@@ -1,53 +1,48 @@
-using System;
+ï»¿using System;
 
 namespace TacoDiscordBot;
 
 /// <summary>
-/// ƒAƒvƒŠƒP[ƒVƒ‡ƒ““à‚Åg—p‚·‚éŒÅ’è•¶š—ñ‚ğ‚Ü‚Æ‚ß‚½ƒNƒ‰ƒX‚Å‚·B
-/// ƒn[ƒhƒR[ƒh‚³‚ê‚½•¶š—ñ‚ğ‚±‚±‚ÉW–ñ‚·‚é‚±‚Æ‚ÅA–|–ó‚â•ÏX‚ğ—eˆÕ‚É‚µ‚Ü‚·B
+/// ã‚¢ãƒ—ãƒªå†…ã®å®šæ•°æ–‡å­—åˆ—ã‚’ã¾ã¨ã‚ãŸã‚¯ãƒ©ã‚¹ã§ã™ã€‚
+/// ãƒ¡ãƒƒã‚»ãƒ¼ã‚¸ã«æ—¥æœ¬èªã‚’ä½¿ã†ãŸã‚ã€ã‚½ãƒ¼ã‚¹ã¯ UTF-8 ã§ä¿å­˜ã—ã¦ãã ã•ã„ã€‚
 /// </summary>
 public static class Strings
 {
-    // --- ŠÂ‹« / ƒtƒ@ƒCƒ‹ ---
+    // --- General ---
     public const string EnvTokenMissing = "Environment variable DISCORD_TOKEN is not set. Set it to your bot token.";
 
-    // --- “ú•tƒtƒH[ƒ}ƒbƒg ---
+    // --- Formatting ---
     public const string DateTimeFormat = "yyyy/MM/dd HH:mm";
 
-    // --- VC ƒƒO ---
-    public const string VcLogJoinFmt = "“üºF{0}({1})";
-    public const string VcLogLeaveFmt = "‘ŞºF{0}({1})";
-    public const string VcLogMoveFmt = "ˆÚ“®F{0} ({1} ¨ {2})({3})";
-    // ŠÂ‹«•Ï”–¼: VC ƒƒO—p‚Ìƒ`ƒƒƒ“ƒlƒ‹İ’èi’PˆêƒT[ƒo[‰^—p‚ğ‘z’èjB
-    // ’l‚Íƒ`ƒƒƒ“ƒlƒ‹IDi”’lj‚ğ’¼Úw’è‚µ‚Ü‚·B—á: "123456789012345678"
+    // --- VC log ---
+    public const string VcLogJoinFmt = "å‚åŠ : {0} ({1})";
+    public const string VcLogLeaveFmt = "é€€å‡º: {0} ({1})";
+    public const string VcLogMoveFmt = "ç§»å‹•: {0} ({1} â†’ {2}) ({3})";
+    // ç’°å¢ƒå¤‰æ•°: VC ãƒ­ã‚°é€ä¿¡å…ˆãƒãƒ£ãƒ³ãƒãƒ« ID (ä¾‹: "123456789012345678")
     public const string EnvVcLogChannel = "VCLOG_CHANNEL";
 
-    // --- BOi•åWj ---
-    // --- BOi•åWj ---
-    // BO ŠÖ˜A‚Ì SQL ‚ÍŠeƒT[ƒrƒXƒtƒ@ƒCƒ‹‘¤‚É’è‹`‚µ‚Ü‚·B
+    // --- BO (å‹Ÿé›†) ---
+    public const string EmbedTitle = "å‹Ÿé›†";
+    public const string EmbedStartContent = "@here\nå‹Ÿé›†ã‚’é–‹å§‹ã—ã¾ã—ãŸï¼";
+    public const string EmbedUpdatedContent = "@here\nå‹Ÿé›†ã‚’æ›´æ–°ã—ã¾ã—ãŸï¼";
+    public const string ButtonJoin = "å‚åŠ ";
+    public const string ButtonCancel = "ã‚­ãƒ£ãƒ³ã‚»ãƒ«";
 
-    // --- ƒƒbƒZ[ƒW•¶Œ¾ ---
-    public const string EmbedTitle = "•åW";
-    public const string EmbedStartContent = "@here\n•åW‚ªŠJn‚³‚ê‚Ü‚µ‚½I";
-    public const string EmbedUpdatedContent = "@here\n•åW‚ªXV‚³‚ê‚Ü‚µ‚½I";
-    public const string ButtonJoin = "Q‰Á";
-    public const string ButtonCancel = "Q‰ÁæÁ";
+    public const string LabelGame = "ã‚²ãƒ¼ãƒ å";
+    public const string LabelOwner = "å‹Ÿé›†ä¸»";
+    public const string LabelRank = "ãƒ©ãƒ³ã‚¯";
+    public const string LabelParticipants = "å‚åŠ è€…";
 
-    public const string LabelGame = "ƒQ[ƒ€F";
-    public const string LabelOwner = "•åWåF";
-    public const string LabelRank = "ƒ‰ƒ“ƒNF";
-    public const string LabelParticipants = "Q‰ÁÒF";
+    public const string VcToggleOn = "æŒ‡å®šãƒãƒ£ãƒ³ãƒãƒ«ã® VC ãƒ­ã‚°ã‚’æœ‰åŠ¹åŒ–ã—ã¾ã—ãŸã€‚";
+    public const string VcToggleOff = "æŒ‡å®šãƒãƒ£ãƒ³ãƒãƒ«ã® VC ãƒ­ã‚°ã‚’ç„¡åŠ¹åŒ–ã—ã¾ã—ãŸã€‚";
+    public const string VcChannelSet = "VC ãƒ­ã‚°é€ä¿¡å…ˆãƒãƒ£ãƒ³ãƒãƒ«ã‚’è¨­å®šã—ã¾ã—ãŸã€‚";
 
-    public const string VcToggleOn = "‚±‚Ìƒ`ƒƒƒ“ƒlƒ‹‚ÅVCƒƒO‚ğo—Í‚µ‚Ü‚·B";
-    public const string VcToggleOff = "‚±‚Ìƒ`ƒƒƒ“ƒlƒ‹‚Å‚ÌVCƒƒO‚ğ’â~‚µ‚Ü‚µ‚½B";
-    public const string VcChannelSet = "‚±‚Ìƒ`ƒƒƒ“ƒlƒ‹‚ğVCƒƒO‚Ì‘—Mæ‚Éİ’è‚µ‚Ü‚µ‚½B";
-    // —áŠO”­¶‚É‘—M‚·‚éƒƒbƒZ[ƒW‚ÌŒó•âiƒ‰ƒ“ƒ_ƒ€‚É1‚Â‘I‚ñ‚Å‘—M‚µ‚Ü‚·j
     public static readonly string[] ErrorMessages = new[]
     {
-        "ƒGƒ‰[”­¶I‚½‚±ƒNƒIƒŠƒeƒB‚¾‚©‚çd•û‚È‚¢‚ËI",
-        "ƒGƒ‰[”­¶I‹C‚ªŒü‚¢‚½‚çC³‚µ‚Ü‚·I",
-        "ƒGƒ‰[”­¶I‰ó‚³‚È‚¢‚ÅI—D‚µ‚­g‚Á‚Ä‚ËI",
-        "ƒGƒ‰[”­¶I’¼‚¹‚él•åW’†I",
-        "ƒGƒ‰[”­¶I‚±‚Ìbot‚Í‰ó‚ê‚Ä‚Ü‚·I’@‚¯‚Î’¼‚é‚©‚àI"
+        "ã‚¨ãƒ©ãƒ¼ç™ºç”Ÿï¼ãŸã“ã‚¯ã‚ªãƒªãƒ†ã‚£ã ã‹ã‚‰ä»•æ–¹ãªã„ã­ï¼",
+        "ã‚¨ãƒ©ãƒ¼ç™ºç”Ÿï¼æ°—ãŒå‘ã„ãŸã‚‰ä¿®æ­£ã—ã¾ã™ï¼",
+        "ã‚¨ãƒ©ãƒ¼ç™ºç”Ÿï¼å£Šã•ãªã„ã§ï¼å„ªã—ãä½¿ã£ã¦ã­ï¼",
+        "ã‚¨ãƒ©ãƒ¼ç™ºç”Ÿï¼ç›´ã›ã‚‹äººå‹Ÿé›†ä¸­ï¼",
+        "ã‚¨ãƒ©ãƒ¼ç™ºç”Ÿï¼ã“ã®botã¯å£Šã‚Œã¦ã¾ã™ï¼å©ã‘ã°ç›´ã‚‹ã‹ã‚‚ï¼"
     };
 }
