@@ -20,7 +20,10 @@ RUN dotnet publish "TacoDiscordBot.csproj" -c $BUILD_CONFIGURATION -o /app/publi
 FROM mcr.microsoft.com/dotnet/runtime:8.0
 
 # セキュリティのため、非 root ユーザーを作成して実行
-RUN addgroup --system app && adduser --system --ingroup app app
+# 既に存在する場合もエラーにしないように条件付きで作成する
+RUN set -eux; \
+	if ! getent group app >/dev/null 2>&1; then groupadd -r app; fi; \
+	if ! id -u app >/dev/null 2>&1; then useradd -r -g app -s /sbin/nologin -M app; fi
 WORKDIR /app
 
 # 公開成果物をコピー
