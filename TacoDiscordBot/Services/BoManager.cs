@@ -46,7 +46,7 @@ public class BoManager
         var id = e.Id;
         if (string.IsNullOrEmpty(id)) return;
 
-        if (id.StartsWith("bo_join:") || id.StartsWith("bo_cancel:"))
+            if (id.StartsWith("bo_join:") || id.StartsWith("bo_cancel:"))
         {
             var parts = id.Split(':', 2);
             if (parts.Length != 2) return;
@@ -80,6 +80,9 @@ public class BoManager
                     // If acknowledgement fails, continue - we still attempt to update the message.
                 }
 
+                // capture previous count to detect when the session becomes full
+                var prevCount = session.Participants.Count;
+
                 lock (session)
                 {
                     if (action == "bo_join")
@@ -94,6 +97,25 @@ public class BoManager
                 }
 
                 await UpdateSessionMessageAsync(session);
+
+                // If the session reached the requested number, notify all participants by mentioning them
+                try
+                {
+                    var cur = session.Participants.Count;
+                    if (session.At > 0 && prevCount < session.At && cur >= session.At)
+                    {
+                        var ch = await _client.GetChannelAsync(session.ChannelId);
+                        if (ch != null)
+                        {
+                            var mentions = string.Join(" ", session.Participants.Select(id => $"<@{id}>"));
+                            await ch.SendMessageAsync($"人数が集まりました！ {mentions}");
+                        }
+                    }
+                }
+                catch
+                {
+                    // ignore notification failure
+                }
             }
             catch (Exception ex)
             {
@@ -141,12 +163,12 @@ public class BoManager
                 .AddField("👤 " + Strings.LabelOwner, $"<@{session.OwnerId}>", true)
                 .AddField("🏅 " + Strings.LabelRank, string.IsNullOrEmpty(session.Rank) ? "未設定" : session.Rank, true)
                 .AddField("📋 " + Strings.LabelParticipants, participantsText, false)
-                .WithFooter(atText)
+                .WithFooter("参加数: " + atText)
                 .WithColor(DiscordColor.Blurple)
                 .WithTimestamp(DateTime.UtcNow);
 
             var builder = new DiscordMessageBuilder()
-                .WithContent(Strings.EmbedStartContent)
+                .WithContent($"@here\n**{(string.IsNullOrWhiteSpace(session.Game) ? "募集" : session.Game)}** の募集を開始しました！")
                 .AddEmbed(embed)
                 .AddComponents(new DiscordComponent[] {
                     new DiscordButtonComponent(ButtonStyle.Primary, $"bo_join:{sessionId}", Strings.ButtonJoin),
@@ -236,18 +258,18 @@ public class BoManager
             var cur = session.Participants.Count;
             var atText = session.At > 0 ? $"{cur}/{session.At}" : $"{cur}/任意";
 
-            var embed = new DiscordEmbedBuilder()
+                var embed = new DiscordEmbedBuilder()
                 .WithTitle(Strings.EmbedTitle)
-                .AddField("\uD83C\uDFAE " + Strings.LabelGame, string.IsNullOrWhiteSpace(session.Game) ? "未設定" : session.Game, false)
-                .AddField("\uD83D\uDC64 " + Strings.LabelOwner, $"<@{session.OwnerId}>", true)
-                .AddField("\uD83C\uDFC5 " + Strings.LabelRank, string.IsNullOrEmpty(session.Rank) ? "未設定" : session.Rank, true)
-                .AddField("\uD83D\uDCCB " + Strings.LabelParticipants, participantsText, false)
-                .WithFooter(atText)
+                .AddField("🎮 " + Strings.LabelGame, string.IsNullOrWhiteSpace(session.Game) ? "未設定" : session.Game, false)
+                .AddField("👤 " + Strings.LabelOwner, $"<@{session.OwnerId}>", true)
+                .AddField("🏅 " + Strings.LabelRank, string.IsNullOrEmpty(session.Rank) ? "未設定" : session.Rank, true)
+                .AddField("📋 " + Strings.LabelParticipants, participantsText, false)
+                .WithFooter("参加数: " + atText)
                 .WithColor(DiscordColor.Blurple)
                 .WithTimestamp(DateTime.UtcNow);
 
             var builder = new DiscordInteractionResponseBuilder()
-                .WithContent(Strings.EmbedUpdatedContent)
+                .WithContent($"@here\n**{(string.IsNullOrWhiteSpace(session.Game) ? "募集" : session.Game)}** の募集を更新しました！")
                 .AddEmbed(embed)
                 .AddComponents(new DiscordComponent[] {
                     new DiscordButtonComponent(ButtonStyle.Primary, $"bo_join:{session.SessionId}", Strings.ButtonJoin),
