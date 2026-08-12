@@ -54,12 +54,32 @@ public class BoManager
             var sessionId = parts[1];
             if (!_sessions.TryGetValue(sessionId, out var session))
             {
-                // session not found
+                // session not found - respond ephemerally so the user does not see an interaction timeout
+                try
+                {
+                    await e.Interaction.CreateResponseAsync(DSharpPlus.InteractionResponseType.ChannelMessageWithSource,
+                        new DSharpPlus.Entities.DiscordInteractionResponseBuilder().WithContent("募集が見つかりませんでした。").AsEphemeral(true));
+                }
+                catch
+                {
+                    // ignore
+                }
                 return;
             }
 
             try
             {
+                // Acknowledge the interaction quickly to avoid the Discord "application did not respond" message.
+                // We defer an update because we will edit the original message below.
+                try
+                {
+                    await e.Interaction.CreateResponseAsync(DSharpPlus.InteractionResponseType.DeferredMessageUpdate);
+                }
+                catch
+                {
+                    // If acknowledgement fails, continue - we still attempt to update the message.
+                }
+
                 lock (session)
                 {
                     if (action == "bo_join")
@@ -96,11 +116,34 @@ public class BoManager
         {
             var sessionId = Guid.NewGuid().ToString();
 
-            // 埋め込みメッセージの本文を作成します（ラベルは Strings で集中管理）。
+            // セッションを先に作成して募集主を参加者リストの先頭に入れます。
+            var session = new Models.BoSession
+            {
+                SessionId = sessionId,
+                MessageId = 0, // 後で設定
+                ChannelId = ctx.Channel.Id,
+                Game = game,
+                At = at,
+                Rank = rank ?? string.Empty,
+                OwnerId = ctx.User.Id,
+                Participants = new List<ulong> { ctx.User.Id },
+                CreatedAt = DateTime.UtcNow
+            };
+
+            // 埋め込みメッセージを装飾して作成します。
+            var participantsText = string.Join("\n", session.Participants.Select((id, idx) => $"{idx + 1}. <@{id}>") );
+            if (string.IsNullOrEmpty(participantsText)) participantsText = "—";
+            var atText = session.At > 0 ? $"{session.Participants.Count}/{session.At}" : $"{session.Participants.Count}/任意";
+
             var embed = new DiscordEmbedBuilder()
                 .WithTitle(Strings.EmbedTitle)
-                .WithDescription($"{Strings.LabelGame}{game}\n\n{Strings.LabelOwner}{ctx.User.Mention}\n\n{Strings.LabelRank}{(string.IsNullOrEmpty(rank) ? "未設定" : rank)}\n\n{Strings.LabelParticipants}\n\n\n{(at > 0 ? $"0/{at}" : "0/任意")}")
-                .WithColor(DiscordColor.Blurple);
+                .AddField("🎮 " + Strings.LabelGame, string.IsNullOrWhiteSpace(session.Game) ? "未設定" : session.Game, false)
+                .AddField("👤 " + Strings.LabelOwner, $"<@{session.OwnerId}>", true)
+                .AddField("🏅 " + Strings.LabelRank, string.IsNullOrEmpty(session.Rank) ? "未設定" : session.Rank, true)
+                .AddField("📋 " + Strings.LabelParticipants, participantsText, false)
+                .WithFooter(atText)
+                .WithColor(DiscordColor.Blurple)
+                .WithTimestamp(DateTime.UtcNow);
 
             var builder = new DiscordMessageBuilder()
                 .WithContent(Strings.EmbedStartContent)
@@ -112,19 +155,8 @@ public class BoManager
 
             var msg = await ctx.Channel.SendMessageAsync(builder);
 
-            var session = new Models.BoSession
-            {
-                SessionId = sessionId,
-                MessageId = msg.Id,
-                ChannelId = ctx.Channel.Id,
-                Game = game,
-                At = at,
-                Rank = rank ?? string.Empty,
-                OwnerId = ctx.User.Id,
-                Participants = new List<ulong>(),
-                CreatedAt = DateTime.UtcNow
-            };
-
+            // メッセージ ID を確定してセッションを格納
+            session.MessageId = msg.Id;
             _sessions[sessionId] = session;
         }
         catch (Exception ex)
@@ -200,14 +232,19 @@ public class BoManager
         try
         {
             // 参加者一覧と参加数を組み立てます。
-            var participantsText = session.Participants.Count == 0 ? "" : string.Join("\n", session.Participants.Select(id => $"<@{id}>"));
+            var participantsText = session.Participants.Count == 0 ? "—" : string.Join("\n", session.Participants.Select((id, idx) => $"{idx + 1}. <@{id}>"));
             var cur = session.Participants.Count;
             var atText = session.At > 0 ? $"{cur}/{session.At}" : $"{cur}/任意";
 
             var embed = new DiscordEmbedBuilder()
                 .WithTitle(Strings.EmbedTitle)
-                .WithDescription($"{Strings.LabelGame}{session.Game}\n\n{Strings.LabelOwner}<@{session.OwnerId}>\n\n{Strings.LabelRank}{(string.IsNullOrEmpty(session.Rank) ? "未設定" : session.Rank)}\n\n{Strings.LabelParticipants}\n\n{participantsText}\n\n{atText}")
-                .WithColor(DiscordColor.Blurple);
+                .AddField("\uD83C\uDFAE " + Strings.LabelGame, string.IsNullOrWhiteSpace(session.Game) ? "未設定" : session.Game, false)
+                .AddField("\uD83D\uDC64 " + Strings.LabelOwner, $"<@{session.OwnerId}>", true)
+                .AddField("\uD83C\uDFC5 " + Strings.LabelRank, string.IsNullOrEmpty(session.Rank) ? "未設定" : session.Rank, true)
+                .AddField("\uD83D\uDCCB " + Strings.LabelParticipants, participantsText, false)
+                .WithFooter(atText)
+                .WithColor(DiscordColor.Blurple)
+                .WithTimestamp(DateTime.UtcNow);
 
             var builder = new DiscordInteractionResponseBuilder()
                 .WithContent(Strings.EmbedUpdatedContent)
