@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using System;
+using System.Globalization;
 using DSharpPlus;
 using DSharpPlus.Entities;
 using DSharpPlus.EventArgs;
@@ -37,6 +38,66 @@ public class BoManager
                     Console.WriteLine(ex.ToString());
                 }
                 await Task.Delay(TimeSpan.FromHours(1));
+            }
+        });
+
+        // 締め切りチェック用の定期タスク（1分毎）
+        _ = Task.Run(async () =>
+        {
+            while (true)
+            {
+                try
+                {
+                    var now = DateTime.UtcNow;
+                    foreach (var kv in _sessions)
+                    {
+                        var s = kv.Value;
+                        if (s == null) continue;
+                        if (s.IsClosed) continue;
+                        if (s.DeadlineUtc.HasValue && now >= s.DeadlineUtc.Value)
+                        {
+                            // mark closed to avoid duplicate notifications
+                            s.IsClosed = true;
+                            try
+                            {
+                                var ch = await _client.GetChannelAsync(s.ChannelId);
+                                if (ch != null)
+                                {
+                                    var mentions = s.Participants != null && s.Participants.Count > 0
+                                        ? string.Join(" ", s.Participants.Select(id => $"<@{id}>"))
+                                        : string.Empty;
+                                    await ch.SendMessageAsync($"締め切りです！ {mentions}");
+
+                                    // Edit original message to indicate closed (append note)
+                                    try
+                                    {
+                                        var msg = await ch.GetMessageAsync(s.MessageId);
+                                        if (msg != null)
+                                        {
+                                            await msg.ModifyAsync(m =>
+                                            {
+                                                m.Content = (msg.Content ?? string.Empty) + "\n\n**（締め切り済み）**";
+                                            });
+                                        }
+                                    }
+                                    catch
+                                    {
+                                        // ignore edit failure
+                                    }
+                                }
+                            }
+                            catch
+                            {
+                                // ignore notification failure
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine(ex.ToString());
+                }
+                await Task.Delay(TimeSpan.FromMinutes(1));
             }
         });
     }
@@ -102,7 +163,8 @@ public class BoManager
                 try
                 {
                     var cur = session.Participants.Count;
-                    if (session.At > 0 && prevCount < session.At && cur >= session.At)
+                    var capacity = session.At > 0 ? session.At + 1 : int.MaxValue;
+                    if (session.At > 0 && prevCount < capacity && cur >= capacity)
                     {
                         var ch = await _client.GetChannelAsync(session.ChannelId);
                         if (ch != null)
@@ -132,7 +194,7 @@ public class BoManager
         }
     }
 
-    public async Task CreateSessionAsync(InteractionContext ctx, string game, int at, string rank)
+    public async Task CreateSessionAsync(InteractionContext ctx, string game, int at, string rank, DateTime? deadline = null, string description = "")
     {
         try
         {
@@ -147,21 +209,32 @@ public class BoManager
                 Game = game,
                 At = at,
                 Rank = rank ?? string.Empty,
+                DeadlineRaw = deadline.HasValue ? deadline.Value.ToLocalTime().ToString(Strings.DateTimeFormat) : string.Empty,
+                Description = description ?? string.Empty,
                 OwnerId = ctx.User.Id,
                 Participants = new List<ulong> { ctx.User.Id },
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.UtcNow,
+                IsClosed = false
             };
+
+            // 締め切りが渡されていれば UTC に保存
+            if (deadline.HasValue)
+            {
+                session.DeadlineUtc = DateTime.SpecifyKind(deadline.Value, DateTimeKind.Local).ToUniversalTime();
+            }
 
             // 埋め込みメッセージを装飾して作成します。
             var participantsText = string.Join("\n", session.Participants.Select((id, idx) => $"{idx + 1}. <@{id}>") );
             if (string.IsNullOrEmpty(participantsText)) participantsText = "—";
-            var atText = session.At > 0 ? $"{session.Participants.Count}/{session.At}" : $"{session.Participants.Count}/任意";
+            var atText = session.At > 0 ? $"{session.Participants.Count}/{session.At + 1}" : $"{session.Participants.Count}/任意";
 
             var embed = new DiscordEmbedBuilder()
                 .WithTitle(Strings.EmbedTitle)
                 .AddField("🎮 " + Strings.LabelGame, string.IsNullOrWhiteSpace(session.Game) ? "未設定" : session.Game, false)
                 .AddField("👤 " + Strings.LabelOwner, $"<@{session.OwnerId}>", true)
                 .AddField("🏅 " + Strings.LabelRank, string.IsNullOrEmpty(session.Rank) ? "未設定" : session.Rank, true)
+                .AddField("⏰ 締切", session.DeadlineUtc.HasValue ? session.DeadlineUtc.Value.ToLocalTime().ToString(Strings.DateTimeFormat) : (string.IsNullOrWhiteSpace(session.DeadlineRaw) ? "—" : session.DeadlineRaw), true)
+                .AddField("📝 説明", string.IsNullOrWhiteSpace(session.Description) ? "—" : session.Description, false)
                 .AddField("📋 " + Strings.LabelParticipants, participantsText, false)
                 .WithFooter("参加数: " + atText)
                 .WithColor(DiscordColor.Blurple)
@@ -255,14 +328,16 @@ public class BoManager
         {
             // 参加者一覧と参加数を組み立てます。
             var participantsText = session.Participants.Count == 0 ? "—" : string.Join("\n", session.Participants.Select((id, idx) => $"{idx + 1}. <@{id}>"));
-            var cur = session.Participants.Count;
-            var atText = session.At > 0 ? $"{cur}/{session.At}" : $"{cur}/任意";
+                var cur = session.Participants.Count;
+            var atText = session.At > 0 ? $"{cur}/{session.At + 1}" : $"{cur}/任意";
 
                 var embed = new DiscordEmbedBuilder()
                 .WithTitle(Strings.EmbedTitle)
                 .AddField("🎮 " + Strings.LabelGame, string.IsNullOrWhiteSpace(session.Game) ? "未設定" : session.Game, false)
                 .AddField("👤 " + Strings.LabelOwner, $"<@{session.OwnerId}>", true)
                 .AddField("🏅 " + Strings.LabelRank, string.IsNullOrEmpty(session.Rank) ? "未設定" : session.Rank, true)
+                .AddField("⏰ 締切", session.DeadlineUtc.HasValue ? session.DeadlineUtc.Value.ToLocalTime().ToString(Strings.DateTimeFormat) : (string.IsNullOrWhiteSpace(session.DeadlineRaw) ? "—" : session.DeadlineRaw), true)
+                .AddField("📝 説明", string.IsNullOrWhiteSpace(session.Description) ? "—" : session.Description, false)
                 .AddField("📋 " + Strings.LabelParticipants, participantsText, false)
                 .WithFooter("参加数: " + atText)
                 .WithColor(DiscordColor.Blurple)
