@@ -1,4 +1,4 @@
-using System;
+ï»¿using System;
 using System.Threading.Tasks;
 using DSharpPlus;
 using DSharpPlus.SlashCommands;
@@ -15,8 +15,8 @@ public static class BotHost
     public static async Task RunAsync()
     {
         var token = Environment.GetEnvironmentVariable("DISCORD_TOKEN");
-        // ŠÂ‹«•Ï”‚É Discord ƒg[ƒNƒ“‚ªİ’è‚³‚ê‚Ä‚¢‚é‚±‚Æ‚ğŠm”F‚µ‚Ü‚·B
-        // İ’è‚³‚ê‚Ä‚¢‚È‚¢ê‡‚Í‹N“®‚ğ’†~‚µ‚Ü‚·B
+        // ç’°å¢ƒå¤‰æ•°ã« Discord ãƒˆãƒ¼ã‚¯ãƒ³ãŒè¨­å®šã•ã‚Œã¦ã„ã‚‹ã“ã¨ã‚’ç¢ºèªã—ã¾ã™ã€‚
+        // è¨­å®šã•ã‚Œã¦ã„ãªã„å ´åˆã¯èµ·å‹•ã‚’ä¸­æ­¢ã—ã¾ã™ã€‚
         if (string.IsNullOrWhiteSpace(token))
         {
             Console.WriteLine(Strings.EnvTokenMissing);

@@ -1,4 +1,4 @@
-using System.Threading.Tasks;
+ï»¿using System.Threading.Tasks;
 using DSharpPlus.SlashCommands;
 using DSharpPlus.Entities;
 
@@ -9,17 +9,17 @@ public class VcCommands : ApplicationCommandModule
     [SlashCommand("vclog", "Toggle VC join/leave/move logging to this text channel")]
     public async Task VcLog(InteractionContext ctx)
     {
-        // ’PˆêƒT[ƒo[‰^—p‚ğ‘z’è‚µ‚Ä‚¢‚Ü‚·B
-        // ‚Ü‚¸ VC ƒƒOæƒ`ƒƒƒ“ƒlƒ‹‚ªİ’è‚³‚ê‚Ä‚¢‚é‚©‚ğŠm”F‚µ‚Ü‚·B
+        // å˜ä¸€ã‚µãƒ¼ãƒãƒ¼é‹ç”¨ã‚’æƒ³å®šã—ã¦ã„ã¾ã™ã€‚
+        // ã¾ãš VC ãƒ­ã‚°å…ˆãƒãƒ£ãƒ³ãƒãƒ«ãŒè¨­å®šã•ã‚Œã¦ã„ã‚‹ã‹ã‚’ç¢ºèªã—ã¾ã™ã€‚
         if (!BotHost.VcLogger.IsConfigured)
         {
-            // ŠÂ‹«•Ï”‚ª–¢İ’è‚Ìê‡‚ÍA‚±‚Ìƒ`ƒƒƒ“ƒlƒ‹‚ğ‘—Mæ‚Æ‚µ‚Äİ’è‚µ‚Ü‚·iƒƒ‚ƒŠ‚Ì‚İjB
+            // ç’°å¢ƒå¤‰æ•°ãŒæœªè¨­å®šã®å ´åˆã¯ã€ã“ã®ãƒãƒ£ãƒ³ãƒãƒ«ã‚’é€ä¿¡å…ˆã¨ã—ã¦è¨­å®šã—ã¾ã™ï¼ˆãƒ¡ãƒ¢ãƒªã®ã¿ï¼‰ã€‚
             BotHost.VcLogger.SetChannel(ctx.Channel.Id);
             await ctx.Channel.SendMessageAsync(Strings.VcChannelSet);
             return;
         }
 
-        // Šù‚Éƒ`ƒƒƒ“ƒlƒ‹‚ªİ’è‚³‚ê‚Ä‚¢‚éê‡‚ÍƒIƒ“/ƒIƒt‚ğƒgƒOƒ‹‚µ‚Ü‚·B
+        // æ—¢ã«ãƒãƒ£ãƒ³ãƒãƒ«ãŒè¨­å®šã•ã‚Œã¦ã„ã‚‹å ´åˆã¯ã‚ªãƒ³/ã‚ªãƒ•ã‚’ãƒˆã‚°ãƒ«ã—ã¾ã™ã€‚
         var enabled = BotHost.VcLogger.ToggleChannel();
         await ctx.Channel.SendMessageAsync(enabled ? Strings.VcToggleOn : Strings.VcToggleOff);
     }

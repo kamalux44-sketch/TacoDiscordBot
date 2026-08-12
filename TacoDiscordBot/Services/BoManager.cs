@@ -1,4 +1,4 @@
-using System;
+ï»¿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
@@ -16,13 +16,13 @@ public class BoManager
 {
     private readonly DiscordClient _client;
     private readonly ConcurrentDictionary<string, Models.BoSession> _sessions = new();
-    // BO ƒZƒbƒVƒ‡ƒ“‚Íƒƒ‚ƒŠŠÇ—‚Æ‚µ‚Ü‚·B‰i‘±‰»‚Ís‚¢‚Ü‚¹‚ñB
+    // BO ã‚»ãƒƒã‚·ãƒ§ãƒ³ã¯ãƒ¡ãƒ¢ãƒªç®¡ç†ã¨ã—ã¾ã™ã€‚æ°¸ç¶šåŒ–ã¯è¡Œã„ã¾ã›ã‚“ã€‚
 
     public BoManager(DiscordClient client)
     {
         _client = client;
-        // ƒoƒbƒNƒOƒ‰ƒEƒ“ƒh‚Å’èŠú“I‚ÉŒÃ‚¢•åW‚ğƒNƒŠ[ƒ“ƒAƒbƒv‚µ‚Ü‚·B
-        // ‚±‚±‚Å‚Í1ŠÔ‚²‚Æ‚Éƒ`ƒFƒbƒN‚µAì¬‚©‚ç1TŠÔ‚ğ’´‚¦‚½•åW‚ğ”jŠü‚µ‚Ü‚·B
+        // ãƒãƒƒã‚¯ã‚°ãƒ©ã‚¦ãƒ³ãƒ‰ã§å®šæœŸçš„ã«å¤ã„å‹Ÿé›†ã‚’ã‚¯ãƒªãƒ¼ãƒ³ã‚¢ãƒƒãƒ—ã—ã¾ã™ã€‚
+        // ã“ã“ã§ã¯1æ™‚é–“ã”ã¨ã«ãƒã‚§ãƒƒã‚¯ã—ã€ä½œæˆã‹ã‚‰1é€±é–“ã‚’è¶…ãˆãŸå‹Ÿé›†ã‚’ç ´æ£„ã—ã¾ã™ã€‚
         _ = Task.Run(async () =>
         {
             while (true)
@@ -33,7 +33,7 @@ public class BoManager
                 }
                 catch (Exception ex)
                 {
-                    // —áŠO‚ÍƒƒOo—Í‚µ‚Ä–³‹‚µAƒ‹[ƒv‚ğŒp‘±‚µ‚Ü‚·B
+                    // ä¾‹å¤–ã¯ãƒ­ã‚°å‡ºåŠ›ã—ã¦ç„¡è¦–ã—ã€ãƒ«ãƒ¼ãƒ—ã‚’ç¶™ç¶šã—ã¾ã™ã€‚
                     Console.WriteLine(ex.ToString());
                 }
                 await Task.Delay(TimeSpan.FromHours(1));
@@ -77,14 +77,14 @@ public class BoManager
             }
             catch (Exception ex)
             {
-                // ƒRƒ}ƒ“ƒh‚ª‘Å‚½‚ê‚½ƒ`ƒƒƒ“ƒlƒ‹i•åW‚Ì“Šeƒ`ƒƒƒ“ƒlƒ‹j‚ÉƒGƒ‰[•¶Œ¾‚ğ’Ê’m
+                // ã‚³ãƒãƒ³ãƒ‰ãŒæ‰“ãŸã‚ŒãŸãƒãƒ£ãƒ³ãƒãƒ«ï¼ˆå‹Ÿé›†ã®æŠ•ç¨¿ãƒãƒ£ãƒ³ãƒãƒ«ï¼‰ã«ã‚¨ãƒ©ãƒ¼æ–‡è¨€ã‚’é€šçŸ¥
                 try
                 {
                     await ReportErrorAsync(session.ChannelId, ex);
                 }
                 catch
                 {
-                    // ‚±‚±‚Å‚Í“ñŸƒGƒ‰[‚Í–³‹‚·‚é
+                    // ã“ã“ã§ã¯äºŒæ¬¡ã‚¨ãƒ©ãƒ¼ã¯ç„¡è¦–ã™ã‚‹
                 }
             }
         }
@@ -96,10 +96,10 @@ public class BoManager
         {
             var sessionId = Guid.NewGuid().ToString();
 
-            // –„‚ß‚İƒƒbƒZ[ƒW‚Ì–{•¶‚ğì¬‚µ‚Ü‚·iƒ‰ƒxƒ‹‚Í Strings ‚ÅW’†ŠÇ—jB
+            // åŸ‹ã‚è¾¼ã¿ãƒ¡ãƒƒã‚»ãƒ¼ã‚¸ã®æœ¬æ–‡ã‚’ä½œæˆã—ã¾ã™ï¼ˆãƒ©ãƒ™ãƒ«ã¯ Strings ã§é›†ä¸­ç®¡ç†ï¼‰ã€‚
             var embed = new DiscordEmbedBuilder()
                 .WithTitle(Strings.EmbedTitle)
-                .WithDescription($"{Strings.LabelGame}{game}\n\n{Strings.LabelOwner}{ctx.User.Mention}\n\n{Strings.LabelRank}{(string.IsNullOrEmpty(rank) ? "–¢İ’è" : rank)}\n\n{Strings.LabelParticipants}\n\n\n{(at > 0 ? $"0/{at}" : "0/”CˆÓ")}")
+                .WithDescription($"{Strings.LabelGame}{game}\n\n{Strings.LabelOwner}{ctx.User.Mention}\n\n{Strings.LabelRank}{(string.IsNullOrEmpty(rank) ? "æœªè¨­å®š" : rank)}\n\n{Strings.LabelParticipants}\n\n\n{(at > 0 ? $"0/{at}" : "0/ä»»æ„")}")
                 .WithColor(DiscordColor.Blurple);
 
             var builder = new DiscordMessageBuilder()
@@ -129,7 +129,7 @@ public class BoManager
         }
         catch (Exception ex)
         {
-            // ƒRƒ}ƒ“ƒh‚ª‘Å‚½‚ê‚½ƒ`ƒƒƒ“ƒlƒ‹‚ÉƒGƒ‰[ƒƒbƒZ[ƒW‚ğ’Ê’m‚µAƒRƒ“ƒ\[ƒ‹‚ÉÚ×‚ğo—Í‚µ‚Ü‚·B
+            // ã‚³ãƒãƒ³ãƒ‰ãŒæ‰“ãŸã‚ŒãŸãƒãƒ£ãƒ³ãƒãƒ«ã«ã‚¨ãƒ©ãƒ¼ãƒ¡ãƒƒã‚»ãƒ¼ã‚¸ã‚’é€šçŸ¥ã—ã€ã‚³ãƒ³ã‚½ãƒ¼ãƒ«ã«è©³ç´°ã‚’å‡ºåŠ›ã—ã¾ã™ã€‚
             try
             {
                 var msg = Strings.ErrorMessages[Random.Shared.Next(Strings.ErrorMessages.Length)];
@@ -137,15 +137,15 @@ public class BoManager
             }
             catch
             {
-                // ’Ê’m‚É¸”s‚µ‚Ä‚à–³‹
+                // é€šçŸ¥ã«å¤±æ•—ã—ã¦ã‚‚ç„¡è¦–
             }
             Console.WriteLine(ex.ToString());
         }
     }
 
     /// <summary>
-    /// ì¬‚©‚ç7“ú‚ğ’´‚¦‚½•åW‚ğ”jŠü‚µ‚Ü‚·B
-    /// ƒƒbƒZ[ƒW‚Ííœ‚µAƒƒ‚ƒŠã‚ÌƒZƒbƒVƒ‡ƒ“î•ñ‚ğ”jŠü‚µ‚Ü‚·B
+    /// ä½œæˆã‹ã‚‰7æ—¥ã‚’è¶…ãˆãŸå‹Ÿé›†ã‚’ç ´æ£„ã—ã¾ã™ã€‚
+    /// ãƒ¡ãƒƒã‚»ãƒ¼ã‚¸ã¯å‰Šé™¤ã—ã€ãƒ¡ãƒ¢ãƒªä¸Šã®ã‚»ãƒƒã‚·ãƒ§ãƒ³æƒ…å ±ã‚’ç ´æ£„ã—ã¾ã™ã€‚
     /// </summary>
     private async Task CleanExpiredSessionsAsync()
     {
@@ -168,7 +168,7 @@ public class BoManager
             {
                 try
                 {
-                    // ƒƒbƒZ[ƒWíœ‚ğ‚İ‚éi¸”s‚µ‚Ä‚à•ñ‚µ‚Ä‘±sj
+                    // ãƒ¡ãƒƒã‚»ãƒ¼ã‚¸å‰Šé™¤ã‚’è©¦ã¿ã‚‹ï¼ˆå¤±æ•—ã—ã¦ã‚‚å ±å‘Šã—ã¦ç¶šè¡Œï¼‰
                     var ch = await _client.GetChannelAsync(session.ChannelId);
                     if (ch != null)
                     {
@@ -181,14 +181,14 @@ public class BoManager
                 }
                 catch (Exception ex)
                 {
-                    // ƒGƒ‰[‚ğƒRƒ}ƒ“ƒhƒ`ƒƒƒ“ƒlƒ‹i•åW“Šeƒ`ƒƒƒ“ƒlƒ‹j‚É’Ê’m‚µAƒRƒ“ƒ\[ƒ‹‚ÉÚ×‚ğo—Í
+                    // ã‚¨ãƒ©ãƒ¼ã‚’ã‚³ãƒãƒ³ãƒ‰ãƒãƒ£ãƒ³ãƒãƒ«ï¼ˆå‹Ÿé›†æŠ•ç¨¿ãƒãƒ£ãƒ³ãƒãƒ«ï¼‰ã«é€šçŸ¥ã—ã€ã‚³ãƒ³ã‚½ãƒ¼ãƒ«ã«è©³ç´°ã‚’å‡ºåŠ›
                     try
                     {
                         await ReportErrorAsync(session.ChannelId, ex);
                     }
                     catch
                     {
-                        // ’Ê’m¸”s‚Í–³‹
+                        // é€šçŸ¥å¤±æ•—ã¯ç„¡è¦–
                     }
                 }
             }
@@ -199,14 +199,14 @@ public class BoManager
     {
         try
         {
-            // Q‰ÁÒˆê——‚ÆQ‰Á”‚ğ‘g‚İ—§‚Ä‚Ü‚·B
+            // å‚åŠ è€…ä¸€è¦§ã¨å‚åŠ æ•°ã‚’çµ„ã¿ç«‹ã¦ã¾ã™ã€‚
             var participantsText = session.Participants.Count == 0 ? "" : string.Join("\n", session.Participants.Select(id => $"<@{id}>"));
             var cur = session.Participants.Count;
-            var atText = session.At > 0 ? $"{cur}/{session.At}" : $"{cur}/”CˆÓ";
+            var atText = session.At > 0 ? $"{cur}/{session.At}" : $"{cur}/ä»»æ„";
 
             var embed = new DiscordEmbedBuilder()
                 .WithTitle(Strings.EmbedTitle)
-                .WithDescription($"{Strings.LabelGame}{session.Game}\n\n{Strings.LabelOwner}<@{session.OwnerId}>\n\n{Strings.LabelRank}{(string.IsNullOrEmpty(session.Rank) ? "–¢İ’è" : session.Rank)}\n\n{Strings.LabelParticipants}\n\n{participantsText}\n\n{atText}")
+                .WithDescription($"{Strings.LabelGame}{session.Game}\n\n{Strings.LabelOwner}<@{session.OwnerId}>\n\n{Strings.LabelRank}{(string.IsNullOrEmpty(session.Rank) ? "æœªè¨­å®š" : session.Rank)}\n\n{Strings.LabelParticipants}\n\n{participantsText}\n\n{atText}")
                 .WithColor(DiscordColor.Blurple);
 
             var builder = new DiscordInteractionResponseBuilder()
@@ -235,22 +235,22 @@ public class BoManager
         }
         catch (Exception ex)
         {
-            // ƒGƒ‰[”­¶‚Í•åW‚Ìƒ`ƒƒƒ“ƒlƒ‹‚É’Ê’m‚µAƒXƒ^ƒbƒNƒgƒŒ[ƒX‚ğƒRƒ“ƒ\[ƒ‹‚Éo—Í‚µ‚Ü‚·B
+            // ã‚¨ãƒ©ãƒ¼ç™ºç”Ÿæ™‚ã¯å‹Ÿé›†ã®ãƒãƒ£ãƒ³ãƒãƒ«ã«é€šçŸ¥ã—ã€ã‚¹ã‚¿ãƒƒã‚¯ãƒˆãƒ¬ãƒ¼ã‚¹ã‚’ã‚³ãƒ³ã‚½ãƒ¼ãƒ«ã«å‡ºåŠ›ã—ã¾ã™ã€‚
             try
             {
                 await ReportErrorAsync(session.ChannelId, ex);
             }
             catch
             {
-                // ’Ê’m¸”s‚Í–³‹
+                // é€šçŸ¥å¤±æ•—ã¯ç„¡è¦–
             }
             Console.WriteLine(ex.ToString());
         }
     }
 
     /// <summary>
-    /// w’èƒ`ƒƒƒ“ƒlƒ‹‚ÖƒGƒ‰[•¶Œ¾‚ğ‘—M‚µAƒRƒ“ƒ\[ƒ‹‚É—áŠOî•ñ‚ğo—Í‚µ‚Ü‚·B
-    /// ¸”s‚µ‚Ä‚à—áŠO‚Í“Š‚°‚Ü‚¹‚ñiŒÄ‚Ño‚µ‘¤‚ÍŒp‘±‚µ‚Ü‚·jB
+    /// æŒ‡å®šãƒãƒ£ãƒ³ãƒãƒ«ã¸ã‚¨ãƒ©ãƒ¼æ–‡è¨€ã‚’é€ä¿¡ã—ã€ã‚³ãƒ³ã‚½ãƒ¼ãƒ«ã«ä¾‹å¤–æƒ…å ±ã‚’å‡ºåŠ›ã—ã¾ã™ã€‚
+    /// å¤±æ•—ã—ã¦ã‚‚ä¾‹å¤–ã¯æŠ•ã’ã¾ã›ã‚“ï¼ˆå‘¼ã³å‡ºã—å´ã¯ç¶™ç¶šã—ã¾ã™ï¼‰ã€‚
     /// </summary>
     private async Task ReportErrorAsync(ulong channelId, Exception ex)
     {
@@ -265,10 +265,10 @@ public class BoManager
         }
         catch
         {
-            // ‘—M¸”s‚Í–³‹
+            // é€ä¿¡å¤±æ•—ã¯ç„¡è¦–
         }
 
-        // ƒRƒ“ƒ\[ƒ‹‚É‚ÍƒXƒ^ƒbƒNƒgƒŒ[ƒX‚ğo—Í‚·‚é
+        // ã‚³ãƒ³ã‚½ãƒ¼ãƒ«ã«ã¯ã‚¹ã‚¿ãƒƒã‚¯ãƒˆãƒ¬ãƒ¼ã‚¹ã‚’å‡ºåŠ›ã™ã‚‹
         Console.WriteLine(ex.ToString());
     }
 

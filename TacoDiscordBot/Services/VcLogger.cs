@@ -1,4 +1,4 @@
-using System;
+ï»¿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
@@ -12,13 +12,13 @@ namespace TacoDiscordBot.Services;
 
 public class VcLogger
 {
-    // ’Pˆêƒ`ƒƒƒ“ƒlƒ‹‰^—p‚ğ‘z’è‚µ‚ÄAŠÂ‹«•Ï”‚©‚çƒ`ƒƒƒ“ƒlƒ‹ID‚ğ“Ç‚İ‚İ‚Ü‚·B
-    // Às‚Íƒƒ‚ƒŠã‚Ìƒtƒ‰ƒO‚ÅƒIƒ“/ƒIƒt‚ğØ‚è‘Ö‚¦‚Ü‚·i‰i‘±‰»‚µ‚Ü‚¹‚ñjB
-    private ulong _channelId; // 0=–¢İ’è
+    // å˜ä¸€ãƒãƒ£ãƒ³ãƒãƒ«é‹ç”¨ã‚’æƒ³å®šã—ã¦ã€ç’°å¢ƒå¤‰æ•°ã‹ã‚‰ãƒãƒ£ãƒ³ãƒãƒ«IDã‚’èª­ã¿è¾¼ã¿ã¾ã™ã€‚
+    // å®Ÿè¡Œæ™‚ã¯ãƒ¡ãƒ¢ãƒªä¸Šã®ãƒ•ãƒ©ã‚°ã§ã‚ªãƒ³/ã‚ªãƒ•ã‚’åˆ‡ã‚Šæ›¿ãˆã¾ã™ï¼ˆæ°¸ç¶šåŒ–ã—ã¾ã›ã‚“ï¼‰ã€‚
+    private ulong _channelId; // 0=æœªè¨­å®š
     private bool _enabled;
 
     /// <summary>
-    /// ƒRƒ“ƒXƒgƒ‰ƒNƒ^BŠÂ‹«•Ï”‚©‚çƒ`ƒƒƒ“ƒlƒ‹ID‚ğ“Ç‚İæ‚èA‰Šúó‘Ô‚ğİ’è‚µ‚Ü‚·B
+    /// ã‚³ãƒ³ã‚¹ãƒˆãƒ©ã‚¯ã‚¿ã€‚ç’°å¢ƒå¤‰æ•°ã‹ã‚‰ãƒãƒ£ãƒ³ãƒãƒ«IDã‚’èª­ã¿å–ã‚Šã€åˆæœŸçŠ¶æ…‹ã‚’è¨­å®šã—ã¾ã™ã€‚
     /// </summary>
     public VcLogger()
     {
@@ -28,13 +28,13 @@ public class VcLogger
     }
 
     /// <summary>
-    /// ƒ`ƒƒƒ“ƒlƒ‹‚ªİ’è‚³‚ê‚Ä‚¢‚é‚©‚ğ¦‚µ‚Ü‚·B
+    /// ãƒãƒ£ãƒ³ãƒãƒ«ãŒè¨­å®šã•ã‚Œã¦ã„ã‚‹ã‹ã‚’ç¤ºã—ã¾ã™ã€‚
     /// </summary>
     public bool IsConfigured => _channelId != 0;
 
     /// <summary>
-    /// ŠÂ‹«•Ï”‚©‚ç’Pˆêƒ`ƒƒƒ“ƒlƒ‹ID‚ğ“Ç‚İ‚İ‚Ü‚·B
-    /// ŠÂ‹«•Ï”‚ª–³‚¢ê‡‚Í–¢İ’è‚Ì‚Ü‚Ü‚É‚È‚è‚Ü‚·B
+    /// ç’°å¢ƒå¤‰æ•°ã‹ã‚‰å˜ä¸€ãƒãƒ£ãƒ³ãƒãƒ«IDã‚’èª­ã¿è¾¼ã¿ã¾ã™ã€‚
+    /// ç’°å¢ƒå¤‰æ•°ãŒç„¡ã„å ´åˆã¯æœªè¨­å®šã®ã¾ã¾ã«ãªã‚Šã¾ã™ã€‚
     /// </summary>
     private void LoadFromEnv()
     {
@@ -45,7 +45,7 @@ public class VcLogger
             if (ulong.TryParse(raw.Trim(), out var cid))
             {
                 _channelId = cid;
-                _enabled = true; // ‹N“®‚Í—LŒø‚É‚·‚é
+                _enabled = true; // èµ·å‹•æ™‚ã¯æœ‰åŠ¹ã«ã™ã‚‹
             }
         }
         catch
@@ -55,8 +55,8 @@ public class VcLogger
     }
 
     /// <summary>
-    /// /vclog ƒRƒ}ƒ“ƒh‚È‚Ç‚©‚çŒÄ‚Î‚ê‚ÄAVC ƒƒO‹@”\‚ÌƒIƒ“/ƒIƒt‚ğØ‚è‘Ö‚¦‚Ü‚·B
-    /// –ß‚è’l‚ÍŒ»İ‚Ì—LŒøó‘Ô‚Å‚·B
+    /// /vclog ã‚³ãƒãƒ³ãƒ‰ãªã©ã‹ã‚‰å‘¼ã°ã‚Œã¦ã€VC ãƒ­ã‚°æ©Ÿèƒ½ã®ã‚ªãƒ³/ã‚ªãƒ•ã‚’åˆ‡ã‚Šæ›¿ãˆã¾ã™ã€‚
+    /// æˆ»ã‚Šå€¤ã¯ç¾åœ¨ã®æœ‰åŠ¹çŠ¶æ…‹ã§ã™ã€‚
     /// </summary>
     public bool ToggleChannel()
     {
@@ -65,7 +65,7 @@ public class VcLogger
     }
 
     /// <summary>
-    /// ŠÂ‹«•Ï”‚ª‚È‚¢ê‡‚ÉAŒ»İ‚Ìƒ`ƒƒƒ“ƒlƒ‹‚ğ VC ƒƒOæ‚Æ‚µ‚Äİ’è‚·‚é‚½‚ß‚Ég‚¢‚Ü‚·iƒƒ‚ƒŠ‚Ì‚İjB
+    /// ç’°å¢ƒå¤‰æ•°ãŒãªã„å ´åˆã«ã€ç¾åœ¨ã®ãƒãƒ£ãƒ³ãƒãƒ«ã‚’ VC ãƒ­ã‚°å…ˆã¨ã—ã¦è¨­å®šã™ã‚‹ãŸã‚ã«ä½¿ã„ã¾ã™ï¼ˆãƒ¡ãƒ¢ãƒªã®ã¿ï¼‰ã€‚
     /// </summary>
     public void SetChannel(ulong channelId)
     {
@@ -85,17 +85,17 @@ public class VcLogger
             string text = null;
             if (before == null && after != null)
             {
-                // ƒ†[ƒU[‚ª VC ‚É“üº‚µ‚½ê‡‚ÌƒƒO•¶š—ñ‚ğì¬‚µ‚Ü‚·B
+                // ãƒ¦ãƒ¼ã‚¶ãƒ¼ãŒ VC ã«å…¥å®¤ã—ãŸå ´åˆã®ãƒ­ã‚°æ–‡å­—åˆ—ã‚’ä½œæˆã—ã¾ã™ã€‚
                 text = string.Format(Strings.VcLogJoinFmt, e.User.Mention, DateTime.Now.ToString(Strings.DateTimeFormat));
             }
             else if (before != null && after == null)
             {
-                // ƒ†[ƒU[‚ª VC ‚©‚ç‘Şº‚µ‚½ê‡‚ÌƒƒO
+                // ãƒ¦ãƒ¼ã‚¶ãƒ¼ãŒ VC ã‹ã‚‰é€€å®¤ã—ãŸå ´åˆã®ãƒ­ã‚°
                 text = string.Format(Strings.VcLogLeaveFmt, e.User.Mention, DateTime.Now.ToString(Strings.DateTimeFormat));
             }
             else if (before != null && after != null && before.Id != after.Id)
             {
-                // ƒ`ƒƒƒ“ƒlƒ‹ˆÚ“®‚ª”­¶‚µ‚½ê‡‚ÌƒƒO
+                // ãƒãƒ£ãƒ³ãƒãƒ«ç§»å‹•ãŒç™ºç”Ÿã—ãŸå ´åˆã®ãƒ­ã‚°
                 text = string.Format(Strings.VcLogMoveFmt, e.User.Mention, before.Name, after.Name, DateTime.Now.ToString(Strings.DateTimeFormat));
             }
 

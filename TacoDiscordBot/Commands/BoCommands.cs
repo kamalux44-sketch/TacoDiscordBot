@@ -1,15 +1,15 @@
-using System.Threading.Tasks;
+ï»¿using System.Threading.Tasks;
 using DSharpPlus.SlashCommands;
 
 namespace TacoDiscordBot.Commands;
 
 public class BoCommands : ApplicationCommandModule
 {
-    [SlashCommand("bo", "•åW‚ğì¬‚µ‚Ü‚·")]
+    [SlashCommand("bo", "å‹Ÿé›†ã‚’ä½œæˆã—ã¾ã™")]
     public async Task Bo(InteractionContext ctx,
-        [Option("game","ƒQ[ƒ€–¼")] string game,
-        [Option("at","Q‰Ál”(”CˆÓ)")] long at = 0,
-        [Option("rank","ƒ‰ƒ“ƒN(”CˆÓ)")] string rank = "")
+        [Option("game","ã‚²ãƒ¼ãƒ å")] string game,
+        [Option("at","å‚åŠ äººæ•°(ä»»æ„)")] long at = 0,
+        [Option("rank","ãƒ©ãƒ³ã‚¯(ä»»æ„)")] string rank = "")
     {
         await BotHost.BoManager.CreateSessionAsync(ctx, game, (int)at, rank);
     }

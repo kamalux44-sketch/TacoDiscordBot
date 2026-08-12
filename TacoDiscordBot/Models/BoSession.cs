@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+ï»¿using System.Collections.Generic;
 
 namespace TacoDiscordBot.Models;
 
@@ -12,6 +12,6 @@ public class BoSession
     public string Rank { get; set; }
     public ulong OwnerId { get; set; }
     public List<ulong> Participants { get; set; }
-    // ì¬“úiUTCjB•åW‚Ì—LŒøŠúŒÀ”»’è‚Ég—p‚µ‚Ü‚·B
+    // ä½œæˆæ—¥æ™‚ï¼ˆUTCï¼‰ã€‚å‹Ÿé›†ã®æœ‰åŠ¹æœŸé™åˆ¤å®šã«ä½¿ç”¨ã—ã¾ã™ã€‚
     public DateTime CreatedAt { get; set; }
 }
