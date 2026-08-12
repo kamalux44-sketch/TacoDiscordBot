@@ -2,7 +2,6 @@
 using System.Threading.Tasks;
 using DSharpPlus;
 using DSharpPlus.SlashCommands;
-// Interactivity extension removed to keep minimal dependencies. Add the package if needed later.
 
 namespace TacoDiscordBot;
 
@@ -14,37 +13,76 @@ public static class BotHost
 
     public static async Task RunAsync()
     {
-        var token = Environment.GetEnvironmentVariable("DISCORD_TOKEN");
-        // 環境変数に Discord トークンが設定されていることを確認します。
-        // 設定されていない場合は起動を中止します。
-        if (string.IsNullOrWhiteSpace(token))
+        try
         {
-            Console.WriteLine(Strings.EnvTokenMissing);
-            return;
+            Console.WriteLine("[BotHost] RunAsync開始");
+
+            var token = Environment.GetEnvironmentVariable("DISCORD_TOKEN");
+
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                Console.WriteLine(Strings.EnvTokenMissing);
+                return;
+            }
+
+            Console.WriteLine("[BotHost] Discord token確認OK");
+
+            Client = new DiscordClient(new DiscordConfiguration
+            {
+                Token = token,
+                TokenType = TokenType.Bot,
+                Intents =
+                    DiscordIntents.Guilds |
+                    DiscordIntents.GuildMessages |
+                    DiscordIntents.GuildVoiceStates |
+                    DiscordIntents.GuildMembers
+            });
+
+            Console.WriteLine("[BotHost] DiscordClient作成完了");
+
+            VcLogger = new Services.VcLogger();
+
+            Console.WriteLine("[BotHost] VcLogger作成完了");
+
+            BoManager = new Services.BoManager(Client);
+
+            Console.WriteLine("[BotHost] BoManager作成完了");
+
+            Client.VoiceStateUpdated +=
+                VcLogger.HandleVoiceStateUpdated;
+
+            Client.ComponentInteractionCreated +=
+                BoManager.HandleComponentInteraction;
+
+            Console.WriteLine("[BotHost] イベント登録完了");
+
+            var slash = Client.UseSlashCommands();
+
+            Console.WriteLine("[BotHost] SlashCommandsExtension作成完了");
+
+            slash.RegisterCommands<Commands.VcCommands>();
+
+            Console.WriteLine("[BotHost] VcCommands登録完了");
+
+            slash.RegisterCommands<Commands.BoCommands>();
+
+            Console.WriteLine("[BotHost] BoCommands登録完了");
+
+            Console.WriteLine("[BotHost] Discordへ接続開始");
+
+            await Client.ConnectAsync();
+
+            Console.WriteLine("[BotHost] Discord接続完了");
+
+            // Botを終了させないために待機
+            await Task.Delay(Timeout.Infinite);
         }
-
-        Client = new DiscordClient(new DiscordConfiguration
+        catch (Exception ex)
         {
-            Token = token,
-            TokenType = TokenType.Bot,
-            Intents = DiscordIntents.Guilds | DiscordIntents.GuildMessages | DiscordIntents.GuildVoiceStates | DiscordIntents.GuildMembers
-        });
+            Console.WriteLine("[BotHost] 致命的な例外が発生しました");
+            Console.WriteLine(ex.ToString());
 
-        // Interactivity is optional; if needed add the DSharpPlus.Interactivity package and enable it here.
-
-        // initialize services
-        VcLogger = new Services.VcLogger();
-        BoManager = new Services.BoManager(Client);
-
-        // wire events
-        Client.VoiceStateUpdated += VcLogger.HandleVoiceStateUpdated;
-        Client.ComponentInteractionCreated += BoManager.HandleComponentInteraction;
-
-        var slash = Client.UseSlashCommands();
-        slash.RegisterCommands<Commands.VcCommands>();
-        slash.RegisterCommands<Commands.BoCommands>();
-
-        await Client.ConnectAsync();
-        await Task.Delay(-1);
+            throw;
+        }
     }
 }
