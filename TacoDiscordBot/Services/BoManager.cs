@@ -133,178 +133,41 @@ public class BoManager
             if (!_sessions.TryGetValue(sessionId, out var session))
             {
                 _ = SafeCreateResponseAsync(e, "募集が見つかりませんでした。");
-
                 return;
+            }
+
+            // Interaction ACK（失敗しても続行）
+            try
+            {
+                await e.Interaction.CreateResponseAsync(InteractionResponseType.DeferredMessageUpdate);
+            }
+            catch
+            {
+                // ACK 失敗は無視
             }
 
             try
             {
-                // まずInteractionをACKしてタイムアウトを防止
-                try
-                {
-                    await e.Interaction.CreateResponseAsync(
-                        InteractionResponseType.DeferredMessageUpdate);
-                }
-                catch
-                {
-                    // ACK失敗時も処理は継続
-                }
-
-                // ==============================
-                // 募集終了
-                // ==============================
                 if (action == "bo_close")
                 {
-                    // 募集主のみ募集終了可能
-                    if (e.User.Id != session.OwnerId)
-                    {
-                        try
-                        {
-                            await e.Interaction.CreateFollowupMessageAsync(
-                                new DiscordFollowupMessageBuilder()
-                                    .WithContent(
-                                        "募集主のみ募集終了できます。")
-                                    .AsEphemeral(true));
-                        }
-                        catch
-                        {
-                            // 無視
-                        }
-
-                        return;
-                    }
-
-                    // すでに終了している場合
-                    if (session.IsClosed)
-                    {
-                        return;
-                    }
-
-                    session.IsClosed = true;
-
-                    // 通知とメッセージ編集はヘルパーで安全に行う
-                    _ = SafeSendChannelMessageAsync(session.ChannelId, "📢 募集を終了しました。");
-                    _ = SafeAppendToMessageAsync(session.ChannelId, session.MessageId, "\n\n**（募集終了）**");
-
+                    await HandleCloseActionAsync(e, session);
                     return;
                 }
 
-                // ==============================
-                // すでに募集終了している場合
-                // ==============================
-                    if (session.IsClosed)
-                    {
-                        _ = SafeCreateFollowupAsync(e, "この募集はすでに終了しています。");
-
-                        return;
-                    }
-
-                // 変更前の参加人数
-                var prevCount = session.Participants.Count;
-
-                lock (session)
+                // すでに終了している場合は通知して終わり
+                if (session.IsClosed)
                 {
-                    // ==============================
-                    // 参加
-                    // ==============================
-                    if (action == "bo_join")
-                    {
-                        if (!session.Participants.Contains(e.User.Id))
-                        {
-                            // 定員を超えないようにする
-                            var capacity =
-                                session.At > 0
-                                    ? session.At + 1
-                                    : int.MaxValue;
-
-                            if (session.Participants.Count < capacity)
-                            {
-                                session.Participants.Add(e.User.Id);
-                            }
-                        }
-                    }
-
-                    // ==============================
-                    // 参加取消
-                    // ==============================
-                    else if (action == "bo_cancel")
-                    {
-                        session.Participants.RemoveAll(
-                            x => x == e.User.Id);
-                    }
+                    await e.Interaction.CreateFollowupMessageAsync(new DiscordFollowupMessageBuilder().WithContent("この募集はすでに終了しています。").AsEphemeral(true));
+                    return;
                 }
 
-                await UpdateSessionMessageAsync(session);
-
-                // ==============================
-                // 定員到達チェック
-                // ==============================
-                try
-                {
-                    var cur = session.Participants.Count;
-
-                    var capacity =
-                        session.At > 0
-                            ? session.At + 1
-                            : int.MaxValue;
-
-                    if (session.At > 0 &&
-                        prevCount < capacity &&
-                        cur >= capacity)
-                    {
-                        // 定員に達した時点で募集終了
-                        session.IsClosed = true;
-
-                        var ch = await _client.GetChannelAsync(
-                            session.ChannelId);
-
-                        if (ch != null)
-                        {
-                            var mentions = string.Join(
-                                " ",
-                                session.Participants.Select(
-                                    userId => $"<@{userId}>"));
-
-                            await ch.SendMessageAsync(
-                                $"人数が集まりました！ {mentions}");
-
-                            // 元の募集メッセージに
-                            // 募集終了を追記
-                            try
-                            {
-                                var msg = await ch.GetMessageAsync(
-                                    session.MessageId);
-
-                                if (msg != null)
-                                {
-                                    await msg.ModifyAsync(m =>
-                                    {
-                                        m.Content =
-                                            (msg.Content ??
-                                             string.Empty)
-                                            + "\n\n**（募集終了）**";
-                                    });
-                                }
-                            }
-                            catch
-                            {
-                                // 編集失敗は無視
-                            }
-                        }
-                    }
-                }
-                catch
-                {
-                    // 通知失敗は無視
-                }
+                await HandleJoinOrCancelAsync(e, action, session);
             }
             catch (Exception ex)
             {
                 try
                 {
-                    await ReportErrorAsync(
-                        session.ChannelId,
-                        ex);
+                    await ReportErrorAsync(session.ChannelId, ex);
                 }
                 catch
                 {
@@ -312,6 +175,80 @@ public class BoManager
                 }
 
                 Logger.Error(ex, "コンポーネント処理");
+            }
+        }
+    }
+
+    private async Task HandleCloseActionAsync(ComponentInteractionCreateEventArgs e, Models.BoSession session)
+    {
+        // 募集主のみ募集終了可能
+        if (e.User.Id != session.OwnerId)
+        {
+            await e.Interaction.CreateFollowupMessageAsync(new DiscordFollowupMessageBuilder().WithContent("募集主のみ募集終了できます。").AsEphemeral(true));
+            return;
+        }
+
+        if (session.IsClosed)
+            return;
+
+        session.IsClosed = true;
+
+        var ch = await _client.GetChannelAsync(session.ChannelId);
+        if (ch != null)
+        {
+            await ch.SendMessageAsync("📢 募集を終了しました。");
+
+            var msg = await ch.GetMessageAsync(session.MessageId);
+            if (msg != null)
+            {
+                await msg.ModifyAsync(m => { m.Content = (msg.Content ?? string.Empty) + "\n\n**（募集終了）**"; });
+            }
+        }
+    }
+
+    private async Task HandleJoinOrCancelAsync(ComponentInteractionCreateEventArgs e, string action, Models.BoSession session)
+    {
+        // 変更前の参加人数
+        var prevCount = session.Participants.Count;
+
+        lock (session)
+        {
+            if (action == "bo_join")
+            {
+                if (!session.Participants.Contains(e.User.Id))
+                {
+                    var capacity = session.At > 0 ? session.At + 1 : int.MaxValue;
+                    if (session.Participants.Count < capacity)
+                        session.Participants.Add(e.User.Id);
+                }
+            }
+            else if (action == "bo_cancel")
+            {
+                session.Participants.RemoveAll(x => x == e.User.Id);
+            }
+        }
+
+        await UpdateSessionMessageAsync(session);
+
+        // 定員到達チェック
+        var cur = session.Participants.Count;
+        var capacityCheck = session.At > 0 ? session.At + 1 : int.MaxValue;
+
+        if (session.At > 0 && prevCount < capacityCheck && cur >= capacityCheck)
+        {
+            session.IsClosed = true;
+
+            var ch = await _client.GetChannelAsync(session.ChannelId);
+            if (ch != null)
+            {
+                var mentions = string.Join(" ", session.Participants.Select(userId => $"<@{userId}>"));
+                await ch.SendMessageAsync($"人数が集まりました！ {mentions}");
+
+                var msg = await ch.GetMessageAsync(session.MessageId);
+                if (msg != null)
+                {
+                    await msg.ModifyAsync(m => { m.Content = (msg.Content ?? string.Empty) + "\n\n**（募集終了）**"; });
+                }
             }
         }
     }
