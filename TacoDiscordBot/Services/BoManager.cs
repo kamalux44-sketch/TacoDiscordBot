@@ -829,8 +829,9 @@ public class BoManager
                         m.Content =
                             builder.Content;
 
+                        // DiscordMessageBuilder.Embed expects a built DiscordEmbed
                         m.Embed =
-                            embed;
+                            embed.Build();
 
                         // Componentsプロパティは
                         // 読み取り専用のため直接代入しない。
