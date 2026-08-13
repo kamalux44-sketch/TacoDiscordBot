@@ -8,6 +8,7 @@ using DSharpPlus.Entities;
 using DSharpPlus.EventArgs;
 using DSharpPlus.SlashCommands;
 using TacoDiscordBot.Models;
+using TacoDiscordBot.Util;
 
 namespace TacoDiscordBot.Services;
 
@@ -34,7 +35,7 @@ public class BoManager
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine(ex.ToString());
+                    Logger.Error(ex, "期限切れセッションクリーンアップループ");
                 }
 
                 await Task.Delay(TimeSpan.FromHours(1));
@@ -67,68 +68,32 @@ public class BoManager
                         {
                             // 二重通知防止
                             session.IsClosed = true;
+                            // 通知とメッセージ編集は安全なヘルパーに委譲
+                            var mentions =
+                                session.Participants != null &&
+                                session.Participants.Count > 0
+                                    ? string.Join(
+                                        " ",
+                                        session.Participants.Select(
+                                            id => $"<@{id}>"))
+                                    : string.Empty;
 
-                            try
+                            if (string.IsNullOrWhiteSpace(mentions))
                             {
-                                var ch = await _client.GetChannelAsync(
-                                    session.ChannelId);
-
-                                if (ch != null)
-                                {
-                                    var mentions =
-                                        session.Participants != null &&
-                                        session.Participants.Count > 0
-                                            ? string.Join(
-                                                " ",
-                                                session.Participants.Select(
-                                                    id => $"<@{id}>"))
-                                            : string.Empty;
-
-                                    if (string.IsNullOrWhiteSpace(mentions))
-                                    {
-                                        await ch.SendMessageAsync(
-                                            "締め切りです！");
-                                    }
-                                    else
-                                    {
-                                        await ch.SendMessageAsync(
-                                            $"締め切りです！ {mentions}");
-                                    }
-
-                                    // 元の募集メッセージに
-                                    // 「締め切り済み」を追記
-                                    try
-                                    {
-                                        var msg = await ch.GetMessageAsync(
-                                            session.MessageId);
-
-                                        if (msg != null)
-                                        {
-                                            await msg.ModifyAsync(m =>
-                                            {
-                                                m.Content =
-                                                    (msg.Content ??
-                                                     string.Empty)
-                                                    + "\n\n**（締め切り済み）**";
-                                            });
-                                        }
-                                    }
-                                    catch
-                                    {
-                                        // メッセージ編集失敗は無視
-                                    }
-                                }
+                                _ = SafeSendChannelMessageAsync(session.ChannelId, "締め切りです！");
                             }
-                            catch
+                            else
                             {
-                                // 通知失敗は無視
+                                _ = SafeSendChannelMessageAsync(session.ChannelId, $"締め切りです！ {mentions}");
                             }
+
+                            _ = SafeAppendToMessageAsync(session.ChannelId, session.MessageId, "\n\n**（締め切り済み）**");
                         }
                     }
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine(ex.ToString());
+                    Logger.Error(ex, "締め切り確認ループ");
                 }
 
                 await Task.Delay(TimeSpan.FromMinutes(1));
@@ -144,7 +109,7 @@ public class BoManager
         var id = e.Id ?? e?.Interaction?.Data?.CustomId;
 
         // ログを追加して、どのカスタムIDが送信されているかを確認します。
-        Console.WriteLine($"[BoManager] Component interaction received: e.Id={id} CustomId={e?.Interaction?.Data?.CustomId} UserId={e?.User?.Id}");
+        Logger.Info($"Component interaction received: e.Id={id} CustomId={e?.Interaction?.Data?.CustomId} UserId={e?.User?.Id}");
 
 
         if (string.IsNullOrEmpty(id))
@@ -167,18 +132,7 @@ public class BoManager
 
             if (!_sessions.TryGetValue(sessionId, out var session))
             {
-                try
-                {
-                    await e.Interaction.CreateResponseAsync(
-                        InteractionResponseType.ChannelMessageWithSource,
-                        new DiscordInteractionResponseBuilder()
-                            .WithContent("募集が見つかりませんでした。")
-                            .AsEphemeral(true));
-                }
-                catch
-                {
-                    // 無視
-                }
+                _ = SafeCreateResponseAsync(e, "募集が見つかりませんでした。");
 
                 return;
             }
@@ -228,42 +182,9 @@ public class BoManager
 
                     session.IsClosed = true;
 
-                    try
-                    {
-                        var ch = await _client.GetChannelAsync(
-                            session.ChannelId);
-
-                        if (ch != null)
-                        {
-                            await ch.SendMessageAsync(
-                                "📢 募集を終了しました。");
-
-                            try
-                            {
-                                var msg = await ch.GetMessageAsync(
-                                    session.MessageId);
-
-                                if (msg != null)
-                                {
-                                    await msg.ModifyAsync(m =>
-                                    {
-                                        m.Content =
-                                            (msg.Content ??
-                                             string.Empty)
-                                            + "\n\n**（募集終了）**";
-                                    });
-                                }
-                            }
-                            catch
-                            {
-                                // メッセージ編集失敗は無視
-                            }
-                        }
-                    }
-                    catch
-                    {
-                        // 通知失敗は無視
-                    }
+                    // 通知とメッセージ編集はヘルパーで安全に行う
+                    _ = SafeSendChannelMessageAsync(session.ChannelId, "📢 募集を終了しました。");
+                    _ = SafeAppendToMessageAsync(session.ChannelId, session.MessageId, "\n\n**（募集終了）**");
 
                     return;
                 }
@@ -271,23 +192,12 @@ public class BoManager
                 // ==============================
                 // すでに募集終了している場合
                 // ==============================
-                if (session.IsClosed)
-                {
-                    try
+                    if (session.IsClosed)
                     {
-                        await e.Interaction.CreateFollowupMessageAsync(
-                            new DiscordFollowupMessageBuilder()
-                                .WithContent(
-                                    "この募集はすでに終了しています。")
-                                .AsEphemeral(true));
-                    }
-                    catch
-                    {
-                        // 無視
-                    }
+                        _ = SafeCreateFollowupAsync(e, "この募集はすでに終了しています。");
 
-                    return;
-                }
+                        return;
+                    }
 
                 // 変更前の参加人数
                 var prevCount = session.Participants.Count;
@@ -400,6 +310,8 @@ public class BoManager
                 {
                     // 二次エラーは無視
                 }
+
+                Logger.Error(ex, "コンポーネント処理");
             }
         }
     }
@@ -615,7 +527,7 @@ public class BoManager
                 // 通知失敗は無視
             }
 
-            Console.WriteLine(ex.ToString());
+            Logger.Error(ex, "募集作成");
         }
     }
 
@@ -680,6 +592,8 @@ public class BoManager
                     {
                         // 通知失敗は無視
                     }
+
+                    Logger.Error(ex, "メインループ");
                 }
             }
         }
@@ -829,7 +743,7 @@ public class BoManager
                         // デバッグ情報を出力
                         try
                         {
-                            Console.WriteLine($"[BoManager] Updating message: ChannelId={session.ChannelId} MessageId={session.MessageId} ContentLen={(builder.Content?.Length ?? 0)} EmbedTitle={(embed?.Title ?? "(null)")} Fields={embed?.Fields?.Count ?? 0}");
+                            Logger.Info($"Updating message: ChannelId={session.ChannelId} MessageId={session.MessageId} ContentLen={(builder.Content?.Length ?? 0)} EmbedTitle={(embed?.Title ?? "(null)")} Fields={embed?.Fields?.Count ?? 0}");
                         }
                         catch { }
 
@@ -841,7 +755,7 @@ public class BoManager
                         // 失敗時に詳細をログに出す
                         try
                         {
-                            Console.WriteLine("[BoManager] Failed to modify message. Exception:\n" + ex.ToString());
+                            Util.Logger.Error(ex, "メッセージ編集失敗");
                         }
                         catch { }
 
@@ -863,7 +777,7 @@ public class BoManager
                 // 通知失敗は無視
             }
 
-            Console.WriteLine(ex.ToString());
+            Logger.Error(ex, "募集メッセージ更新");
         }
     }
 
@@ -895,7 +809,92 @@ public class BoManager
         {
             // 送信失敗は無視
         }
+        Logger.Error(ex, "エラー報告");
+    }
 
-        Console.WriteLine(ex.ToString());
+    // --- 安全な送受信ヘルパー ---
+    private async Task SafeSendChannelMessageAsync(ulong channelId, string content)
+    {
+        try
+        {
+            var ch = await _client.GetChannelAsync(channelId);
+            if (ch != null)
+                await ch.SendMessageAsync(content);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(ex, "メッセージ送信失敗");
+        }
+    }
+
+    private async Task SafeAppendToMessageAsync(ulong channelId, ulong messageId, string append)
+    {
+        try
+        {
+            var ch = await _client.GetChannelAsync(channelId);
+            if (ch == null) return;
+
+            var msg = await ch.GetMessageAsync(messageId);
+            if (msg == null) return;
+
+            await msg.ModifyAsync(m =>
+            {
+                m.Content = (msg.Content ?? string.Empty) + append;
+            });
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(ex, "メッセージ追記失敗");
+        }
+    }
+
+    private async Task SafeDeleteMessageAsync(ulong channelId, ulong messageId)
+    {
+        try
+        {
+            var ch = await _client.GetChannelAsync(channelId);
+            if (ch == null) return;
+
+            var msg = await ch.GetMessageAsync(messageId);
+            if (msg == null) return;
+
+            await msg.DeleteAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(ex, "メッセージ削除失敗");
+        }
+    }
+
+    private async Task SafeCreateResponseAsync(ComponentInteractionCreateEventArgs e, string content)
+    {
+        try
+        {
+            await e.Interaction.CreateResponseAsync(
+                InteractionResponseType.ChannelMessageWithSource,
+                new DiscordInteractionResponseBuilder()
+                    .WithContent(content)
+                    .AsEphemeral(true));
+        }
+        catch (Exception ex)
+        {
+            // ここでは二重応答などの失敗をログに残す
+            Logger.Error(ex, "応答作成失敗");
+        }
+    }
+
+    private async Task SafeCreateFollowupAsync(ComponentInteractionCreateEventArgs e, string content)
+    {
+        try
+        {
+            await e.Interaction.CreateFollowupMessageAsync(
+                new DiscordFollowupMessageBuilder()
+                    .WithContent(content)
+                    .AsEphemeral(true));
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(ex, "フォローアップ作成失敗");
+        }
     }
 }
