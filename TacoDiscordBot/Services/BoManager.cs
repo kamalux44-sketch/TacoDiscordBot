@@ -356,14 +356,14 @@ public class BoManager
                     .AddField(
                         "👤 " + Strings.LabelOwner,
                         $"<@{session.OwnerId}>",
-                        true)
+                        false)
 
                     .AddField(
                         "🏅 " + Strings.LabelRank,
                         string.IsNullOrEmpty(session.Rank)
                             ? "未設定"
                             : session.Rank,
-                        true)
+                        false)
 
                     .AddField(
                         "⏰ 締切",
@@ -380,7 +380,7 @@ public class BoManager
                                 session.DeadlineRaw)
                                 ? "—"
                                 : session.DeadlineRaw),
-                        true)
+                        false)
 
                     .AddField(
                         "📝 説明",
@@ -579,7 +579,7 @@ public class BoManager
                     .AddField(
                         "👤 " + Strings.LabelOwner,
                         $"<@{session.OwnerId}>",
-                        true)
+                        false)
 
                     .AddField(
                         "🏅 " + Strings.LabelRank,
@@ -587,7 +587,7 @@ public class BoManager
                             session.Rank)
                             ? "未設定"
                             : session.Rank,
-                        true)
+                        false)
 
                     .AddField(
                         "⏰ 締切",
@@ -604,7 +604,7 @@ public class BoManager
                                 session.DeadlineRaw)
                                 ? "—"
                                 : session.DeadlineRaw),
-                        true)
+                        false)
 
                     .AddField(
                         "📝 説明",
@@ -692,7 +692,7 @@ public class BoManager
                         // 失敗時に詳細をログに出す
                         try
                         {
-                            Util.Logger.Error(ex, "メッセージ編集失敗");
+                            Logger.Error(ex, "メッセージ編集失敗");
                         }
                         catch { }
 
