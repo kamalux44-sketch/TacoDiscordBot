@@ -824,35 +824,29 @@ public class BoManager
 
                 if (msg != null)
                 {
-                    await msg.ModifyAsync(m =>
+                    try
                     {
-                        m.Content =
-                            builder.Content;
+                        // デバッグ情報を出力
+                        try
+                        {
+                            Console.WriteLine($"[BoManager] Updating message: ChannelId={session.ChannelId} MessageId={session.MessageId} ContentLen={(builder.Content?.Length ?? 0)} EmbedTitle={(embed?.Title ?? "(null)")} Fields={embed?.Fields?.Count ?? 0}");
+                        }
+                        catch { }
 
-                        // DiscordMessageBuilder.Embed expects a built DiscordEmbed
-                        m.Embed =
-                            embed.Build();
+                        // DiscordMessageBuilder をそのまま使ってメッセージを更新する
+                        await msg.ModifyAsync(builder);
+                    }
+                    catch (Exception ex)
+                    {
+                        // 失敗時に詳細をログに出す
+                        try
+                        {
+                            Console.WriteLine("[BoManager] Failed to modify message. Exception:\n" + ex.ToString());
+                        }
+                        catch { }
 
-                        // Componentsプロパティは
-                        // 読み取り専用のため直接代入しない。
-                        // AddComponents()で設定する。
-                        m.AddComponents(
-                            new DiscordButtonComponent(
-                                ButtonStyle.Primary,
-                                $"bo_join:{session.SessionId}",
-                                "参加"),
-
-                            new DiscordButtonComponent(
-                                ButtonStyle.Secondary,
-                                $"bo_cancel:{session.SessionId}",
-                                "参加取消"),
-
-                            new DiscordButtonComponent(
-                                ButtonStyle.Danger,
-                                $"bo_close:{session.SessionId}",
-                                "募集終了")
-                        );
-                    });
+                        throw;
+                    }
                 }
             }
         }
