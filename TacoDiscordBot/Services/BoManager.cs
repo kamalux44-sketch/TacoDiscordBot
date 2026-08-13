@@ -140,7 +140,12 @@ public class BoManager
         DiscordClient client,
         ComponentInteractionCreateEventArgs e)
     {
-        var id = e.Id;
+        // e.Id が null/空 の場合、Interaction.Data の CustomId を代替として使用する
+        var id = e.Id ?? e?.Interaction?.Data?.CustomId;
+
+        // ログを追加して、どのカスタムIDが送信されているかを確認します。
+        Console.WriteLine($"[BoManager] Component interaction received: e.Id={id} CustomId={e?.Interaction?.Data?.CustomId} UserId={e?.User?.Id}");
+
 
         if (string.IsNullOrEmpty(id))
             return;
