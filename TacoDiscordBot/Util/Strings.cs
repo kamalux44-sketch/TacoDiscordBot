@@ -15,9 +15,10 @@ public static class Strings
     public const string DateTimeFormat = "yyyy/MM/dd HH:mm";
 
     // --- VC log ---
-    public const string VcLogJoinFmt = "参加: {0} ({1})";
-    public const string VcLogLeaveFmt = "退出: {0} ({1})";
-    public const string VcLogMoveFmt = "移動: {0} ({1} → {2}) ({3})";
+    // 誰が、どのチャンネルで、いつ 入室/退室/移動 したか分かるようにします。
+    public const string VcLogJoinFmt = "参加: {0} が {1} に入室 ({2})"; // {0}=user, {1}=channel, {2}=time
+    public const string VcLogLeaveFmt = "退出: {0} が {1} から退室 ({2})"; // {0}=user, {1}=channel, {2}=time
+    public const string VcLogMoveFmt = "移動: {0} が {1} → {2} ({3})"; // {0}=user, {1}=from, {2}=to, {3}=time
     // 環境変数: VC ログ送信先チャンネル ID (例: "123456789012345678")
     public const string EnvVcLogChannel = "VCLOG_CHANNEL";
 

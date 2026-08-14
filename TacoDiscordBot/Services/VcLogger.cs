@@ -174,12 +174,13 @@ public class VcLogger
             if (before == null && after != null)
             {
                 // ユーザーが VC に入室した場合のログ文字列を作成します。
-                text = string.Format(Strings.VcLogJoinFmt, e.User.Mention, DateTime.Now.ToString(Strings.DateTimeFormat));
+                // 出力に "誰が / どこに / いつ" が分かるようにする
+                text = string.Format(Strings.VcLogJoinFmt, e.User.Mention, after.Name, DateTime.Now.ToString(Strings.DateTimeFormat));
             }
             else if (before != null && after == null)
             {
                 // ユーザーが VC から退室した場合のログ
-                text = string.Format(Strings.VcLogLeaveFmt, e.User.Mention, DateTime.Now.ToString(Strings.DateTimeFormat));
+                text = string.Format(Strings.VcLogLeaveFmt, e.User.Mention, before.Name, DateTime.Now.ToString(Strings.DateTimeFormat));
             }
             else if (before != null && after != null && before.Id != after.Id)
             {
@@ -189,16 +190,42 @@ public class VcLogger
 
             if (text == null) return;
 
-                try
+            try
+            {
+                var ch = await client.GetChannelAsync(targetChannel);
+                if (ch == null) return;
+
+                // Embed with colored side bar depending on event type
+                DiscordColor color;
+                string title;
+                if (before == null && after != null)
                 {
-                    var ch = await client.GetChannelAsync(targetChannel);
-                    if (ch != null)
-                        await ch.SendMessageAsync(text);
+                    color = DiscordColor.Green;
+                    title = "VC 入室";
                 }
-                catch
+                else if (before != null && after == null)
                 {
-                    // ignore send errors
+                    color = DiscordColor.Red;
+                    title = "VC 退室";
                 }
+                else
+                {
+                    color = DiscordColor.Yellow;
+                    title = "VC 移動";
+                }
+
+                var embed = new DiscordEmbedBuilder()
+                    .WithTitle(title)
+                    .WithDescription(text)
+                    .WithColor(color)
+                    .WithTimestamp(DateTime.UtcNow);
+
+                await ch.SendMessageAsync(new DiscordMessageBuilder().AddEmbed(embed));
+            }
+            catch
+            {
+                // ignore send errors
+            }
         }
         catch
         {
