@@ -467,10 +467,8 @@ public class BoManager
                                 "募集終了")
                         });
 
-            if (!isMinimal)
-            {
-                builder.AddEmbed(embed);
-            }
+            // 埋め込みは常に追加する（最小表示でも詳細は埋め込みで確認できるように）
+            builder.AddEmbed(embed);
 
             var msg =
                 await ctx.Channel.SendMessageAsync(
@@ -721,10 +719,8 @@ public class BoManager
                                 "募集終了")
                         });
 
-            if (!isMinimal)
-            {
-                builder.AddEmbed(embed);
-            }
+            // 埋め込みは常に追加する（最小表示でも詳細は埋め込みで確認できるように）
+            builder.AddEmbed(embed);
 
             // 元の募集メッセージを取得
             var ch =
