@@ -1,4 +1,5 @@
 using System.Threading.Tasks;
+using DSharpPlus;
 using DSharpPlus.SlashCommands;
 using DSharpPlus.Entities;
 
@@ -14,7 +15,9 @@ public class VcLogCommands : ApplicationCommandModule
 
         if (guildId == 0)
         {
-            await ctx.Channel.SendMessageAsync("このコマンドはサーバー内で実行してください。");
+            await ctx.CreateResponseAsync(
+                InteractionResponseType.ChannelMessageWithSource,
+                new DiscordInteractionResponseBuilder().WithContent("このコマンドはサーバー内で実行してください。").AsEphemeral(true));
             return;
         }
 
@@ -22,12 +25,12 @@ public class VcLogCommands : ApplicationCommandModule
         if (BotHost.VcLogger.IsConfiguredForGuild(guildId))
         {
             await BotHost.VcLogger.RemoveChannelAsync(guildId);
-            await ctx.Channel.SendMessageAsync(Strings.VcToggleOff);
+            await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder().WithContent(Strings.VcToggleOff).AsEphemeral(true));
         }
         else
         {
             await BotHost.VcLogger.SetChannelAsync(guildId, ctx.Channel.Id);
-            await ctx.Channel.SendMessageAsync(Strings.VcToggleOn);
+            await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder().WithContent(Strings.VcToggleOn).AsEphemeral(true));
         }
     }
 }

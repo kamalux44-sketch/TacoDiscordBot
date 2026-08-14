@@ -35,6 +35,9 @@ public class BoCommands : ApplicationCommandModule
             "募集の説明（任意）")]
         string description = "")
     {
+        // Acknowledge the interaction to avoid "application did not respond"
+        await ctx.CreateResponseAsync(InteractionResponseType.DeferredChannelMessageWithSource);
+
         DateTime? parsedDeadline = null;
 
         if (!string.IsNullOrWhiteSpace(deadline))
@@ -80,5 +83,8 @@ public class BoCommands : ApplicationCommandModule
             rank,
             parsedDeadline,
             description);
+
+        // Edit the deferred response to confirm
+        await ctx.EditResponseAsync(new DiscordWebhookBuilder().WithContent("募集を作成しました。"));
     }
 }

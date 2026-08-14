@@ -56,7 +56,7 @@ public class VcRankingService
 
         var ranks = await repo.GetRankingAsync(guildId, since);
 
-        embed.WithTitle($"VC 滞在時間ランキング ({periodLabel})");
+        embed.WithTitle($"📣VC 滞在時間ランキング ({periodLabel})");
 
         if (ranks == null || ranks.Count == 0)
         {
@@ -66,7 +66,7 @@ public class VcRankingService
 
         // Build formatted ranking
         var sb = new StringBuilder();
-        sb.AppendLine("?? VCランキング");
+        sb.AppendLine("👑 VCランキング");
         sb.AppendLine("━━━━━━━━━━━━━━━━━━");
         sb.AppendLine($"{periodLabel}のVC滞在時間ランキングです！");
         sb.AppendLine();
@@ -93,9 +93,9 @@ public class VcRankingService
             var timestr = $"{hours}時間{mins:D2}分";
 
             string line;
-            if (idx == 1) line = $"?? {name}　{timestr}";
-            else if (idx == 2) line = $"?? {name}　{timestr}";
-            else if (idx == 3) line = $"?? {name}　{timestr}";
+            if (idx == 1) line = $"🥇 {name}　{timestr}";
+            else if (idx == 2) line = $"🥈 {name}　{timestr}";
+            else if (idx == 3) line = $"🥉 {name}　{timestr}";
             else line = $"{idx,2}. {name}　{timestr}";
 
             sb.AppendLine(line);
@@ -122,7 +122,7 @@ public class VcRankingService
         {
             var uh = userTotal / 3600;
             var um = (userTotal % 3600) / 60;
-            sb.AppendLine($"?? あなた");
+            sb.AppendLine($"👤 あなた");
             sb.AppendLine($"{userRankIndex}位　{uh}時間{um:D2}分");
         }
 

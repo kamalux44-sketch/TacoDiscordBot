@@ -1,6 +1,8 @@
 using System.Threading.Tasks;
+using DSharpPlus;
 using DSharpPlus.SlashCommands;
 using DSharpPlus.Entities;
+using DSharpPlus.SlashCommands.Attributes;
 using TacoDiscordBot.Services;
 
 namespace TacoDiscordBot.Commands;
@@ -12,16 +14,19 @@ public class VcRankingCommands : ApplicationCommandModule
         InteractionContext ctx,
         [Option("period", "集計期間: day, week, month, all")] string period = "day")
     {
+        // ACK the interaction to avoid "application did not respond"
+        await ctx.CreateResponseAsync(InteractionResponseType.DeferredChannelMessageWithSource);
+
         var guildId = ctx.Guild?.Id ?? 0UL;
         if (guildId == 0)
         {
-            await ctx.Channel.SendMessageAsync("サーバー内で実行してください。");
+            await ctx.EditResponseAsync(new DiscordWebhookBuilder().WithContent("サーバー内で実行してください。"));
             return;
         }
 
         var svc = new VcRankingService();
         var embed = await svc.BuildRankingEmbedAsync(guildId, period, ctx.Guild, ctx.User);
-        await ctx.Channel.SendMessageAsync(new DiscordMessageBuilder().AddEmbed(embed));
+        await ctx.EditResponseAsync(new DiscordWebhookBuilder().AddEmbed(embed.Build()));
     }
 }
 
