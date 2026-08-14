@@ -15,6 +15,7 @@ public class VcLogger
 {
     // per-guild targets are stored in DB if available. Fallback to legacy single-channel env var.
     private readonly VcLogRepository _repo;
+    private readonly VcRankingRepository _rankingRepo;
     private readonly System.Collections.Concurrent.ConcurrentDictionary<ulong, ulong> _targets = new();
     // legacy fallback
     private ulong _legacyChannelId; // 0=未設定
@@ -30,8 +31,9 @@ public class VcLogger
         _legacyChannelId = 0;
         _legacyEnabled = false;
 
-        // Try to create repository from env. If exists, load targets into cache.
+        // Try to create repositories from env. If exists, load targets into cache.
         _repo = VcLogRepository.TryCreateFromEnv();
+        _rankingRepo = VcRankingRepository.TryCreateFromEnv();
         if (_repo != null)
         {
             try
@@ -183,12 +185,12 @@ public class VcLogger
                 // persist session start
                 try
                 {
-                    if (_repo != null)
-                    {
-                        var id = _repo.CreateVcSessionAsync(e.Guild.Id, e.User.Id, after.Id, DateTime.UtcNow).GetAwaiter().GetResult();
-                        var key = $"{e.Guild.Id}:{e.User.Id}";
-                        _openSessions[key] = (id, DateTime.UtcNow, after.Id);
-                    }
+                if (_rankingRepo != null)
+                {
+                    var id = _rankingRepo.CreateVcSessionAsync(e.Guild.Id, e.User.Id, after.Id, DateTime.UtcNow).GetAwaiter().GetResult();
+                    var key = $"{e.Guild.Id}:{e.User.Id}";
+                    _openSessions[key] = (id, DateTime.UtcNow, after.Id);
+                }
                 }
                 catch
                 {
@@ -206,12 +208,12 @@ public class VcLogger
                     if (_openSessions.TryRemove(key, out var v))
                     {
                         var dur = (long)(DateTime.UtcNow - v.joinedAtUtc).TotalSeconds;
-                        _repo?.CloseVcSessionAsync(v.dbId, DateTime.UtcNow, dur).GetAwaiter().GetResult();
+                        _rankingRepo?.CloseVcSessionAsync(v.dbId, DateTime.UtcNow, dur).GetAwaiter().GetResult();
                     }
                     else
                     {
                         // fallback: try close latest open session in DB
-                        _repo?.CloseLatestSessionForUserAsync(e.Guild.Id, e.User.Id, DateTime.UtcNow).GetAwaiter().GetResult();
+                        _rankingRepo?.CloseLatestSessionForUserAsync(e.Guild.Id, e.User.Id, DateTime.UtcNow).GetAwaiter().GetResult();
                     }
                 }
                 catch
@@ -230,16 +232,16 @@ public class VcLogger
                     if (_openSessions.TryRemove(key, out var v))
                     {
                         var dur = (long)(DateTime.UtcNow - v.joinedAtUtc).TotalSeconds;
-                        _repo?.CloseVcSessionAsync(v.dbId, DateTime.UtcNow, dur).GetAwaiter().GetResult();
+                        _rankingRepo?.CloseVcSessionAsync(v.dbId, DateTime.UtcNow, dur).GetAwaiter().GetResult();
                     }
                     else
                     {
-                        _repo?.CloseLatestSessionForUserAsync(e.Guild.Id, e.User.Id, DateTime.UtcNow).GetAwaiter().GetResult();
+                        _rankingRepo?.CloseLatestSessionForUserAsync(e.Guild.Id, e.User.Id, DateTime.UtcNow).GetAwaiter().GetResult();
                     }
 
-                    if (_repo != null)
+                    if (_rankingRepo != null)
                     {
-                        var id = _repo.CreateVcSessionAsync(e.Guild.Id, e.User.Id, after.Id, DateTime.UtcNow).GetAwaiter().GetResult();
+                        var id = _rankingRepo.CreateVcSessionAsync(e.Guild.Id, e.User.Id, after.Id, DateTime.UtcNow).GetAwaiter().GetResult();
                         _openSessions[key] = (id, DateTime.UtcNow, after.Id);
                     }
                 }

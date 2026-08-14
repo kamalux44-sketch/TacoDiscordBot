@@ -60,9 +60,11 @@ public static class BotHost
 
             Console.WriteLine("[BotHost] SlashCommandsExtension作成完了");
 
-            slash.RegisterCommands<Commands.VcCommands>();
+            slash.RegisterCommands<Commands.VcLogCommands>();
+            Console.WriteLine("[BotHost] VcLogCommands登録完了");
 
-            Console.WriteLine("[BotHost] VcCommands登録完了");
+            slash.RegisterCommands<Commands.VcRankingCommands>();
+            Console.WriteLine("[BotHost] VcRankingCommands登録完了");
 
             slash.RegisterCommands<Commands.BoCommands>();
 
