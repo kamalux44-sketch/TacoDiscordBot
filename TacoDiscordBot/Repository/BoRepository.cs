@@ -23,8 +23,8 @@ public class BoRepository
             if (string.IsNullOrWhiteSpace(host))
                 return null;
 
-            var port = Environment.GetEnvironmentVariable("PGPORT") ?? "5432";
-            var db = Environment.GetEnvironmentVariable("PGDATABASE") ?? "postgres";
+            var port = Environment.GetEnvironmentVariable("PGPORT") ?? Strings.DefaultDBPPort;
+            var db = Environment.GetEnvironmentVariable("PGDATABASE") ?? Strings.DefaultDBName;
             var user = Environment.GetEnvironmentVariable("PGUSER");
             var pass = Environment.GetEnvironmentVariable("PGPASSWORD");
             var ssl = Environment.GetEnvironmentVariable("PGSSLMODE");

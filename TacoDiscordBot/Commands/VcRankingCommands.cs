@@ -12,7 +12,7 @@ public class VcRankingCommands : ApplicationCommandModule
     [SlashCommand("vcrank", "VC 滞在時間ランキングを表示します")]
     public async Task VcRank(
         InteractionContext ctx,
-        [Option("period", "集計期間: day, week, month, all")] string period = "day")
+        [Option("period", "集計期間: day, week, month, all")] string period = "all")
     {
         // ACK the interaction to avoid "application did not respond"
         await ctx.CreateResponseAsync(InteractionResponseType.DeferredChannelMessageWithSource);

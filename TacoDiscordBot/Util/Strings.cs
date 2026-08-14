@@ -11,6 +11,10 @@ public static class Strings
     // --- General ---
     public const string EnvTokenMissing = "Environment variable DISCORD_TOKEN is not set. Set it to your bot token.";
 
+    //デフォルトの接続情報は、環境変数が設定されていない場合に使用されます。
+    public const string DefaultDBName = "postgres";
+    public const string DefaultDBPPort = "5432";
+
     // --- Formatting ---
     public const string DateTimeFormat = "yyyy/MM/dd HH:mm";
 
