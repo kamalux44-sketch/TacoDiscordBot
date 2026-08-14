@@ -78,13 +78,18 @@ public class BoManager
                                             id => $"<@{id}>"))
                                     : string.Empty;
 
+                            // 締め切りメッセージにも募集内容が分かるようにする
+                            var header = !string.IsNullOrWhiteSpace(session.Body)
+                                ? $"📢 『{session.Body}』 の募集は締め切りです！"
+                                : "📢 募集は締め切りです！";
+
                             if (string.IsNullOrWhiteSpace(mentions))
                             {
-                                _ = SafeSendChannelMessageAsync(session.ChannelId, "締め切りです！");
+                                _ = SafeSendChannelMessageAsync(session.ChannelId, header);
                             }
                             else
                             {
-                                _ = SafeSendChannelMessageAsync(session.ChannelId, $"締め切りです！ {mentions}");
+                                _ = SafeSendChannelMessageAsync(session.ChannelId, header + " " + mentions);
                             }
 
                             _ = SafeAppendToMessageAsync(session.ChannelId, session.MessageId, "\n\n**（締め切り済み）**");
@@ -196,7 +201,11 @@ public class BoManager
         var ch = await _client.GetChannelAsync(session.ChannelId);
         if (ch != null)
         {
-            await ch.SendMessageAsync("📢 募集を終了しました。");
+                // どの募集が終了したか分かるように、募集内容（ある場合）を含めて通知
+                if (!string.IsNullOrWhiteSpace(session.Body))
+                    await ch.SendMessageAsync($"📢 募集を終了しました：『{session.Body}』");
+                else
+                    await ch.SendMessageAsync("📢 募集を終了しました。");
 
             var msg = await ch.GetMessageAsync(session.MessageId);
             if (msg != null)
@@ -242,7 +251,11 @@ public class BoManager
             if (ch != null)
             {
                 var mentions = string.Join(" ", session.Participants.Select(userId => $"<@{userId}>"));
-                await ch.SendMessageAsync($"人数が集まりました！ {mentions}");
+                // どの募集で人数が集まったか分かるように募集内容を含める
+                if (!string.IsNullOrWhiteSpace(session.Body))
+                    await ch.SendMessageAsync($"📢 人数が集まりました！（募集: 『{session.Body}』） {mentions}");
+                else
+                    await ch.SendMessageAsync($"📢 人数が集まりました！ {mentions}");
 
                 var msg = await ch.GetMessageAsync(session.MessageId);
                 if (msg != null)
