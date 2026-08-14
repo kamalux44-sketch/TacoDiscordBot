@@ -19,6 +19,8 @@ public class VcLogger
     // legacy fallback
     private ulong _legacyChannelId; // 0=未設定
     private bool _legacyEnabled;
+    // in-memory map of open sessions: key = "{guildId}:{userId}" -> (dbId, joinedAtUtc, channelId)
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, (long dbId, DateTime joinedAtUtc, ulong channelId)> _openSessions = new();
 
     /// <summary>
     /// コンストラクタ。環境変数からチャンネルIDを読み取り、初期状態を設定します。
@@ -42,6 +44,8 @@ public class VcLogger
             {
                 // ignore
             }
+
+            // nothing else to load for open sessions; they are created on join
         }
 
         // legacy env var
@@ -176,16 +180,73 @@ public class VcLogger
                 // ユーザーが VC に入室した場合のログ文字列を作成します。
                 // 出力に "誰が / どこに / いつ" が分かるようにする
                 text = string.Format(Strings.VcLogJoinFmt, e.User.Mention, after.Name, DateTime.Now.ToString(Strings.DateTimeFormat));
+                // persist session start
+                try
+                {
+                    if (_repo != null)
+                    {
+                        var id = _repo.CreateVcSessionAsync(e.Guild.Id, e.User.Id, after.Id, DateTime.UtcNow).GetAwaiter().GetResult();
+                        var key = $"{e.Guild.Id}:{e.User.Id}";
+                        _openSessions[key] = (id, DateTime.UtcNow, after.Id);
+                    }
+                }
+                catch
+                {
+                    // ignore persistence errors
+                }
             }
             else if (before != null && after == null)
             {
                 // ユーザーが VC から退室した場合のログ
                 text = string.Format(Strings.VcLogLeaveFmt, e.User.Mention, before.Name, DateTime.Now.ToString(Strings.DateTimeFormat));
+                // persist session end
+                try
+                {
+                    var key = $"{e.Guild.Id}:{e.User.Id}";
+                    if (_openSessions.TryRemove(key, out var v))
+                    {
+                        var dur = (long)(DateTime.UtcNow - v.joinedAtUtc).TotalSeconds;
+                        _repo?.CloseVcSessionAsync(v.dbId, DateTime.UtcNow, dur).GetAwaiter().GetResult();
+                    }
+                    else
+                    {
+                        // fallback: try close latest open session in DB
+                        _repo?.CloseLatestSessionForUserAsync(e.Guild.Id, e.User.Id, DateTime.UtcNow).GetAwaiter().GetResult();
+                    }
+                }
+                catch
+                {
+                    // ignore
+                }
             }
             else if (before != null && after != null && before.Id != after.Id)
             {
                 // チャンネル移動が発生した場合のログ
                 text = string.Format(Strings.VcLogMoveFmt, e.User.Mention, before.Name, after.Name, DateTime.Now.ToString(Strings.DateTimeFormat));
+                // persist move: close previous session and create new one
+                try
+                {
+                    var key = $"{e.Guild.Id}:{e.User.Id}";
+                    if (_openSessions.TryRemove(key, out var v))
+                    {
+                        var dur = (long)(DateTime.UtcNow - v.joinedAtUtc).TotalSeconds;
+                        _repo?.CloseVcSessionAsync(v.dbId, DateTime.UtcNow, dur).GetAwaiter().GetResult();
+                    }
+                    else
+                    {
+                        _repo?.CloseLatestSessionForUserAsync(e.Guild.Id, e.User.Id, DateTime.UtcNow).GetAwaiter().GetResult();
+                    }
+
+                    if (_repo != null)
+                    {
+                        var id = _repo.CreateVcSessionAsync(e.Guild.Id, e.User.Id, after.Id, DateTime.UtcNow).GetAwaiter().GetResult();
+                        _openSessions[key] = (id, DateTime.UtcNow, after.Id);
+                    }
+                }
+                catch
+                {
+                    // ignore
+                }
             }
 
             if (text == null) return;
