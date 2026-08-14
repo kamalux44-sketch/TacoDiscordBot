@@ -14,8 +14,8 @@ public class BoSession
     // 募集が作成されたチャンネルのDiscordチャンネルID
     public ulong ChannelId { get; set; }
 
-    // ゲーム名
-    public string Game { get; set; }
+    // 募集内容
+    public string Body { get; set; }
 
     // 募集人数
     // 募集主は含めず、「追加で何人募集するか」を表します。

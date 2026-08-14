@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Linq;
+using System.Linq; // No-op placeholder to ensure patch sections align
 using System.Threading.Tasks;
 using DSharpPlus;
 using DSharpPlus.Entities;
@@ -255,7 +255,7 @@ public class BoManager
 
     public async Task CreateSessionAsync(
         InteractionContext ctx,
-        string game,
+        string body,
         int at,
         string rank,
         DateTime? deadline = null,
@@ -272,7 +272,7 @@ public class BoManager
                 SessionId = sessionId,
                 MessageId = 0,
                 ChannelId = ctx.Channel.Id,
-                Game = game,
+                Body = body,
                 At = at,
                 Rank = rank ?? string.Empty,
 
@@ -340,85 +340,114 @@ public class BoManager
                     : $"{session.Participants.Count}/任意";
 
             // ==============================
-            // Embed
+            // Embed (条件付きでフィールドを追加)
             // ==============================
-            var embed =
+            var embedBuilder =
                 new DiscordEmbedBuilder()
                     .WithTitle(Strings.EmbedTitle)
+                    .WithColor(DiscordColor.Blurple)
+                    .WithTimestamp(DateTime.UtcNow);
 
-                    .AddField(
-                        "🎮 " + Strings.LabelGame,
-                        string.IsNullOrWhiteSpace(session.Game)
-                            ? "未設定"
-                            : session.Game,
-                        false)
+            // 募集内容は指定されていれば表示
+            if (!string.IsNullOrWhiteSpace(session.Body))
+            {
+                embedBuilder.AddField(
+                    "🎮 " + Strings.LabelContent,
+                    session.Body,
+                    false);
+            }
 
-                    .AddField(
-                        "👤 " + Strings.LabelOwner,
-                        $"<@{session.OwnerId}>",
-                        false)
+            // 募集主は常に表示
+            embedBuilder.AddField(
+                "👤 " + Strings.LabelOwner,
+                $"<@{session.OwnerId}>",
+                false);
 
-                    .AddField(
-                        "🏅 " + Strings.LabelRank,
-                        string.IsNullOrEmpty(session.Rank)
-                            ? "未設定"
-                            : session.Rank,
-                        false)
+            // ランク（指定があれば表示）
+            if (!string.IsNullOrWhiteSpace(session.Rank))
+            {
+                embedBuilder.AddField(
+                    "🏅 " + Strings.LabelRank,
+                    session.Rank,
+                    false);
+            }
 
-                    .AddField(
-                        "⏰ 締切",
-                        session.Deadline.HasValue
-                            ? TimeZoneInfo.ConvertTimeFromUtc(
-                                DateTime.SpecifyKind(
-                                    session.Deadline.Value,
-                                    DateTimeKind.Utc),
-                                TimeZoneInfo.FindSystemTimeZoneById(
-                                    "Tokyo Standard Time"))
-                                .ToString(
-                                    Strings.DateTimeFormat)
-                            : (string.IsNullOrWhiteSpace(
-                                session.DeadlineRaw)
-                                ? "—"
-                                : session.DeadlineRaw),
-                        false)
+            // 締め切り（締め切りがある、または生の入力がある場合に表示）
+            if (session.Deadline.HasValue)
+            {
+                embedBuilder.AddField(
+                    "⏰ 締切",
+                    TimeZoneInfo.ConvertTimeFromUtc(
+                        DateTime.SpecifyKind(
+                            session.Deadline.Value,
+                            DateTimeKind.Utc),
+                        TimeZoneInfo.FindSystemTimeZoneById(
+                            "Tokyo Standard Time"))
+                        .ToString(Strings.DateTimeFormat),
+                    false);
+            }
+            else if (!string.IsNullOrWhiteSpace(session.DeadlineRaw))
+            {
+                embedBuilder.AddField(
+                    "⏰ 締切",
+                    session.DeadlineRaw,
+                    false);
+            }
 
-                    .AddField(
-                        "📝 説明",
-                        string.IsNullOrWhiteSpace(
-                            session.Description)
-                            ? "—"
-                            : session.Description,
-                        false)
+            // 説明（指定があれば表示）
+            if (!string.IsNullOrWhiteSpace(session.Description))
+            {
+                embedBuilder.AddField(
+                    "📝 説明",
+                    session.Description,
+                    false);
+            }
 
-                    .AddField(
-                        "📋 " + Strings.LabelParticipants,
-                        participantsText,
-                        false)
+            // 参加者一覧（常に表示）
+            embedBuilder.AddField(
+                "📋 " + Strings.LabelParticipants,
+                participantsText,
+                false);
 
-                    .WithFooter(
-                        "参加数: " + atText)
+            // フッターは募集人数が指定されている場合のみ表示
+            if (session.At > 0)
+            {
+                embedBuilder.WithFooter("参加数: " + atText);
+            }
 
-                    .WithColor(
-                        DiscordColor.Blurple)
+            var embed = embedBuilder;
 
-                    .WithTimestamp(
-                        DateTime.UtcNow);
+            // ==============================
+            // 募集メッセージ本体（簡易表示判定）
+            // ==============================
+            var isMinimal =
+                string.IsNullOrWhiteSpace(session.Body) &&
+                session.At == 0 &&
+                string.IsNullOrWhiteSpace(session.Rank) &&
+                string.IsNullOrWhiteSpace(session.DeadlineRaw) &&
+                string.IsNullOrWhiteSpace(session.Description);
+
+            string content;
+            if (isMinimal)
+            {
+                // 他項目が未指定のみのシンプルな投稿
+                content = $"@here\n<@{session.OwnerId}>さんが何か募集しているようです";
+            }
+            else
+            {
+                // 募集内容が指定されている場合は「○○さんが<募集内容>の募集を開始しました！」を表示
+                if (!string.IsNullOrWhiteSpace(session.Body))
+                    content = $"@here\n<@{session.OwnerId}>さんが{session.Body}の募集を開始しました！";
+                else
+                    content = $"@here\n募集を開始しました！";
+            }
 
             // ==============================
             // 募集メッセージ
             // ==============================
             var builder =
                 new DiscordMessageBuilder()
-                    .WithContent(
-                        $"@here\n**{(
-                            string.IsNullOrWhiteSpace(
-                                session.Game)
-                                ? "募集"
-                                : session.Game
-                        )}** の募集を開始しました！")
-
-                    .AddEmbed(embed)
-
+                    .WithContent(content)
                     .AddComponents(
                         new DiscordComponent[]
                         {
@@ -437,6 +466,11 @@ public class BoManager
                                 $"bo_close:{sessionId}",
                                 "募集終了")
                         });
+
+            if (!isMinimal)
+            {
+                builder.AddEmbed(embed);
+            }
 
             var msg =
                 await ctx.Channel.SendMessageAsync(
@@ -562,87 +596,112 @@ public class BoManager
                     : $"{cur}/任意";
 
             // ==============================
-            // Embed
+            // Embed (条件付きでフィールドを追加)
             // ==============================
-            var embed =
+            var embedBuilder =
                 new DiscordEmbedBuilder()
                     .WithTitle(Strings.EmbedTitle)
+                    .WithColor(DiscordColor.Blurple)
+                    .WithTimestamp(DateTime.UtcNow);
 
-                    .AddField(
-                        "🎮 " + Strings.LabelGame,
-                        string.IsNullOrWhiteSpace(
-                            session.Game)
-                            ? "未設定"
-                            : session.Game,
-                        false)
+            // 募集内容
+            if (!string.IsNullOrWhiteSpace(session.Body))
+            {
+                embedBuilder.AddField(
+                    "🎮 " + Strings.LabelContent,
+                    session.Body,
+                    false);
+            }
 
-                    .AddField(
-                        "👤 " + Strings.LabelOwner,
-                        $"<@{session.OwnerId}>",
-                        false)
+            // 募集主
+            embedBuilder.AddField(
+                "👤 " + Strings.LabelOwner,
+                $"<@{session.OwnerId}>",
+                false);
 
-                    .AddField(
-                        "🏅 " + Strings.LabelRank,
-                        string.IsNullOrEmpty(
-                            session.Rank)
-                            ? "未設定"
-                            : session.Rank,
-                        false)
+            // ランク（指定があれば表示）
+            if (!string.IsNullOrWhiteSpace(session.Rank))
+            {
+                embedBuilder.AddField(
+                    "🏅 " + Strings.LabelRank,
+                    session.Rank,
+                    false);
+            }
 
-                    .AddField(
-                        "⏰ 締切",
-                        session.Deadline.HasValue
-                            ? TimeZoneInfo.ConvertTimeFromUtc(
-                                DateTime.SpecifyKind(
-                                    session.Deadline.Value,
-                                    DateTimeKind.Utc),
-                                TimeZoneInfo.FindSystemTimeZoneById(
-                                    "Tokyo Standard Time"))
-                                .ToString(
-                                    Strings.DateTimeFormat)
-                            : (string.IsNullOrWhiteSpace(
-                                session.DeadlineRaw)
-                                ? "—"
-                                : session.DeadlineRaw),
-                        false)
+            // 締め切り（締め切りがある、または生の入力がある場合に表示）
+            if (session.Deadline.HasValue)
+            {
+                embedBuilder.AddField(
+                    "⏰ 締切",
+                    TimeZoneInfo.ConvertTimeFromUtc(
+                        DateTime.SpecifyKind(
+                            session.Deadline.Value,
+                            DateTimeKind.Utc),
+                        TimeZoneInfo.FindSystemTimeZoneById(
+                            "Tokyo Standard Time"))
+                        .ToString(Strings.DateTimeFormat),
+                    false);
+            }
+            else if (!string.IsNullOrWhiteSpace(session.DeadlineRaw))
+            {
+                embedBuilder.AddField(
+                    "⏰ 締切",
+                    session.DeadlineRaw,
+                    false);
+            }
 
-                    .AddField(
-                        "📝 説明",
-                        string.IsNullOrWhiteSpace(
-                            session.Description)
-                            ? "—"
-                            : session.Description,
-                        false)
+            // 説明（指定があれば表示）
+            if (!string.IsNullOrWhiteSpace(session.Description))
+            {
+                embedBuilder.AddField(
+                    "📝 説明",
+                    session.Description,
+                    false);
+            }
 
-                    .AddField(
-                        "📋 " + Strings.LabelParticipants,
-                        participantsText,
-                        false)
+            // 参加者一覧
+            embedBuilder.AddField(
+                "📋 " + Strings.LabelParticipants,
+                participantsText,
+                false);
 
-                    .WithFooter(
-                        "参加数: " + atText)
+            // フッターは募集人数が指定されている場合のみ表示
+            if (session.At > 0)
+            {
+                embedBuilder.WithFooter("参加数: " + atText);
+            }
 
-                    .WithColor(
-                        DiscordColor.Blurple)
+            var embed = embedBuilder;
 
-                    .WithTimestamp(
-                        DateTime.UtcNow);
+            // ==============================
+            // メッセージ（簡易表示判定）
+            // ==============================
+            var isMinimal =
+                string.IsNullOrWhiteSpace(session.Body) &&
+                session.At == 0 &&
+                string.IsNullOrWhiteSpace(session.Rank) &&
+                string.IsNullOrWhiteSpace(session.DeadlineRaw) &&
+                string.IsNullOrWhiteSpace(session.Description);
+
+            string content;
+            if (isMinimal)
+            {
+                content = $"@here\n<@{session.OwnerId}>さんが何か募集しているようです";
+            }
+            else
+            {
+                if (!string.IsNullOrWhiteSpace(session.Body))
+                    content = $"@here\n<@{session.OwnerId}>さんが{session.Body}の募集を更新しました！";
+                else
+                    content = $"@here\n募集を更新しました！";
+            }
 
             // ==============================
             // メッセージ
             // ==============================
             var builder =
                 new DiscordMessageBuilder()
-                    .WithContent(
-                        $"@here\n**{(
-                            string.IsNullOrWhiteSpace(
-                                session.Game)
-                                ? "募集"
-                                : session.Game
-                        )}** の募集を更新しました！")
-
-                    .AddEmbed(embed)
-
+                    .WithContent(content)
                     .AddComponents(
                         new DiscordComponent[]
                         {
@@ -661,6 +720,11 @@ public class BoManager
                                 $"bo_close:{session.SessionId}",
                                 "募集終了")
                         });
+
+            if (!isMinimal)
+            {
+                builder.AddEmbed(embed);
+            }
 
             // 元の募集メッセージを取得
             var ch =

@@ -28,7 +28,7 @@ public static class Strings
     public const string ButtonJoin = "参加";
     public const string ButtonCancel = "キャンセル";
 
-    public const string LabelGame = "ゲーム名";
+    public const string LabelContent = "募集内容";
     public const string LabelOwner = "募集主";
     public const string LabelRank = "ランク";
     public const string LabelParticipants = "参加者";

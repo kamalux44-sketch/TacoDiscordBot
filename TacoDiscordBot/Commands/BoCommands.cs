@@ -12,8 +12,8 @@ public class BoCommands : ApplicationCommandModule
     public async Task Bo(
         InteractionContext ctx,
 
-        [Option("game", "ゲーム名")]
-        string game,
+        [Option("content", "募集内容 (任意)")]
+        string content = "",
 
         [Option(
             "at",
@@ -75,7 +75,7 @@ public class BoCommands : ApplicationCommandModule
 
         await BotHost.BoManager.CreateSessionAsync(
             ctx,
-            game,
+            content,
             (int)at,
             rank,
             parsedDeadline,
