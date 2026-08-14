@@ -58,10 +58,7 @@ public class BoCommands : ApplicationCommandModule
                 await ctx.CreateResponseAsync(
                     InteractionResponseType.ChannelMessageWithSource,
                     new DiscordInteractionResponseBuilder()
-                        .WithContent(
-                            "締め切りの日時が正しくありません。\n" +
-                            "以下の形式で入力してください：\n" +
-                            "`2026-08-13 01:30`")
+                        .WithContent(Strings.BoDeadlineInvalid)
                         .AsEphemeral(true));
 
                 return;
@@ -85,6 +82,6 @@ public class BoCommands : ApplicationCommandModule
             description);
 
         // Edit the deferred response to confirm
-        await ctx.EditResponseAsync(new DiscordWebhookBuilder().WithContent("募集を作成しました。"));
+        await ctx.EditResponseAsync(new DiscordWebhookBuilder().WithContent(Strings.BoCreatedConfirmation));
     }
 }

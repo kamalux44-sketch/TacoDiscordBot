@@ -22,6 +22,20 @@ public static class Strings
     // 環境変数: VC ログ送信先チャンネル ID (例: "123456789012345678")
     public const string EnvVcLogChannel = "VCLOG_CHANNEL";
 
+    // General command messages
+    public const string CommandGuildOnly = "このコマンドはサーバー内で実行してください。";
+
+    // VcRanking messages
+    public const string VcRankingDbNotSet = "VC セッション集計は未設定です（Postgres 未接続）。";
+    public const string VcRankingInvalidPeriod = "period は day/week/month/all のいずれかを指定してください。";
+    public const string VcRankingNoData = "順位データがありません。注意: サーバー内でVCログが有効になっているか確認してください。";
+    public const string VcRankingHeader = "👑 VCランキング";
+    public const string VcRankingSeparator = "━━━━━━━━━━━━━━━━━━";
+
+    // Bo messages
+    public const string BoDeadlineInvalid = "締め切りの日時が正しくありません。\n以下の形式で入力してください：\n`2026-08-13 01:30`";
+    public const string BoCreatedConfirmation = "募集を作成しました。";
+
     // --- BO (募集) ---
     public const string EmbedTitle = "募集";
     public const string EmbedStartContent = "@here\n募集を開始しました！";
@@ -37,6 +51,22 @@ public static class Strings
     public const string VcToggleOn = "指定チャンネルの VC ログを有効化しました。";
     public const string VcToggleOff = "指定チャンネルの VC ログを無効化しました。";
     public const string VcChannelSet = "VC ログ送信先チャンネルを設定しました。";
+
+    // VC logger titles
+    public const string VcEnterTitle = "VC 入室";
+    public const string VcLeaveTitle = "VC 退室";
+    public const string VcMoveTitle = "VC 移動";
+
+    // Bo (募集) UI labels used in embeds/buttons
+    public const string LabelDeadline = "⏰ 締切";
+    public const string LabelDescription = "📝 説明";
+    public const string ParticipantsFieldPrefix = "📋 ";
+    public const string FooterParticipantCount = "参加数: ";
+    public const string ButtonJoinLabel = "参加";
+    public const string ButtonCancelParticipationLabel = "参加取消";
+    public const string ButtonCloseLabel = "募集終了";
+    public const string ContentMinimalTemplate = "@here\n<@{0}>さんが何か募集しているようです"; // {0}=ownerId
+    public const string ContentWithBodyTemplate = "@here\n<@{0}>さんが{1}の募集を開始しました！"; // {0}=ownerId, {1}=body
 
     public static readonly string[] ErrorMessages = new[]
     {

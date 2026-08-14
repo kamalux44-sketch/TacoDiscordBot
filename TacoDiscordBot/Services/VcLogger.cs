@@ -264,17 +264,17 @@ public class VcLogger
                 if (before == null && after != null)
                 {
                     color = DiscordColor.Green;
-                    title = "VC 入室";
+                    title = Strings.VcEnterTitle;
                 }
                 else if (before != null && after == null)
                 {
                     color = DiscordColor.Red;
-                    title = "VC 退室";
+                    title = Strings.VcLeaveTitle;
                 }
                 else
                 {
                     color = DiscordColor.Yellow;
-                    title = "VC 移動";
+                    title = Strings.VcMoveTitle;
                 }
 
                 var embed = new DiscordEmbedBuilder()

@@ -23,7 +23,7 @@ public class VcRankingService
         if (repo == null)
         {
             embed.WithTitle("VCランキング")
-                .WithDescription("VC セッション集計は未設定です（Postgres 未接続）。");
+                .WithDescription(Strings.VcRankingDbNotSet);
             return embed;
         }
 
@@ -49,8 +49,8 @@ public class VcRankingService
                 periodLabel = "全期間";
                 break;
             default:
-                embed.WithTitle("VCランキング")
-                    .WithDescription("period は day/week/month/all のいずれかを指定してください。");
+            embed.WithTitle("VCランキング")
+                    .WithDescription(Strings.VcRankingInvalidPeriod);
                 return embed;
         }
 
@@ -60,14 +60,14 @@ public class VcRankingService
 
         if (ranks == null || ranks.Count == 0)
         {
-            embed.WithDescription("順位データがありません。注意: サーバー内でVCログが有効になっているか確認してください。");
+            embed.WithDescription(Strings.VcRankingNoData);
             return embed;
         }
 
         // Build formatted ranking
         var sb = new StringBuilder();
-        sb.AppendLine("👑 VCランキング");
-        sb.AppendLine("━━━━━━━━━━━━━━━━━━");
+        sb.AppendLine(Strings.VcRankingHeader);
+        sb.AppendLine(Strings.VcRankingSeparator);
         sb.AppendLine($"{periodLabel}のVC滞在時間ランキングです！");
         sb.AppendLine();
 
@@ -103,7 +103,7 @@ public class VcRankingService
         }
 
         sb.AppendLine();
-        sb.AppendLine("━━━━━━━━━━━━━━━━━━");
+        sb.AppendLine(Strings.VcRankingSeparator);
 
         // Find user's rank
         int userRankIndex = -1;

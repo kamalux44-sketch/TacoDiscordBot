@@ -17,7 +17,7 @@ public class VcLogCommands : ApplicationCommandModule
         {
             await ctx.CreateResponseAsync(
                 InteractionResponseType.ChannelMessageWithSource,
-                new DiscordInteractionResponseBuilder().WithContent("このコマンドはサーバー内で実行してください。").AsEphemeral(true));
+                new DiscordInteractionResponseBuilder().WithContent(Strings.CommandGuildOnly).AsEphemeral(true));
             return;
         }
 

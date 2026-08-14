@@ -20,7 +20,7 @@ public class VcRankingCommands : ApplicationCommandModule
         var guildId = ctx.Guild?.Id ?? 0UL;
         if (guildId == 0)
         {
-            await ctx.EditResponseAsync(new DiscordWebhookBuilder().WithContent("サーバー内で実行してください。"));
+            await ctx.EditResponseAsync(new DiscordWebhookBuilder().WithContent(Strings.CommandGuildOnly));
             return;
         }
 

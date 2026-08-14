@@ -428,8 +428,8 @@ public class BoManager
             // 締め切り（締め切りがある、または生の入力がある場合に表示）
             if (session.Deadline.HasValue)
             {
-                embedBuilder.AddField(
-                    "⏰ 締切",
+            embedBuilder.AddField(
+                    Strings.LabelDeadline,
                     TimeZoneInfo.ConvertTimeFromUtc(
                         DateTime.SpecifyKind(
                             session.Deadline.Value,
@@ -442,7 +442,7 @@ public class BoManager
             else if (!string.IsNullOrWhiteSpace(session.DeadlineRaw))
             {
                 embedBuilder.AddField(
-                    "⏰ 締切",
+                    Strings.LabelDeadline,
                     session.DeadlineRaw,
                     false);
             }
@@ -451,21 +451,21 @@ public class BoManager
             if (!string.IsNullOrWhiteSpace(session.Description))
             {
                 embedBuilder.AddField(
-                    "📝 説明",
+                    Strings.LabelDescription,
                     session.Description,
                     false);
             }
 
             // 参加者一覧（常に表示）
             embedBuilder.AddField(
-                "📋 " + Strings.LabelParticipants,
+                Strings.ParticipantsFieldPrefix + Strings.LabelParticipants,
                 participantsText,
                 false);
 
             // フッターは募集人数が指定されている場合のみ表示
             if (session.At > 0)
             {
-                embedBuilder.WithFooter("参加数: " + atText);
+                embedBuilder.WithFooter(Strings.FooterParticipantCount + atText);
             }
 
             var embed = embedBuilder;
@@ -481,19 +481,19 @@ public class BoManager
                 string.IsNullOrWhiteSpace(session.Description);
 
             string content;
-            if (isMinimal)
-            {
-                // 他項目が未指定のみのシンプルな投稿
-                content = $"@here\n<@{session.OwnerId}>さんが何か募集しているようです";
-            }
-            else
-            {
-                // 募集内容が指定されている場合は「○○さんが<募集内容>の募集を開始しました！」を表示
-                if (!string.IsNullOrWhiteSpace(session.Body))
-                    content = $"@here\n<@{session.OwnerId}>さんが{session.Body}の募集を開始しました！";
+                if (isMinimal)
+                {
+                    // 他項目が未指定のみのシンプルな投稿
+                    content = string.Format(Strings.ContentMinimalTemplate, session.OwnerId);
+                }
                 else
-                    content = $"@here\n募集を開始しました！";
-            }
+                {
+                    // 募集内容が指定されている場合は「○○さんが<募集内容>の募集を開始しました！」を表示
+                    if (!string.IsNullOrWhiteSpace(session.Body))
+                        content = string.Format(Strings.ContentWithBodyTemplate, session.OwnerId, session.Body);
+                    else
+                        content = Strings.EmbedStartContent;
+                }
 
             // ==============================
             // 募集メッセージ
@@ -507,17 +507,17 @@ public class BoManager
                             new DiscordButtonComponent(
                                 ButtonStyle.Primary,
                                 $"bo_join:{sessionId}",
-                                "参加"),
+                                Strings.ButtonJoinLabel),
 
                             new DiscordButtonComponent(
                                 ButtonStyle.Secondary,
                                 $"bo_cancel:{sessionId}",
-                                "参加取消"),
+                                Strings.ButtonCancelParticipationLabel),
 
                             new DiscordButtonComponent(
                                 ButtonStyle.Danger,
                                 $"bo_close:{sessionId}",
-                                "募集終了")
+                                Strings.ButtonCloseLabel)
                         });
 
             // 埋め込みは常に追加する（最小表示でも詳細は埋め込みで確認できるように）
