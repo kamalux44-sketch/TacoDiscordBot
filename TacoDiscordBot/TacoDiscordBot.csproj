@@ -11,6 +11,7 @@
     <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.22.1" />
     <PackageReference Include="DSharpPlus" Version="5.0.0" />
     <PackageReference Include="DSharpPlus.SlashCommands" Version="5.0.0" />
+    <PackageReference Include="Npgsql" Version="10.0.3" />
   </ItemGroup>
 
 </Project>

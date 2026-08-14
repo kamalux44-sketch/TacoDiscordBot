@@ -9,20 +9,39 @@ using DSharpPlus.EventArgs;
 using DSharpPlus.SlashCommands;
 using TacoDiscordBot.Models;
 using TacoDiscordBot.Util;
+using TacoDiscordBot.Repository;
 
 namespace TacoDiscordBot.Services;
 
 public class BoManager
 {
     private readonly DiscordClient _client;
-
     private readonly ConcurrentDictionary<string, Models.BoSession> _sessions = new();
+    private readonly BoRepository _repo;
 
     // BOセッションはメモリ管理とします。
     // 永続化は行いません。
     public BoManager(DiscordClient client)
     {
         _client = client;
+
+        // Try to initialize repository (Postgres) and load persisted sessions
+        _repo = BoRepository.TryCreateFromEnv();
+        if (_repo != null)
+        {
+            try
+            {
+                var persisted = _repo.LoadActiveSessionsAsync().GetAwaiter().GetResult();
+                foreach (var s in persisted)
+                {
+                    _sessions[s.SessionId] = s;
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex, "DB からのセッション読み込みに失敗");
+            }
+        }
 
         // 作成から7日を超えた古い募集を1時間ごとにクリーンアップします。
         _ = Task.Run(async () =>
@@ -168,6 +187,7 @@ public class BoManager
 
                 await HandleJoinOrCancelAsync(e, action, session);
             }
+
             catch (Exception ex)
             {
                 try
@@ -212,7 +232,27 @@ public class BoManager
             {
                 await msg.ModifyAsync(m => { m.Content = (msg.Content ?? string.Empty) + "\n\n**（募集終了）**"; });
             }
+            // persist close
+            try
+            {
+                if (_repo != null)
+                    await _repo.UpdateSessionAsync(session);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex, "セッション更新(終了) 永続化失敗");
+            }
         }
+            // persist close
+            try
+            {
+                if (_repo != null)
+                    await _repo.UpdateSessionAsync(session);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex, "セッション更新(終了) 永続化失敗");
+            }
     }
 
     private async Task HandleJoinOrCancelAsync(ComponentInteractionCreateEventArgs e, string action, Models.BoSession session)
@@ -492,6 +532,16 @@ public class BoManager
 
             // セッションをメモリに保存
             _sessions[sessionId] = session;
+            // 永続化
+            try
+            {
+                if (_repo != null)
+                    await _repo.CreateSessionAsync(session);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex, "セッション永続化失敗");
+            }
         }
         catch (Exception ex)
         {
@@ -576,6 +626,16 @@ public class BoManager
                     }
 
                     Logger.Error(ex, "メインループ");
+                }
+                // delete from persistent storage as well
+                try
+                {
+                    if (_repo != null)
+                        await _repo.DeleteSessionAsync(session.SessionId);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error(ex, "セッション削除 永続化失敗");
                 }
             }
         }

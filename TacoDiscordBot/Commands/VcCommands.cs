@@ -9,18 +9,25 @@ public class VcCommands : ApplicationCommandModule
     [SlashCommand("vclog", "Toggle VC join/leave/move logging to this text channel")]
     public async Task VcLog(InteractionContext ctx)
     {
-        // 単一サーバー運用を想定しています。
-        // まず VC ログ先チャンネルが設定されているかを確認します。
-        if (!BotHost.VcLogger.IsConfigured)
+        // Per-guild vc log targets supported. Toggle or set target for this guild.
+        var guildId = ctx.Guild?.Id ?? 0UL;
+
+        if (guildId == 0)
         {
-            // 環境変数が未設定の場合は、このチャンネルを送信先として設定します（メモリのみ）。
-            BotHost.VcLogger.SetChannel(ctx.Channel.Id);
-            await ctx.Channel.SendMessageAsync(Strings.VcChannelSet);
+            await ctx.Channel.SendMessageAsync("このコマンドはサーバー内で実行してください。");
             return;
         }
 
-        // 既にチャンネルが設定されている場合はオン/オフをトグルします。
-        var enabled = BotHost.VcLogger.ToggleChannel();
-        await ctx.Channel.SendMessageAsync(enabled ? Strings.VcToggleOn : Strings.VcToggleOff);
+        // If a target exists for this guild, remove it (toggle off). Otherwise set this channel as target.
+        if (BotHost.VcLogger.IsConfiguredForGuild(guildId))
+        {
+            await BotHost.VcLogger.RemoveChannelAsync(guildId);
+            await ctx.Channel.SendMessageAsync(Strings.VcToggleOff);
+        }
+        else
+        {
+            await BotHost.VcLogger.SetChannelAsync(guildId, ctx.Channel.Id);
+            await ctx.Channel.SendMessageAsync(Strings.VcToggleOn);
+        }
     }
 }

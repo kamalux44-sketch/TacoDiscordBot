@@ -6,31 +6,60 @@ using System.Threading.Tasks;
 using DSharpPlus;
 using DSharpPlus.EventArgs;
 using DSharpPlus.Entities;
+using TacoDiscordBot.Repository;
 
 
 namespace TacoDiscordBot.Services;
 
 public class VcLogger
 {
-    // 単一チャンネル運用を想定して、環境変数からチャンネルIDを読み込みます。
-    // 実行時はメモリ上のフラグでオン/オフを切り替えます（永続化しません）。
-    private ulong _channelId; // 0=未設定
-    private bool _enabled;
+    // per-guild targets are stored in DB if available. Fallback to legacy single-channel env var.
+    private readonly VcLogRepository _repo;
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<ulong, ulong> _targets = new();
+    // legacy fallback
+    private ulong _legacyChannelId; // 0=未設定
+    private bool _legacyEnabled;
 
     /// <summary>
     /// コンストラクタ。環境変数からチャンネルIDを読み取り、初期状態を設定します。
     /// </summary>
     public VcLogger()
     {
-        _channelId = 0;
-        _enabled = false;
+        _legacyChannelId = 0;
+        _legacyEnabled = false;
+
+        // Try to create repository from env. If exists, load targets into cache.
+        _repo = VcLogRepository.TryCreateFromEnv();
+        if (_repo != null)
+        {
+            try
+            {
+                var all = _repo.LoadAllAsync().GetAwaiter().GetResult();
+                foreach (var kv in all)
+                    _targets[kv.Key] = kv.Value;
+            }
+            catch
+            {
+                // ignore
+            }
+        }
+
+        // legacy env var
         LoadFromEnv();
     }
 
     /// <summary>
     /// チャンネルが設定されているかを示します。
     /// </summary>
-    public bool IsConfigured => _channelId != 0;
+    // Indicates if any configuration exists (repo or legacy)
+    public bool IsConfigured => _repo != null || _legacyChannelId != 0;
+
+    public bool IsConfiguredForGuild(ulong guildId)
+    {
+        if (_repo != null)
+            return _targets.ContainsKey(guildId);
+        return _legacyChannelId != 0;
+    }
 
     /// <summary>
     /// 環境変数から単一チャンネルIDを読み込みます。
@@ -44,8 +73,8 @@ public class VcLogger
             if (string.IsNullOrWhiteSpace(raw)) return;
             if (ulong.TryParse(raw.Trim(), out var cid))
             {
-                _channelId = cid;
-                _enabled = true; // 起動時は有効にする
+                _legacyChannelId = cid;
+                _legacyEnabled = true; // 起動時は有効にする
             }
         }
         catch
@@ -58,10 +87,27 @@ public class VcLogger
     /// /vclog コマンドなどから呼ばれて、VC ログ機能のオン/オフを切り替えます。
     /// 戻り値は現在の有効状態です。
     /// </summary>
-    public bool ToggleChannel()
+    // Toggle per-guild target when repo available; otherwise toggle legacy global channel.
+    public bool ToggleChannel(ulong guildId)
     {
-        _enabled = !_enabled;
-        return _enabled;
+        if (_repo != null)
+        {
+            if (_targets.ContainsKey(guildId))
+            {
+                // remove
+                try { _repo.RemoveTargetAsync(guildId).GetAwaiter().GetResult(); } catch { }
+                _targets.TryRemove(guildId, out _);
+                return false;
+            }
+            else
+            {
+                // set to nothing: caller should call SetChannel to set channel
+                return true;
+            }
+        }
+
+        _legacyEnabled = !_legacyEnabled;
+        return _legacyEnabled;
     }
 
     /// <summary>
@@ -69,8 +115,37 @@ public class VcLogger
     /// </summary>
     public void SetChannel(ulong channelId)
     {
-        _channelId = channelId;
-        _enabled = true;
+        // legacy fallback: set global channel
+        _legacyChannelId = channelId;
+        _legacyEnabled = true;
+    }
+
+    // Set per-guild target (persist if repo available)
+    public async Task SetChannelAsync(ulong guildId, ulong channelId)
+    {
+        if (_repo != null)
+        {
+            await _repo.SetTargetAsync(guildId, channelId);
+            _targets[guildId] = channelId;
+            return;
+        }
+
+        // fallback: set legacy channel
+        _legacyChannelId = channelId;
+        _legacyEnabled = true;
+    }
+
+    public async Task RemoveChannelAsync(ulong guildId)
+    {
+        if (_repo != null)
+        {
+            await _repo.RemoveTargetAsync(guildId);
+            _targets.TryRemove(guildId, out _);
+            return;
+        }
+
+        _legacyChannelId = 0;
+        _legacyEnabled = false;
     }
 
     public async Task HandleVoiceStateUpdated(DiscordClient client, VoiceStateUpdateEventArgs e)
@@ -78,7 +153,20 @@ public class VcLogger
         try
         {
             if (e.Guild == null) return;
-            if (!_enabled || _channelId == 0) return;
+
+            // Determine channel to log to
+            ulong targetChannel = 0;
+            if (_repo != null)
+            {
+                _targets.TryGetValue(e.Guild.Id, out targetChannel);
+            }
+            else
+            {
+                if (_legacyEnabled && _legacyChannelId != 0)
+                    targetChannel = _legacyChannelId;
+            }
+
+            if (targetChannel == 0) return;
 
             var before = e.Before?.Channel;
             var after = e.After?.Channel;
@@ -101,16 +189,16 @@ public class VcLogger
 
             if (text == null) return;
 
-            try
-            {
-                var ch = await client.GetChannelAsync(_channelId);
-                if (ch != null)
-                    await ch.SendMessageAsync(text);
-            }
-            catch
-            {
-                // ignore send errors
-            }
+                try
+                {
+                    var ch = await client.GetChannelAsync(targetChannel);
+                    if (ch != null)
+                        await ch.SendMessageAsync(text);
+                }
+                catch
+                {
+                    // ignore send errors
+                }
         }
         catch
         {
