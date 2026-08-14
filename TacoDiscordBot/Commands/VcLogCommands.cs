@@ -7,7 +7,7 @@ namespace TacoDiscordBot.Commands;
 
 public class VcLogCommands : ApplicationCommandModule
 {
-    [SlashCommand("vclog", "Toggle VC join/leave/move logging to this text channel")]
+    [SlashCommand("vclog", "このテキストチャンネルへのVC参加・退出・移動のログ表示を切り替える")]
     public async Task VcLog(InteractionContext ctx)
     {
         // Per-guild vc log targets supported. Toggle or set target for this guild.
