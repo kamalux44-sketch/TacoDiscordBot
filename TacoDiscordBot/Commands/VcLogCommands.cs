@@ -14,7 +14,7 @@ public class VcLogCommands : ApplicationCommandModule
 
         if (guildId == 0)
         {
-            await ctx.Channel.SendMessageAsync("‚±‚ÌƒRƒ}ƒ“ƒh‚ÍƒT[ƒo[“à‚ÅÀs‚µ‚Ä‚­‚¾‚³‚¢B");
+            await ctx.Channel.SendMessageAsync("ã“ã®ã‚³ãƒãƒ³ãƒ‰ã¯ã‚µãƒ¼ãƒãƒ¼å†…ã§å®Ÿè¡Œã—ã¦ãã ã•ã„ã€‚");
             return;
         }
 
@@ -31,3 +31,4 @@ public class VcLogCommands : ApplicationCommandModule
         }
     }
 }
+

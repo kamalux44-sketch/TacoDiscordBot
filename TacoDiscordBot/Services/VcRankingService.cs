@@ -22,53 +22,53 @@ public class VcRankingService
 
         if (repo == null)
         {
-            embed.WithTitle("VCƒ‰ƒ“ƒLƒ“ƒO")
-                .WithDescription("VC ƒZƒbƒVƒ‡ƒ“WŒv‚Í–¢İ’è‚Å‚·iPostgres –¢Ú‘±jB");
+            embed.WithTitle("VCãƒ©ãƒ³ã‚­ãƒ³ã‚°")
+                .WithDescription("VC ã‚»ãƒƒã‚·ãƒ§ãƒ³é›†è¨ˆã¯æœªè¨­å®šã§ã™ï¼ˆPostgres æœªæ¥ç¶šï¼‰ã€‚");
             return embed;
         }
 
         DateTime? since = null;
-        string periodLabel = "‘SŠúŠÔ";
+        string periodLabel = "å…¨æœŸé–“";
         var now = DateTime.UtcNow;
         switch ((period ?? "day").ToLowerInvariant())
         {
             case "day":
                 since = now.AddDays(-1);
-                periodLabel = "‰ß‹ 1 “ú";
+                periodLabel = "éå» 1 æ—¥";
                 break;
             case "week":
                 since = now.AddDays(-7);
-                periodLabel = "‰ß‹ 1 TŠÔ";
+                periodLabel = "éå» 1 é€±é–“";
                 break;
             case "month":
                 since = now.AddMonths(-1);
-                periodLabel = "‰ß‹ 1 ‚©Œ";
+                periodLabel = "éå» 1 ã‹æœˆ";
                 break;
             case "all":
                 since = null;
-                periodLabel = "‘SŠúŠÔ";
+                periodLabel = "å…¨æœŸé–“";
                 break;
             default:
-                embed.WithTitle("VCƒ‰ƒ“ƒLƒ“ƒO")
-                    .WithDescription("period ‚Í day/week/month/all ‚Ì‚¢‚¸‚ê‚©‚ğw’è‚µ‚Ä‚­‚¾‚³‚¢B");
+                embed.WithTitle("VCãƒ©ãƒ³ã‚­ãƒ³ã‚°")
+                    .WithDescription("period ã¯ day/week/month/all ã®ã„ãšã‚Œã‹ã‚’æŒ‡å®šã—ã¦ãã ã•ã„ã€‚");
                 return embed;
         }
 
         var ranks = await repo.GetRankingAsync(guildId, since);
 
-        embed.WithTitle($"VC ‘ØİŠÔƒ‰ƒ“ƒLƒ“ƒO ({periodLabel})");
+        embed.WithTitle($"VC æ»åœ¨æ™‚é–“ãƒ©ãƒ³ã‚­ãƒ³ã‚° ({periodLabel})");
 
         if (ranks == null || ranks.Count == 0)
         {
-            embed.WithDescription("‡ˆÊƒf[ƒ^‚ª‚ ‚è‚Ü‚¹‚ñB’ˆÓ: ƒT[ƒo[“à‚ÅVCƒƒO‚ª—LŒø‚É‚È‚Á‚Ä‚¢‚é‚©Šm”F‚µ‚Ä‚­‚¾‚³‚¢B");
+            embed.WithDescription("é †ä½ãƒ‡ãƒ¼ã‚¿ãŒã‚ã‚Šã¾ã›ã‚“ã€‚æ³¨æ„: ã‚µãƒ¼ãƒãƒ¼å†…ã§VCãƒ­ã‚°ãŒæœ‰åŠ¹ã«ãªã£ã¦ã„ã‚‹ã‹ç¢ºèªã—ã¦ãã ã•ã„ã€‚");
             return embed;
         }
 
         // Build formatted ranking
         var sb = new StringBuilder();
-        sb.AppendLine("?? VCƒ‰ƒ“ƒLƒ“ƒO");
-        sb.AppendLine("„ª„ª„ª„ª„ª„ª„ª„ª„ª„ª„ª„ª„ª„ª„ª„ª„ª„ª");
-        sb.AppendLine($"{periodLabel}‚ÌVC‘ØİŠÔƒ‰ƒ“ƒLƒ“ƒO‚Å‚·I");
+        sb.AppendLine("?? VCãƒ©ãƒ³ã‚­ãƒ³ã‚°");
+        sb.AppendLine("â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”");
+        sb.AppendLine($"{periodLabel}ã®VCæ»åœ¨æ™‚é–“ãƒ©ãƒ³ã‚­ãƒ³ã‚°ã§ã™ï¼");
         sb.AppendLine();
 
         int displayCount = Math.Min(ranks.Count, 10);
@@ -90,20 +90,20 @@ public class VcRankingService
 
             var hours = total / 3600;
             var mins = (total % 3600) / 60;
-            var timestr = $"{hours}ŠÔ{mins:D2}•ª";
+            var timestr = $"{hours}æ™‚é–“{mins:D2}åˆ†";
 
             string line;
-            if (idx == 1) line = $"?? {name}@{timestr}";
-            else if (idx == 2) line = $"?? {name}@{timestr}";
-            else if (idx == 3) line = $"?? {name}@{timestr}";
-            else line = $"{idx,2}. {name}@{timestr}";
+            if (idx == 1) line = $"?? {name}ã€€{timestr}";
+            else if (idx == 2) line = $"?? {name}ã€€{timestr}";
+            else if (idx == 3) line = $"?? {name}ã€€{timestr}";
+            else line = $"{idx,2}. {name}ã€€{timestr}";
 
             sb.AppendLine(line);
             idx++;
         }
 
         sb.AppendLine();
-        sb.AppendLine("„ª„ª„ª„ª„ª„ª„ª„ª„ª„ª„ª„ª„ª„ª„ª„ª„ª„ª");
+        sb.AppendLine("â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”â”");
 
         // Find user's rank
         int userRankIndex = -1;
@@ -122,11 +122,12 @@ public class VcRankingService
         {
             var uh = userTotal / 3600;
             var um = (userTotal % 3600) / 60;
-            sb.AppendLine($"?? ‚ ‚È‚½");
-            sb.AppendLine($"{userRankIndex}ˆÊ@{uh}ŠÔ{um:D2}•ª");
+            sb.AppendLine($"?? ã‚ãªãŸ");
+            sb.AppendLine($"{userRankIndex}ä½ã€€{uh}æ™‚é–“{um:D2}åˆ†");
         }
 
         embed.WithDescription(sb.ToString());
         return embed;
     }
 }
+

@@ -12,7 +12,7 @@ public static class Logger
         }
         catch
         {
-            // ƒƒO¸”s‚Í–³‹
+            // ãƒ­ã‚°å¤±æ•—ã¯ç„¡è¦–
         }
     }
 
@@ -25,7 +25,8 @@ public static class Logger
         }
         catch
         {
-            // ƒƒO¸”s‚Í–³‹
+            // ãƒ­ã‚°å¤±æ•—ã¯ç„¡è¦–
         }
     }
 }
+

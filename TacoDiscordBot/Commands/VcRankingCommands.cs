@@ -7,15 +7,15 @@ namespace TacoDiscordBot.Commands;
 
 public class VcRankingCommands : ApplicationCommandModule
 {
-    [SlashCommand("vcrank", "VC ‘ØİŠÔƒ‰ƒ“ƒLƒ“ƒO‚ğ•\¦‚µ‚Ü‚·")]
+    [SlashCommand("vcrank", "VC æ»åœ¨æ™‚é–“ãƒ©ãƒ³ã‚­ãƒ³ã‚°ã‚’è¡¨ç¤ºã—ã¾ã™")]
     public async Task VcRank(
         InteractionContext ctx,
-        [Option("period", "WŒvŠúŠÔ: day, week, month, all")] string period = "day")
+        [Option("period", "é›†è¨ˆæœŸé–“: day, week, month, all")] string period = "day")
     {
         var guildId = ctx.Guild?.Id ?? 0UL;
         if (guildId == 0)
         {
-            await ctx.Channel.SendMessageAsync("ƒT[ƒo[“à‚ÅÀs‚µ‚Ä‚­‚¾‚³‚¢B");
+            await ctx.Channel.SendMessageAsync("ã‚µãƒ¼ãƒãƒ¼å†…ã§å®Ÿè¡Œã—ã¦ãã ã•ã„ã€‚");
             return;
         }
 
@@ -24,3 +24,4 @@ public class VcRankingCommands : ApplicationCommandModule
         await ctx.Channel.SendMessageAsync(new DiscordMessageBuilder().AddEmbed(embed));
     }
 }
+

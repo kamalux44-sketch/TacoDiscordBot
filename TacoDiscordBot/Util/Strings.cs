@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 
 namespace TacoDiscordBot;
 
@@ -47,3 +47,4 @@ public static class Strings
         "エラー発生！このbotは壊れてます！叩けば直るかも！"
     };
 }
+
