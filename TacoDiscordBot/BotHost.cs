@@ -40,12 +40,76 @@ public static class BotHost
 
             Console.WriteLine("[BotHost] DiscordClient作成完了");
 
-            VcLogger = new Services.VcLogger();
+            // DB 環境から接続情報を構築する
+            Repository.VcLogRepository vclogRepo = null;
+            Repository.VcRankingRepository vrankRepo = null;
+            Repository.BoRepository boRepo = null;
 
+            var host = Environment.GetEnvironmentVariable("PGHOST");
+            if (!string.IsNullOrWhiteSpace(host))
+            {
+                try
+                {
+                    var port = Environment.GetEnvironmentVariable("PGPORT") ?? Strings.DefaultDBPPort;
+                    var db = Environment.GetEnvironmentVariable("PGDATABASE") ?? Strings.DefaultDBName;
+                    var user = Environment.GetEnvironmentVariable("PGUSER");
+                    var pass = Environment.GetEnvironmentVariable("PGPASSWORD");
+                    var ssl = Environment.GetEnvironmentVariable("PGSSLMODE");
+
+                    var parts = new System.Collections.Generic.List<string>
+                    {
+                        $"Host={host}",
+                        $"Port={port}",
+                        $"Database={db}"
+                    };
+                    if (!string.IsNullOrWhiteSpace(user)) parts.Add($"Username={user}");
+                    if (!string.IsNullOrWhiteSpace(pass)) parts.Add($"Password={pass}");
+                    if (!string.IsNullOrWhiteSpace(ssl)) parts.Add($"SslMode={ssl}");
+
+                    var conn = string.Join(";", parts);
+                    var baseRepo = new Repository.BaseRepository(conn, s => Console.WriteLine($"[DB] {s}"));
+
+                    if (baseRepo.IsProviderAvailable())
+                    {
+                        Console.WriteLine("[BotHost] DB ドライバ確認 OK");
+
+                        // create repo instances with DI
+                        vclogRepo = new Repository.VcLogRepository(baseRepo);
+                        vrankRepo = new Repository.VcRankingRepository(baseRepo);
+                        boRepo = new Repository.BoRepository(baseRepo);
+
+                        // Ensure tables exist for all repositories
+                        try
+                        {
+                            Console.WriteLine("[BotHost] DB テーブル確認・作成開始");
+                            vclogRepo.EnsureTableExistsAsync().GetAwaiter().GetResult();
+                            vrankRepo.EnsureTableExistsAsync().GetAwaiter().GetResult();
+                            boRepo.EnsureTablesExistAsync().GetAwaiter().GetResult();
+                            Console.WriteLine("[BotHost] DB テーブル確認・作成完了");
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine("[BotHost] DB テーブル作成中にエラーが発生しました");
+                            Console.WriteLine(ex.ToString());
+                        }
+                    }
+                    else
+                    {
+                        Console.WriteLine("[BotHost] DB ドライバが見つかりません。Postgres 機能は無効になります。");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("[BotHost] DB 初期化エラー");
+                    Console.WriteLine(ex.ToString());
+                }
+            }
+
+            // create services with (optional) repo dependencies
+            VcLogger = new Services.VcLogger(vclogRepo, vrankRepo);
             Console.WriteLine("[BotHost] VcLogger作成完了");
 
-            BoManager = new Services.BoManager(Client);
-
+            BoManager = new Services.BoManager(Client, boRepo);
             Console.WriteLine("[BotHost] BoManager作成完了");
 
             Client.VoiceStateUpdated +=

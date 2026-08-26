@@ -15,7 +15,7 @@ public class VcRankingService
 
     public async Task<DiscordEmbedBuilder> BuildRankingEmbedAsync(ulong guildId, string period, DiscordGuild guild, DiscordUser requestingUser)
     {
-        var repo = VcRankingRepository.TryCreateFromEnv();
+        var repo = CreateRankingFromEnvOrNull();
         var embed = new DiscordEmbedBuilder()
             .WithColor(DiscordColor.Blurple)
             .WithTimestamp(DateTime.UtcNow);
@@ -26,6 +26,8 @@ public class VcRankingService
                 .WithDescription(Strings.VcRankingDbNotSet);
             return embed;
         }
+
+
 
         DateTime? since = null;
         string periodLabel = "全期間";
@@ -128,6 +130,41 @@ public class VcRankingService
 
         embed.WithDescription(sb.ToString());
         return embed;
+    }
+
+    private static VcRankingRepository CreateRankingFromEnvOrNull()
+    {
+        try
+        {
+            var host = Environment.GetEnvironmentVariable("PGHOST");
+            if (string.IsNullOrWhiteSpace(host))
+                return null;
+
+            var port = Environment.GetEnvironmentVariable("PGPORT") ?? Strings.DefaultDBPPort;
+            var db = Environment.GetEnvironmentVariable("PGDATABASE") ?? Strings.DefaultDBName;
+            var user = Environment.GetEnvironmentVariable("PGUSER");
+            var pass = Environment.GetEnvironmentVariable("PGPASSWORD");
+            var ssl = Environment.GetEnvironmentVariable("PGSSLMODE");
+
+            var parts = new System.Collections.Generic.List<string>
+            {
+                $"Host={host}",
+                $"Port={port}",
+                $"Database={db}"
+            };
+            if (!string.IsNullOrWhiteSpace(user)) parts.Add($"Username={user}");
+            if (!string.IsNullOrWhiteSpace(pass)) parts.Add($"Password={pass}");
+            if (!string.IsNullOrWhiteSpace(ssl)) parts.Add($"SslMode={ssl}");
+
+            var conn = string.Join(";", parts);
+            var baseRepo = new Repository.BaseRepository(conn, s => Console.WriteLine($"[DB] {s}"));
+            if (!baseRepo.IsProviderAvailable()) return null;
+            return new VcRankingRepository(baseRepo);
+        }
+        catch
+        {
+            return null;
+        }
     }
 }
 

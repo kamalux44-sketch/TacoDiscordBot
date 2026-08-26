@@ -7,6 +7,7 @@ using DSharpPlus;
 using DSharpPlus.EventArgs;
 using DSharpPlus.Entities;
 using TacoDiscordBot.Repository;
+using TacoDiscordBot.Util;
 
 
 namespace TacoDiscordBot.Services;
@@ -26,14 +27,15 @@ public class VcLogger
     /// <summary>
     /// コンストラクタ。環境変数からチャンネルIDを読み取り、初期状態を設定します。
     /// </summary>
-    public VcLogger()
+    // DI 対応コンストラクタ。リポジトリは null 可。
+    public VcLogger(VcLogRepository repo, VcRankingRepository rankingRepo)
     {
         _legacyChannelId = 0;
         _legacyEnabled = false;
 
-        // Try to create repositories from env. If exists, load targets into cache.
-        _repo = VcLogRepository.TryCreateFromEnv();
-        _rankingRepo = VcRankingRepository.TryCreateFromEnv();
+        _repo = repo;
+        _rankingRepo = rankingRepo;
+
         if (_repo != null)
         {
             try
@@ -46,12 +48,82 @@ public class VcLogger
             {
                 // ignore
             }
-
-            // nothing else to load for open sessions; they are created on join
         }
 
-        // legacy env var
         LoadFromEnv();
+    }
+
+    // 既存の呼び出し互換のための引数無しコンストラクタ。
+    public VcLogger() : this(CreateFromEnvOrNull(), CreateRankingFromEnvOrNull()) { }
+
+    private static VcLogRepository CreateFromEnvOrNull()
+    {
+        try
+        {
+            var host = Environment.GetEnvironmentVariable("PGHOST");
+            if (string.IsNullOrWhiteSpace(host))
+                return null;
+
+            var port = Environment.GetEnvironmentVariable("PGPORT") ?? Strings.DefaultDBPPort;
+            var db = Environment.GetEnvironmentVariable("PGDATABASE") ?? Strings.DefaultDBName;
+            var user = Environment.GetEnvironmentVariable("PGUSER");
+            var pass = Environment.GetEnvironmentVariable("PGPASSWORD");
+            var ssl = Environment.GetEnvironmentVariable("PGSSLMODE");
+
+            var parts = new System.Collections.Generic.List<string>
+            {
+                $"Host={host}",
+                $"Port={port}",
+                $"Database={db}"
+            };
+            if (!string.IsNullOrWhiteSpace(user)) parts.Add($"Username={user}");
+            if (!string.IsNullOrWhiteSpace(pass)) parts.Add($"Password={pass}");
+            if (!string.IsNullOrWhiteSpace(ssl)) parts.Add($"SslMode={ssl}");
+
+            var conn = string.Join(";", parts);
+            var baseRepo = new Repository.BaseRepository(conn, s => Console.WriteLine($"[DB] {s}"));
+            if (!baseRepo.IsProviderAvailable()) return null;
+            return new VcLogRepository(baseRepo);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static VcRankingRepository CreateRankingFromEnvOrNull()
+    {
+        try
+        {
+            var host = Environment.GetEnvironmentVariable("PGHOST");
+            if (string.IsNullOrWhiteSpace(host))
+                return null;
+
+            var port = Environment.GetEnvironmentVariable("PGPORT") ?? Strings.DefaultDBPPort;
+            var db = Environment.GetEnvironmentVariable("PGDATABASE") ?? Strings.DefaultDBName;
+            var user = Environment.GetEnvironmentVariable("PGUSER");
+            var pass = Environment.GetEnvironmentVariable("PGPASSWORD");
+            var ssl = Environment.GetEnvironmentVariable("PGSSLMODE");
+
+            var parts = new System.Collections.Generic.List<string>
+            {
+                $"Host={host}",
+                $"Port={port}",
+                $"Database={db}"
+            };
+            if (!string.IsNullOrWhiteSpace(user)) parts.Add($"Username={user}");
+            if (!string.IsNullOrWhiteSpace(pass)) parts.Add($"Password={pass}");
+            if (!string.IsNullOrWhiteSpace(ssl)) parts.Add($"SslMode={ssl}");
+
+            var conn = string.Join(";", parts);
+            var baseRepo = new Repository.BaseRepository(conn, s => Console.WriteLine($"[DB] {s}"));
+            if (!baseRepo.IsProviderAvailable()) return null;
+            return new VcRankingRepository(baseRepo);
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     /// <summary>
@@ -81,6 +153,7 @@ public class VcLogger
             {
                 _legacyChannelId = cid;
                 _legacyEnabled = true; // 起動時は有効にする
+                Logger.Info($"VcLogger: 環境変数からレガシーチャンネルを読み込み channel={cid}");
             }
         }
         catch
@@ -103,16 +176,19 @@ public class VcLogger
                 // remove
                 try { _repo.RemoveTargetAsync(guildId).GetAwaiter().GetResult(); } catch { }
                 _targets.TryRemove(guildId, out _);
+                Logger.Info($"VcLogger: ToggleChannel - removed guild={guildId}");
                 return false;
             }
             else
             {
                 // set to nothing: caller should call SetChannel to set channel
+                Logger.Info($"VcLogger: ToggleChannel - will enable for guild={guildId}");
                 return true;
             }
         }
 
         _legacyEnabled = !_legacyEnabled;
+        Logger.Info($"VcLogger: ToggleChannel - legacyEnabled={_legacyEnabled}");
         return _legacyEnabled;
     }
 
@@ -131,6 +207,7 @@ public class VcLogger
     {
         if (_repo != null)
         {
+            Logger.Info($"VcLogger: SetChannelAsync guild={guildId} channel={channelId}");
             await _repo.SetTargetAsync(guildId, channelId);
             _targets[guildId] = channelId;
             return;
@@ -139,19 +216,21 @@ public class VcLogger
         // fallback: set legacy channel
         _legacyChannelId = channelId;
         _legacyEnabled = true;
+        Logger.Info($"VcLogger: SetChannelAsync - legacy channel set={channelId}");
     }
 
     public async Task RemoveChannelAsync(ulong guildId)
     {
         if (_repo != null)
         {
+            Logger.Info($"VcLogger: RemoveChannelAsync guild={guildId}");
             await _repo.RemoveTargetAsync(guildId);
             _targets.TryRemove(guildId, out _);
             return;
         }
-
         _legacyChannelId = 0;
         _legacyEnabled = false;
+        Logger.Info("VcLogger: RemoveChannelAsync - legacy channel disabled");
     }
 
     public async Task HandleVoiceStateUpdated(DiscordClient client, VoiceStateUpdateEventArgs e)
@@ -182,37 +261,40 @@ public class VcLogger
                 // ユーザーが VC に入室した場合のログ文字列を作成します。
                 // 出力に "誰が / どこに / いつ" が分かるようにする
                 text = string.Format(Strings.VcLogJoinFmt, e.User.Mention, after.Name, DateTime.Now.ToString(Strings.DateTimeFormat));
-                // persist session start
+                // persist session start をログ出力しつつ DB に保存を試みる
                 try
                 {
-                if (_rankingRepo != null)
-                {
-                    var id = _rankingRepo.CreateVcSessionAsync(e.Guild.Id, e.User.Id, after.Id, DateTime.UtcNow).GetAwaiter().GetResult();
-                    var key = $"{e.Guild.Id}:{e.User.Id}";
-                    _openSessions[key] = (id, DateTime.UtcNow, after.Id);
+                    if (_rankingRepo != null)
+                    {
+                        Logger.Info($"VcLogger: ユーザー入室を記録 guild={e.Guild.Id} user={e.User.Id} channel={after.Id}");
+                        var id = _rankingRepo.CreateVcSessionAsync(e.Guild.Id, e.User.Id, after.Id, DateTime.UtcNow).GetAwaiter().GetResult();
+                        var key = $"{e.Guild.Id}:{e.User.Id}";
+                        _openSessions[key] = (id, DateTime.UtcNow, after.Id);
+                    }
                 }
-                }
-                catch
+                catch (Exception ex)
                 {
-                    // ignore persistence errors
+                    Logger.Error(ex, "VcLogger: セッション開始の永続化に失敗");
                 }
             }
             else if (before != null && after == null)
             {
                 // ユーザーが VC から退室した場合のログ
                 text = string.Format(Strings.VcLogLeaveFmt, e.User.Mention, before.Name, DateTime.Now.ToString(Strings.DateTimeFormat));
-                // persist session end
+                // persist session end をログ出力しつつ DB を更新
                 try
                 {
                     var key = $"{e.Guild.Id}:{e.User.Id}";
                     if (_openSessions.TryRemove(key, out var v))
                     {
                         var dur = (long)(DateTime.UtcNow - v.joinedAtUtc).TotalSeconds;
+                        Logger.Info($"VcLogger: ユーザー退室を記録 id={v.dbId} duration={dur}");
                         _rankingRepo?.CloseVcSessionAsync(v.dbId, DateTime.UtcNow, dur).GetAwaiter().GetResult();
                     }
                     else
                     {
-                        // fallback: try close latest open session in DB
+                        // fallback: try close latest session
+                        Logger.Info($"VcLogger: Closing latest session for guild={e.Guild.Id} user={e.User.Id}");
                         _rankingRepo?.CloseLatestSessionForUserAsync(e.Guild.Id, e.User.Id, DateTime.UtcNow).GetAwaiter().GetResult();
                     }
                 }

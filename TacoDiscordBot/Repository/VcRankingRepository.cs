@@ -7,53 +7,15 @@ namespace TacoDiscordBot.Repository;
 
 public class VcRankingRepository
 {
-    private readonly string _connString;
+    private readonly BaseRepository _base;
 
-    private VcRankingRepository(string connString)
+    public VcRankingRepository(BaseRepository baseRepo)
     {
-        _connString = connString;
+        _base = baseRepo ?? throw new ArgumentNullException(nameof(baseRepo));
+        _base.Log("VcRankingRepository 作成");
     }
 
-    public static VcRankingRepository TryCreateFromEnv()
-    {
-        try
-        {
-            var host = Environment.GetEnvironmentVariable("PGHOST");
-            if (string.IsNullOrWhiteSpace(host))
-                return null;
-
-            var port = Environment.GetEnvironmentVariable("PGPORT") ?? Strings.DefaultDBPPort;
-            var db = Environment.GetEnvironmentVariable("PGDATABASE") ?? Strings.DefaultDBName;
-            var user = Environment.GetEnvironmentVariable("PGUSER");
-            var pass = Environment.GetEnvironmentVariable("PGPASSWORD");
-            var ssl = Environment.GetEnvironmentVariable("PGSSLMODE");
-
-            var parts = new List<string>
-            {
-                $"Host={host}",
-                $"Port={port}",
-                $"Database={db}"
-            };
-            if (!string.IsNullOrWhiteSpace(user)) parts.Add($"Username={user}");
-            if (!string.IsNullOrWhiteSpace(pass)) parts.Add($"Password={pass}");
-            if (!string.IsNullOrWhiteSpace(ssl)) parts.Add($"SslMode={ssl}");
-
-            var conn = string.Join(";", parts);
-
-            var t = Type.GetType("Npgsql.NpgsqlConnection, Npgsql");
-            if (t == null) return null;
-
-            var repo = new VcRankingRepository(conn);
-            repo.EnsureTableExistsAsync().GetAwaiter().GetResult();
-            return repo;
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private async Task EnsureTableExistsAsync()
+    public async Task EnsureTableExistsAsync()
     {
         var sql = @"CREATE TABLE IF NOT EXISTS vc_sessions (
             id BIGSERIAL PRIMARY KEY,
@@ -68,115 +30,113 @@ public class VcRankingRepository
         CREATE INDEX IF NOT EXISTS idx_vc_sessions_guild_user ON vc_sessions(guild_id, user_id);
         ";
 
-        await ExecuteNonQueryAsync(sql);
+        _base.Log("Ensuring table vc_sessions exists");
+        await _base.ExecuteNonQueryAsync(sql);
     }
 
     public async Task<long> CreateVcSessionAsync(ulong guildId, ulong userId, ulong channelId, DateTime joinedAtUtc)
     {
-        dynamic conn = Activator.CreateInstance(Type.GetType("Npgsql.NpgsqlConnection, Npgsql"), _connString);
-        await conn.OpenAsync();
-        dynamic cmd = conn.CreateCommand();
-        cmd.CommandText = "INSERT INTO vc_sessions (guild_id, user_id, channel_id, joined_at) VALUES(@g, @u, @c, @j) RETURNING id";
-        cmd.Parameters.AddWithValue("@g", (long)guildId);
-        cmd.Parameters.AddWithValue("@u", (long)userId);
-        cmd.Parameters.AddWithValue("@c", (long)channelId);
-        cmd.Parameters.AddWithValue("@j", joinedAtUtc);
-        var obj = await cmd.ExecuteScalarAsync();
-        long id = (long)obj;
-        await conn.CloseAsync();
-        await conn.DisposeAsync();
+        _base.Log($"CreateVcSessionAsync: guild={guildId} user={userId} channel={channelId}");
+        object obj = null;
+        await _base.UseConnectionAsync(async conn =>
+        {
+            dynamic cmd = conn.CreateCommand();
+            cmd.CommandText = "INSERT INTO vc_sessions (guild_id, user_id, channel_id, joined_at) VALUES(@g, @u, @c, @j) RETURNING id";
+            cmd.Parameters.AddWithValue("@g", (long)guildId);
+            cmd.Parameters.AddWithValue("@u", (long)userId);
+            cmd.Parameters.AddWithValue("@c", (long)channelId);
+            cmd.Parameters.AddWithValue("@j", joinedAtUtc);
+            obj = await cmd.ExecuteScalarAsync();
+        });
+
+        var id = (long)obj;
+        _base.Log($"CreateVcSessionAsync: 作成 id={id}");
         return id;
     }
 
     public async Task CloseVcSessionAsync(long id, DateTime leftAtUtc, long durationSeconds)
     {
-        dynamic conn = Activator.CreateInstance(Type.GetType("Npgsql.NpgsqlConnection, Npgsql"), _connString);
-        await conn.OpenAsync();
-        dynamic cmd = conn.CreateCommand();
-        cmd.CommandText = "UPDATE vc_sessions SET left_at=@l, duration_seconds=@d WHERE id=@id";
-        cmd.Parameters.AddWithValue("@l", leftAtUtc);
-        cmd.Parameters.AddWithValue("@d", durationSeconds);
-        cmd.Parameters.AddWithValue("@id", id);
-        await cmd.ExecuteNonQueryAsync();
-        await conn.CloseAsync();
-        await conn.DisposeAsync();
+        _base.Log($"CloseVcSessionAsync: id={id} leftAt={leftAtUtc} duration={durationSeconds}");
+        await _base.UseConnectionAsync(async conn =>
+        {
+            dynamic cmd = conn.CreateCommand();
+            cmd.CommandText = "UPDATE vc_sessions SET left_at=@l, duration_seconds=@d WHERE id=@id";
+            cmd.Parameters.AddWithValue("@l", leftAtUtc);
+            cmd.Parameters.AddWithValue("@d", durationSeconds);
+            cmd.Parameters.AddWithValue("@id", id);
+            await cmd.ExecuteNonQueryAsync();
+        });
+        _base.Log("CloseVcSessionAsync: 更新完了");
     }
 
     public async Task<bool> CloseLatestSessionForUserAsync(ulong guildId, ulong userId, DateTime leftAtUtc)
     {
-        dynamic conn = Activator.CreateInstance(Type.GetType("Npgsql.NpgsqlConnection, Npgsql"), _connString);
-        await conn.OpenAsync();
-        dynamic cmd = conn.CreateCommand();
-        cmd.CommandText = @"SELECT id, joined_at FROM vc_sessions WHERE guild_id = @g AND user_id = @u AND left_at IS NULL ORDER BY joined_at DESC LIMIT 1";
-        cmd.Parameters.AddWithValue("@g", (long)guildId);
-        cmd.Parameters.AddWithValue("@u", (long)userId);
-        dynamic reader = await cmd.ExecuteReaderAsync();
-        if (!await reader.ReadAsync())
+        _base.Log($"CloseLatestSessionForUserAsync: guild={guildId} user={userId}");
+        long id = -1;
+        DateTime joined = DateTime.MinValue;
+
+        await _base.UseConnectionAsync(async conn =>
         {
+            dynamic cmd = conn.CreateCommand();
+            cmd.CommandText = @"SELECT id, joined_at FROM vc_sessions WHERE guild_id = @g AND user_id = @u AND left_at IS NULL ORDER BY joined_at DESC LIMIT 1";
+            cmd.Parameters.AddWithValue("@g", (long)guildId);
+            cmd.Parameters.AddWithValue("@u", (long)userId);
+            dynamic reader = await cmd.ExecuteReaderAsync();
+            if (!await reader.ReadAsync())
+            {
+                await reader.DisposeAsync();
+                return;
+            }
+
+            id = reader.GetInt64(0);
+            joined = reader.GetDateTime(1);
             await reader.DisposeAsync();
-            await conn.CloseAsync();
-            await conn.DisposeAsync();
-            return false;
-        }
 
-        long id = reader.GetInt64(0);
-        DateTime joined = reader.GetDateTime(1);
-        await reader.DisposeAsync();
+            var duration = (long)(leftAtUtc - joined).TotalSeconds;
+            dynamic ucmd = conn.CreateCommand();
+            ucmd.CommandText = "UPDATE vc_sessions SET left_at=@l, duration_seconds=@d WHERE id=@id";
+            ucmd.Parameters.AddWithValue("@l", leftAtUtc);
+            ucmd.Parameters.AddWithValue("@d", duration);
+            ucmd.Parameters.AddWithValue("@id", id);
+            await ucmd.ExecuteNonQueryAsync();
+        });
 
-        var duration = (long)(leftAtUtc - joined).TotalSeconds;
-        dynamic ucmd = conn.CreateCommand();
-        ucmd.CommandText = "UPDATE vc_sessions SET left_at=@l, duration_seconds=@d WHERE id=@id";
-        ucmd.Parameters.AddWithValue("@l", leftAtUtc);
-        ucmd.Parameters.AddWithValue("@d", duration);
-        ucmd.Parameters.AddWithValue("@id", id);
-        await ucmd.ExecuteNonQueryAsync();
-
-        await conn.CloseAsync();
-        await conn.DisposeAsync();
-        return true;
+        _base.Log($"CloseLatestSessionForUserAsync: 終了 id={id}");
+        return id != -1;
     }
 
-    public async Task<List<(ulong userId, long totalSeconds)>> GetRankingAsync(ulong guildId, DateTime? sinceUtc)
+    public async Task<System.Collections.Generic.List<(ulong userId, long totalSeconds)>> GetRankingAsync(ulong guildId, DateTime? sinceUtc)
     {
-        var list = new List<(ulong, long)>();
-        dynamic conn = Activator.CreateInstance(Type.GetType("Npgsql.NpgsqlConnection, Npgsql"), _connString);
-        await conn.OpenAsync();
-        dynamic cmd = conn.CreateCommand();
-        if (sinceUtc.HasValue)
+        var list = new System.Collections.Generic.List<(ulong, long)>();
+        _base.Log($"GetRankingAsync: guild={guildId} since={(sinceUtc.HasValue ? sinceUtc.Value.ToString("o") : "all")}");
+        await _base.UseConnectionAsync(async conn =>
         {
-            cmd.CommandText = @"SELECT user_id, SUM(duration_seconds) as total FROM vc_sessions WHERE guild_id = @g AND duration_seconds IS NOT NULL AND joined_at >= @since GROUP BY user_id ORDER BY total DESC LIMIT 50";
-            cmd.Parameters.AddWithValue("@g", (long)guildId);
-            cmd.Parameters.AddWithValue("@since", sinceUtc.Value);
-        }
-        else
-        {
-            cmd.CommandText = @"SELECT user_id, SUM(duration_seconds) as total FROM vc_sessions WHERE guild_id = @g AND duration_seconds IS NOT NULL GROUP BY user_id ORDER BY total DESC LIMIT 50";
-            cmd.Parameters.AddWithValue("@g", (long)guildId);
-        }
+            dynamic cmd = conn.CreateCommand();
+            if (sinceUtc.HasValue)
+            {
+                cmd.CommandText = @"SELECT user_id, SUM(duration_seconds) as total FROM vc_sessions WHERE guild_id = @g AND duration_seconds IS NOT NULL AND joined_at >= @since GROUP BY user_id ORDER BY total DESC LIMIT 50";
+                cmd.Parameters.AddWithValue("@g", (long)guildId);
+                cmd.Parameters.AddWithValue("@since", sinceUtc.Value);
+            }
+            else
+            {
+                cmd.CommandText = @"SELECT user_id, SUM(duration_seconds) as total FROM vc_sessions WHERE guild_id = @g AND duration_seconds IS NOT NULL GROUP BY user_id ORDER BY total DESC LIMIT 50";
+                cmd.Parameters.AddWithValue("@g", (long)guildId);
+            }
 
-        dynamic reader = await cmd.ExecuteReaderAsync();
-        while (await reader.ReadAsync())
-        {
-            var uid = (ulong)reader.GetInt64(0);
-            var total = reader.IsDBNull(1) ? 0L : reader.GetInt64(1);
-            list.Add((uid, total));
-        }
+            dynamic reader = await cmd.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                var uid = (ulong)reader.GetInt64(0);
+                var total = reader.IsDBNull(1) ? 0L : reader.GetInt64(1);
+                list.Add((uid, total));
+            }
 
-        await reader.DisposeAsync();
-        await conn.CloseAsync();
-        await conn.DisposeAsync();
+            await reader.DisposeAsync();
+        });
+
+        _base.Log($"GetRankingAsync: 結果件数={list.Count}");
         return list;
-    }
-
-    private async Task ExecuteNonQueryAsync(string sql)
-    {
-        dynamic conn = Activator.CreateInstance(Type.GetType("Npgsql.NpgsqlConnection, Npgsql"), _connString);
-        await conn.OpenAsync();
-        dynamic cmd = conn.CreateCommand();
-        cmd.CommandText = sql;
-        await cmd.ExecuteNonQueryAsync();
-        await conn.CloseAsync();
-        await conn.DisposeAsync();
     }
 }
 

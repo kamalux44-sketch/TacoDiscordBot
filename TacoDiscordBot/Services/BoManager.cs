@@ -15,18 +15,58 @@ namespace TacoDiscordBot.Services;
 
 public class BoManager
 {
+    // BO（募集）管理サービス。
+    // メモリ上でセッションを管理し、永続化はオプションで BoRepository を通じて行います。
     private readonly DiscordClient _client;
     private readonly ConcurrentDictionary<string, Models.BoSession> _sessions = new();
     private readonly BoRepository _repo;
 
+    private static BoRepository CreateFromEnvOrNull()
+    {
+        try
+        {
+            var host = Environment.GetEnvironmentVariable("PGHOST");
+            if (string.IsNullOrWhiteSpace(host))
+                return null;
+
+            var port = Environment.GetEnvironmentVariable("PGPORT") ?? Strings.DefaultDBPPort;
+            var db = Environment.GetEnvironmentVariable("PGDATABASE") ?? Strings.DefaultDBName;
+            var user = Environment.GetEnvironmentVariable("PGUSER");
+            var pass = Environment.GetEnvironmentVariable("PGPASSWORD");
+            var ssl = Environment.GetEnvironmentVariable("PGSSLMODE");
+
+            var parts = new System.Collections.Generic.List<string>
+            {
+                $"Host={host}",
+                $"Port={port}",
+                $"Database={db}"
+            };
+            if (!string.IsNullOrWhiteSpace(user)) parts.Add($"Username={user}");
+            if (!string.IsNullOrWhiteSpace(pass)) parts.Add($"Password={pass}");
+            if (!string.IsNullOrWhiteSpace(ssl)) parts.Add($"SslMode={ssl}");
+
+            var conn = string.Join(";", parts);
+            var baseRepo = new Repository.BaseRepository(conn, s => Console.WriteLine($"[DB] {s}"));
+            if (!baseRepo.IsProviderAvailable()) return null;
+            return new BoRepository(baseRepo);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     // BOセッションはメモリ管理とします。
     // 永続化は行いません。
-    public BoManager(DiscordClient client)
+    public BoManager(DiscordClient client, BoRepository repo = null)
     {
         _client = client;
 
-        // Try to initialize repository (Postgres) and load persisted sessions
-        _repo = BoRepository.TryCreateFromEnv();
+        // ロガー出力: コンストラクタ開始
+        Logger.Info("BoManager: 初期化開始");
+
+        // repository may be provided via DI (bot startup); otherwise attempt env fallback
+        _repo = repo ?? CreateFromEnvOrNull();
         if (_repo != null)
         {
             try
@@ -36,6 +76,7 @@ public class BoManager
                 {
                     _sessions[s.SessionId] = s;
                 }
+                Logger.Info($"BoManager: DB からセッションを読み込み 件数={persisted.Count}");
             }
             catch (Exception ex)
             {
@@ -60,6 +101,7 @@ public class BoManager
                 await Task.Delay(TimeSpan.FromHours(1));
             }
         });
+        Logger.Info("BoManager: 期限切れクリーンアップタスクを開始");
 
         // 締め切りチェック用の定期タスク
         // 1分ごとに締め切りを確認します。
