@@ -1,0 +1,30 @@
+services:
+  tacodiscordbot:
+    image: tacodiscordbot
+    build:
+      context: .
+      dockerfile: TacoDiscordBot/Dockerfile
+
+    container_name: tacodiscordbot
+    restart: unless-stopped
+
+    depends_on:
+      - postgres
+
+    env_file:
+      - .env
+
+  postgres:
+    image: postgres:17
+
+    container_name: postgres
+    restart: unless-stopped
+
+    env_file:
+      - .env
+
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+volumes:
+  postgres-data:
