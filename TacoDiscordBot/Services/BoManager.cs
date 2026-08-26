@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Linq; // No-op placeholder to ensure patch sections align
+using System.Linq; // パッチの位置合わせのためのプレースホルダ（無害）
 using System.Threading.Tasks;
 using DSharpPlus;
 using DSharpPlus.Entities;
@@ -65,7 +65,7 @@ public class BoManager
         // ロガー出力: コンストラクタ開始
         Logger.Info("BoManager: 初期化開始");
 
-        // repository may be provided via DI (bot startup); otherwise attempt env fallback
+        // リポジトリは DI（起動時）で渡される場合があります。渡されない場合は環境変数からフォールバックを試みます。
         _repo = repo ?? CreateFromEnvOrNull();
         if (_repo != null)
         {
@@ -202,14 +202,14 @@ public class BoManager
                 return;
             }
 
-            // Interaction ACK（失敗しても続行）
+            // Interaction を ACK（失敗しても処理は続行）
             try
             {
                 await e.Interaction.CreateResponseAsync(InteractionResponseType.DeferredMessageUpdate);
             }
             catch
             {
-                // ACK 失敗は無視
+                // ACK に失敗しても無視します
             }
 
             try
@@ -263,18 +263,18 @@ public class BoManager
         var ch = await _client.GetChannelAsync(session.ChannelId);
         if (ch != null)
         {
-                // どの募集が終了したか分かるように、募集内容（ある場合）を含めて通知
-                if (!string.IsNullOrWhiteSpace(session.Body))
-                    await ch.SendMessageAsync($"📢 募集を終了しました：『{session.Body}』");
-                else
-                    await ch.SendMessageAsync("📢 募集を終了しました。");
+            // どの募集が終了したか分かるように、募集内容（ある場合）を含めて通知
+            if (!string.IsNullOrWhiteSpace(session.Body))
+                await ch.SendMessageAsync($"📢 募集を終了しました：『{session.Body}』");
+            else
+                await ch.SendMessageAsync("📢 募集を終了しました。");
 
             var msg = await ch.GetMessageAsync(session.MessageId);
             if (msg != null)
             {
                 await msg.ModifyAsync(m => { m.Content = (msg.Content ?? string.Empty) + "\n\n**（募集終了）**"; });
             }
-            // persist close
+            // 永続化: 終了状態を保存
             try
             {
                 if (_repo != null)
@@ -285,16 +285,16 @@ public class BoManager
                 Logger.Error(ex, "セッション更新(終了) 永続化失敗");
             }
         }
-            // persist close
-            try
-            {
-                if (_repo != null)
-                    await _repo.UpdateSessionAsync(session);
-            }
-            catch (Exception ex)
-            {
-                Logger.Error(ex, "セッション更新(終了) 永続化失敗");
-            }
+        // 永続化: 終了状態を保存
+        try
+        {
+            if (_repo != null)
+                await _repo.UpdateSessionAsync(session);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(ex, "セッション更新(終了) 永続化失敗");
+        }
     }
 
     private async Task HandleJoinOrCancelAsync(ComponentInteractionCreateEventArgs e, string action, Models.BoSession session)
@@ -435,7 +435,7 @@ public class BoManager
                     : $"{session.Participants.Count}/任意";
 
             // ==============================
-            // Embed (条件付きでフィールドを追加)
+            // Embed（条件に応じてフィールドを追加）
             // ==============================
             var embedBuilder =
                 new DiscordEmbedBuilder()
@@ -470,16 +470,16 @@ public class BoManager
             // 締め切り（締め切りがある、または生の入力がある場合に表示）
             if (session.Deadline.HasValue)
             {
-            embedBuilder.AddField(
-                    Strings.LabelDeadline,
-                    TimeZoneInfo.ConvertTimeFromUtc(
-                        DateTime.SpecifyKind(
-                            session.Deadline.Value,
-                            DateTimeKind.Utc),
-                        TimeZoneInfo.FindSystemTimeZoneById(
-                            "Tokyo Standard Time"))
-                        .ToString(Strings.DateTimeFormat),
-                    false);
+                embedBuilder.AddField(
+                        Strings.LabelDeadline,
+                        TimeZoneInfo.ConvertTimeFromUtc(
+                            DateTime.SpecifyKind(
+                                session.Deadline.Value,
+                                DateTimeKind.Utc),
+                            TimeZoneInfo.FindSystemTimeZoneById(
+                                "Tokyo Standard Time"))
+                            .ToString(Strings.DateTimeFormat),
+                        false);
             }
             else if (!string.IsNullOrWhiteSpace(session.DeadlineRaw))
             {
@@ -523,19 +523,19 @@ public class BoManager
                 string.IsNullOrWhiteSpace(session.Description);
 
             string content;
-                if (isMinimal)
-                {
-                    // 他項目が未指定のみのシンプルな投稿
-                    content = string.Format(Strings.ContentMinimalTemplate, session.OwnerId);
-                }
+            if (isMinimal)
+            {
+                // 他項目が未指定のみのシンプルな投稿
+                content = string.Format(Strings.ContentMinimalTemplate, session.OwnerId);
+            }
+            else
+            {
+                // 募集内容が指定されている場合は「○○さんが<募集内容>の募集を開始しました！」を表示
+                if (!string.IsNullOrWhiteSpace(session.Body))
+                    content = string.Format(Strings.ContentWithBodyTemplate, session.OwnerId, session.Body);
                 else
-                {
-                    // 募集内容が指定されている場合は「○○さんが<募集内容>の募集を開始しました！」を表示
-                    if (!string.IsNullOrWhiteSpace(session.Body))
-                        content = string.Format(Strings.ContentWithBodyTemplate, session.OwnerId, session.Body);
-                    else
-                        content = Strings.EmbedStartContent;
-                }
+                    content = Strings.EmbedStartContent;
+            }
 
             // ==============================
             // 募集メッセージ
@@ -669,7 +669,7 @@ public class BoManager
 
                     Logger.Error(ex, "メインループ");
                 }
-                // delete from persistent storage as well
+                // 永続ストレージからも削除
                 try
                 {
                     if (_repo != null)
@@ -709,7 +709,7 @@ public class BoManager
                     : $"{cur}/任意";
 
             // ==============================
-            // Embed (条件付きでフィールドを追加)
+            // Embed（条件に応じてフィールドを追加）
             // ==============================
             var embedBuilder =
                 new DiscordEmbedBuilder()

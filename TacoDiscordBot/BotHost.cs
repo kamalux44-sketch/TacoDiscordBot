@@ -9,6 +9,7 @@ public static class BotHost
 {
     public static DiscordClient Client { get; private set; }
     public static Services.VcLogger VcLogger { get; private set; }
+    public static Services.VcRankingService VcRankingService { get; private set; }
     public static Services.BoManager BoManager { get; private set; }
 
     public static async Task RunAsync()
@@ -73,12 +74,12 @@ public static class BotHost
                     {
                         Console.WriteLine("[BotHost] DB ドライバ確認 OK");
 
-                        // create repo instances with DI
+                        // DI を使ってリポジトリのインスタンスを作成
                         vclogRepo = new Repository.VcLogRepository(baseRepo);
                         vrankRepo = new Repository.VcRankingRepository(baseRepo);
                         boRepo = new Repository.BoRepository(baseRepo);
 
-                        // Ensure tables exist for all repositories
+                        // すべてのリポジトリについてテーブルの存在確認と作成を行う
                         try
                         {
                             Console.WriteLine("[BotHost] DB テーブル確認・作成開始");
@@ -105,15 +106,22 @@ public static class BotHost
                 }
             }
 
-            // create services with (optional) repo dependencies
+            // リポジトリ（任意）を注入してサービスを作成
             VcLogger = new Services.VcLogger(vclogRepo, vrankRepo);
             Console.WriteLine("[BotHost] VcLogger作成完了");
 
             BoManager = new Services.BoManager(Client, boRepo);
             Console.WriteLine("[BotHost] BoManager作成完了");
 
+            // ランキングサービスを作成（DB 未構成の場合は何もしません）
+            VcRankingService = new Services.VcRankingService();
+            Console.WriteLine("[BotHost] VcRankingService作成完了");
+
             Client.VoiceStateUpdated +=
                 VcLogger.HandleVoiceStateUpdated;
+            // メッセージ送信とは独立してランキングの永続化を行う
+            Client.VoiceStateUpdated +=
+                VcRankingService.HandleVoiceStateUpdated;
 
             Client.ComponentInteractionCreated +=
                 BoManager.HandleComponentInteraction;

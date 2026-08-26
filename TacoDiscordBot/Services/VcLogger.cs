@@ -14,15 +14,14 @@ namespace TacoDiscordBot.Services;
 
 public class VcLogger
 {
-    // per-guild targets are stored in DB if available. Fallback to legacy single-channel env var.
+    // ギルドごとのターゲットは DB に保存されます。利用できない場合はレガシーな単一チャンネル環境変数を使用します。
     private readonly VcLogRepository _repo;
-    private readonly VcRankingRepository _rankingRepo;
     private readonly System.Collections.Concurrent.ConcurrentDictionary<ulong, ulong> _targets = new();
-    // legacy fallback
+    // レガシーフォールバック
     private ulong _legacyChannelId; // 0=未設定
     private bool _legacyEnabled;
-    // in-memory map of open sessions: key = "{guildId}:{userId}" -> (dbId, joinedAtUtc, channelId)
-    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, (long dbId, DateTime joinedAtUtc, ulong channelId)> _openSessions = new();
+    // 開いているセッションのインメモリマップ: key = "{guildId}:{userId}" -> (dbId, joinedAtUtc, channelId)
+    // （ランキングの永続化は VcRankingService に移管しました）
 
     /// <summary>
     /// コンストラクタ。環境変数からチャンネルIDを読み取り、初期状態を設定します。
@@ -34,7 +33,7 @@ public class VcLogger
         _legacyEnabled = false;
 
         _repo = repo;
-        _rankingRepo = rankingRepo;
+        // rankingRepo は意図的に保持しません。ランキング永続化は VcRankingService が担当します。
 
         if (_repo != null)
         {
@@ -46,7 +45,7 @@ public class VcLogger
             }
             catch
             {
-                // ignore
+                // 無視します
             }
         }
 
@@ -129,7 +128,7 @@ public class VcLogger
     /// <summary>
     /// チャンネルが設定されているかを示します。
     /// </summary>
-    // Indicates if any configuration exists (repo or legacy)
+    // リポジトリまたはレガシー設定が存在するかどうかを示します
     public bool IsConfigured => _repo != null || _legacyChannelId != 0;
 
     public bool IsConfiguredForGuild(ulong guildId)
@@ -158,7 +157,7 @@ public class VcLogger
         }
         catch
         {
-            // ignore
+            // 無視します
         }
     }
 
@@ -166,14 +165,14 @@ public class VcLogger
     /// /vclog コマンドなどから呼ばれて、VC ログ機能のオン/オフを切り替えます。
     /// 戻り値は現在の有効状態です。
     /// </summary>
-    // Toggle per-guild target when repo available; otherwise toggle legacy global channel.
+    // リポジトリがある場合はギルド単位でターゲットを切り替え、ない場合はレガシーなグローバルチャンネルを切り替えます。
     public bool ToggleChannel(ulong guildId)
     {
         if (_repo != null)
         {
             if (_targets.ContainsKey(guildId))
             {
-                // remove
+                // 削除
                 try { _repo.RemoveTargetAsync(guildId).GetAwaiter().GetResult(); } catch { }
                 _targets.TryRemove(guildId, out _);
                 Logger.Info($"VcLogger: ToggleChannel - removed guild={guildId}");
@@ -181,7 +180,7 @@ public class VcLogger
             }
             else
             {
-                // set to nothing: caller should call SetChannel to set channel
+                // 空に設定します: 呼び出し元は SetChannel でチャンネルを指定してください
                 Logger.Info($"VcLogger: ToggleChannel - will enable for guild={guildId}");
                 return true;
             }
@@ -197,12 +196,12 @@ public class VcLogger
     /// </summary>
     public void SetChannel(ulong channelId)
     {
-        // legacy fallback: set global channel
+        // レガシーフォールバック: グローバルチャンネルを設定
         _legacyChannelId = channelId;
         _legacyEnabled = true;
     }
 
-    // Set per-guild target (persist if repo available)
+    // ギルド単位のターゲットを設定します（リポジトリがあれば永続化します）
     public async Task SetChannelAsync(ulong guildId, ulong channelId)
     {
         if (_repo != null)
@@ -213,7 +212,7 @@ public class VcLogger
             return;
         }
 
-        // fallback: set legacy channel
+        // フォールバック: レガシーチャンネルを設定
         _legacyChannelId = channelId;
         _legacyEnabled = true;
         Logger.Info($"VcLogger: SetChannelAsync - legacy channel set={channelId}");
@@ -239,7 +238,7 @@ public class VcLogger
         {
             if (e.Guild == null) return;
 
-            // Determine channel to log to
+            // どのチャンネルにログを送るかを決定
             ulong targetChannel = 0;
             if (_repo != null)
             {
@@ -251,7 +250,9 @@ public class VcLogger
                     targetChannel = _legacyChannelId;
             }
 
-            if (targetChannel == 0) return;
+            // メッセージ送信は targetChannel が設定されている場合のみ行います。
+            // ランキングの永続化は VcRankingService 側で行うため、ここでは送信可否のみ判定します。
+            var willSend = targetChannel != 0;
 
             var before = e.Before?.Channel;
             var after = e.After?.Channel;
@@ -261,86 +262,29 @@ public class VcLogger
                 // ユーザーが VC に入室した場合のログ文字列を作成します。
                 // 出力に "誰が / どこに / いつ" が分かるようにする
                 text = string.Format(Strings.VcLogJoinFmt, e.User.Mention, after.Name, DateTime.Now.ToString(Strings.DateTimeFormat));
-                // persist session start をログ出力しつつ DB に保存を試みる
-                try
-                {
-                    if (_rankingRepo != null)
-                    {
-                        Logger.Info($"VcLogger: ユーザー入室を記録 guild={e.Guild.Id} user={e.User.Id} channel={after.Id}");
-                        var id = _rankingRepo.CreateVcSessionAsync(e.Guild.Id, e.User.Id, after.Id, DateTime.UtcNow).GetAwaiter().GetResult();
-                        var key = $"{e.Guild.Id}:{e.User.Id}";
-                        _openSessions[key] = (id, DateTime.UtcNow, after.Id);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Logger.Error(ex, "VcLogger: セッション開始の永続化に失敗");
-                }
             }
             else if (before != null && after == null)
             {
                 // ユーザーが VC から退室した場合のログ
                 text = string.Format(Strings.VcLogLeaveFmt, e.User.Mention, before.Name, DateTime.Now.ToString(Strings.DateTimeFormat));
-                // persist session end をログ出力しつつ DB を更新
-                try
-                {
-                    var key = $"{e.Guild.Id}:{e.User.Id}";
-                    if (_openSessions.TryRemove(key, out var v))
-                    {
-                        var dur = (long)(DateTime.UtcNow - v.joinedAtUtc).TotalSeconds;
-                        Logger.Info($"VcLogger: ユーザー退室を記録 id={v.dbId} duration={dur}");
-                        _rankingRepo?.CloseVcSessionAsync(v.dbId, DateTime.UtcNow, dur).GetAwaiter().GetResult();
-                    }
-                    else
-                    {
-                        // fallback: try close latest session
-                        Logger.Info($"VcLogger: Closing latest session for guild={e.Guild.Id} user={e.User.Id}");
-                        _rankingRepo?.CloseLatestSessionForUserAsync(e.Guild.Id, e.User.Id, DateTime.UtcNow).GetAwaiter().GetResult();
-                    }
-                }
-                catch
-                {
-                    // ignore
-                }
             }
             else if (before != null && after != null && before.Id != after.Id)
             {
                 // チャンネル移動が発生した場合のログ
                 text = string.Format(Strings.VcLogMoveFmt, e.User.Mention, before.Name, after.Name, DateTime.Now.ToString(Strings.DateTimeFormat));
-                // persist move: close previous session and create new one
-                try
-                {
-                    var key = $"{e.Guild.Id}:{e.User.Id}";
-                    if (_openSessions.TryRemove(key, out var v))
-                    {
-                        var dur = (long)(DateTime.UtcNow - v.joinedAtUtc).TotalSeconds;
-                        _rankingRepo?.CloseVcSessionAsync(v.dbId, DateTime.UtcNow, dur).GetAwaiter().GetResult();
-                    }
-                    else
-                    {
-                        _rankingRepo?.CloseLatestSessionForUserAsync(e.Guild.Id, e.User.Id, DateTime.UtcNow).GetAwaiter().GetResult();
-                    }
-
-                    if (_rankingRepo != null)
-                    {
-                        var id = _rankingRepo.CreateVcSessionAsync(e.Guild.Id, e.User.Id, after.Id, DateTime.UtcNow).GetAwaiter().GetResult();
-                        _openSessions[key] = (id, DateTime.UtcNow, after.Id);
-                    }
-                }
-                catch
-                {
-                    // ignore
-                }
             }
 
             if (text == null) return;
+
+            // ギルドに対して送信先チャンネルが設定されている場合のみ Embed を送信します
+            if (!willSend) return;
 
             try
             {
                 var ch = await client.GetChannelAsync(targetChannel);
                 if (ch == null) return;
 
-                // Embed with colored side bar depending on event type
+                // イベント種別に応じてサイドバーの色を変えた Embed を作成
                 DiscordColor color;
                 string title;
                 if (before == null && after != null)
@@ -369,12 +313,12 @@ public class VcLogger
             }
             catch
             {
-                // ignore send errors
+                // 送信エラーは無視します
             }
         }
         catch
         {
-            // swallow
+            // 例外を握りつぶす
         }
     }
 }

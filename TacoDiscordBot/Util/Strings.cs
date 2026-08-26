@@ -8,17 +8,17 @@ namespace TacoDiscordBot;
 /// </summary>
 public static class Strings
 {
-    // --- General ---
+    // --- 全般 ---
     public const string EnvTokenMissing = "Environment variable DISCORD_TOKEN is not set. Set it to your bot token.";
 
-    //デフォルトの接続情報は、環境変数が設定されていない場合に使用されます。
+    // デフォルトの接続情報は、環境変数が設定されていない場合に使用されます。
     public const string DefaultDBName = "postgres";
     public const string DefaultDBPPort = "5432";
 
-    // --- Formatting ---
+    // --- フォーマット ---
     public const string DateTimeFormat = "yyyy/MM/dd HH:mm";
 
-    // --- VC log ---
+    // --- VC ログ ---
     // 誰が、どのチャンネルで、いつ 入室/退室/移動 したか分かるようにします。
     public const string VcLogJoinFmt = "参加: {0} が {1} に入室 ({2})"; // {0}=user, {1}=channel, {2}=time
     public const string VcLogLeaveFmt = "退出: {0} が {1} から退室 ({2})"; // {0}=user, {1}=channel, {2}=time
@@ -26,21 +26,21 @@ public static class Strings
     // 環境変数: VC ログ送信先チャンネル ID (例: "123456789012345678")
     public const string EnvVcLogChannel = "VCLOG_CHANNEL";
 
-    // General command messages
+    // コマンド用の一般的なメッセージ
     public const string CommandGuildOnly = "このコマンドはサーバー内で実行してください。";
 
-    // VcRanking messages
+    // VCランキング用メッセージ
     public const string VcRankingDbNotSet = "VC セッション集計は未設定です（Postgres 未接続）。";
     public const string VcRankingInvalidPeriod = "period は day/week/month/all のいずれかを指定してください。";
     public const string VcRankingNoData = "順位データがありません。注意: サーバー内でVCログが有効になっているか確認してください。";
     public const string VcRankingHeader = "👑 VCランキング";
     public const string VcRankingSeparator = "━━━━━━━━━━━━━━━━━━";
 
-    // Bo messages
+    // BO（募集）用メッセージ
     public const string BoDeadlineInvalid = "締め切りの日時が正しくありません。\n以下の形式で入力してください：\n`2026-08-13 01:30`";
     public const string BoCreatedConfirmation = "募集を作成しました。";
 
-    // --- BO (募集) ---
+    // --- BO（募集） ---
     public const string EmbedTitle = "募集";
     public const string EmbedStartContent = "@here\n募集を開始しました！";
     public const string EmbedUpdatedContent = "@here\n募集を更新しました！";
@@ -56,12 +56,12 @@ public static class Strings
     public const string VcToggleOff = "指定チャンネルの VC ログを無効化しました。";
     public const string VcChannelSet = "VC ログ送信先チャンネルを設定しました。";
 
-    // VC logger titles
+    // VC ロガー用タイトル
     public const string VcEnterTitle = "VC 入室";
     public const string VcLeaveTitle = "VC 退室";
     public const string VcMoveTitle = "VC 移動";
 
-    // Bo (募集) UI labels used in embeds/buttons
+    // BO（募集）で埋め込み／ボタンに使うラベル
     public const string LabelDeadline = "⏰ 締切";
     public const string LabelDescription = "📝 説明";
     public const string ParticipantsFieldPrefix = "📋 ";

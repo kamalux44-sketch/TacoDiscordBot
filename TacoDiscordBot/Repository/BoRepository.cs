@@ -5,7 +5,7 @@ using TacoDiscordBot.Models;
 
 namespace TacoDiscordBot.Repository;
 
-// Lightweight repository that uses Npgsql at runtime if available.
+// 軽量リポジトリ。実行時に Npgsql が利用可能であれば使用します。
 public class BoRepository
 {
     private readonly BaseRepository _base;
@@ -72,7 +72,7 @@ VALUES (@sid, @mid, @cid, @body, @at, @rank, @draw, @dutc, @desc, @oid, @closed,
 
             await cmd.ExecuteNonQueryAsync();
 
-            // insert participants
+            // 参加者を挿入
             foreach (var uid in session.Participants)
             {
                 var psql = "INSERT INTO bo_participants(session_id, user_id, joined_at) VALUES(@sid, @uid, @joined)";
@@ -110,7 +110,7 @@ VALUES (@sid, @mid, @cid, @body, @at, @rank, @draw, @dutc, @desc, @oid, @closed,
             cmd.Parameters.AddWithValue("@sid", session.SessionId);
             await cmd.ExecuteNonQueryAsync();
 
-            // replace participants: delete then insert
+            // 参加者を置換: 既存を削除してから挿入
             var dsql = "DELETE FROM bo_participants WHERE session_id = @sid";
             dynamic dcmd = conn.CreateCommand();
             dcmd.CommandText = dsql;
@@ -170,7 +170,7 @@ VALUES (@sid, @mid, @cid, @body, @at, @rank, @draw, @dutc, @desc, @oid, @closed,
                 s.IsClosed = reader.GetBoolean(10);
                 s.CreatedAt = reader.GetDateTime(11);
 
-                // load participants
+                // 参加者を読み込む
                 s.Participants = new System.Collections.Generic.List<ulong>();
                 var psql = "SELECT user_id FROM bo_participants WHERE session_id = @sid ORDER BY id";
                 dynamic pcmd = conn.CreateCommand();

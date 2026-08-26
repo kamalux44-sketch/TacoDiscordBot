@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 
 namespace TacoDiscordBot.Repository;
 
-// Lightweight repository that uses Npgsql if available at runtime.
+// 軽量リポジトリ。実行時に Npgsql が利用可能であれば使用します。
 /// <summary>
 /// VC ログの永続化リポジトリ。
 /// BaseRepository を介して DB 接続を行い、操作の開始・終了をログ出力します。

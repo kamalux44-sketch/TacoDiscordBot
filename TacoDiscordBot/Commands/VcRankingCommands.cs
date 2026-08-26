@@ -14,7 +14,7 @@ public class VcRankingCommands : ApplicationCommandModule
         InteractionContext ctx,
         [Option("period", "集計期間: day, week, month, all")] string period = "all")
     {
-        // ACK the interaction to avoid "application did not respond"
+        // 応答が遅延すると "application did not respond" になるため、Interaction を ACK します
         await ctx.CreateResponseAsync(InteractionResponseType.DeferredChannelMessageWithSource);
 
         var guildId = ctx.Guild?.Id ?? 0UL;

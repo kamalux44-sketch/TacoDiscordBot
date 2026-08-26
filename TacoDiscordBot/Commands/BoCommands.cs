@@ -35,7 +35,7 @@ public class BoCommands : ApplicationCommandModule
             "募集の説明（任意）")]
         string description = "")
     {
-        // Acknowledge the interaction to avoid "application did not respond"
+        // 応答が遅延すると "application did not respond" になるため、Interaction を ACK します
         await ctx.CreateResponseAsync(InteractionResponseType.DeferredChannelMessageWithSource);
 
         DateTime? parsedDeadline = null;
@@ -66,7 +66,7 @@ public class BoCommands : ApplicationCommandModule
 
             // 入力された日時を「日本時間」として扱います。
             //
-            // Local / UTCなどの環境依存を避けるため、
+            // Local / UTC などの環境依存を避けるため、
             // DateTimeKind.Unspecified にします。
             parsedDeadline = DateTime.SpecifyKind(
                 parsed,
@@ -81,7 +81,7 @@ public class BoCommands : ApplicationCommandModule
             parsedDeadline,
             description);
 
-        // Edit the deferred response to confirm
+        // 保留中のレスポンスを編集して確定します
         await ctx.EditResponseAsync(new DiscordWebhookBuilder().WithContent(Strings.BoCreatedConfirmation));
     }
 }

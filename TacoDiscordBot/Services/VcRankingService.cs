@@ -2,15 +2,104 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
+using DSharpPlus;
+using DSharpPlus.EventArgs;
 using DSharpPlus.Entities;
+using TacoDiscordBot.Util;
 using TacoDiscordBot.Repository;
 
 namespace TacoDiscordBot.Services;
 
 public class VcRankingService
 {
+
+    // ランキング永続化: 開いているセッションを管理し、リポジトリ経由で永続化します。
+    private readonly VcRankingRepository _repo;
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, (long dbId, DateTime joinedAtUtc, ulong channelId)> _openSessions = new();
+
     public VcRankingService()
     {
+        _repo = CreateRankingFromEnvOrNull();
+    }
+
+    // 音声状態更新を受けてランキング用の永続化を行います。メッセージ送信は行いません。
+    public async Task HandleVoiceStateUpdated(DiscordClient client, VoiceStateUpdateEventArgs e)
+    {
+        try
+        {
+            if (e.Guild == null) return;
+            if (_repo == null) return; // DB が無ければ処理なし
+
+            var before = e.Before?.Channel;
+            var after = e.After?.Channel;
+
+            if (before == null && after != null)
+            {
+                // 入室
+                try
+                {
+                    Logger.Info($"VcRankingService: record join guild={e.Guild.Id} user={e.User.Id} channel={after.Id}");
+                    var id = await _repo.CreateVcSessionAsync(e.Guild.Id, e.User.Id, after.Id, DateTime.UtcNow);
+                    var key = $"{e.Guild.Id}:{e.User.Id}";
+                    _openSessions[key] = (id, DateTime.UtcNow, after.Id);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error(ex, "VcRankingService: failed to persist join");
+                }
+            }
+            else if (before != null && after == null)
+            {
+                // 退室
+                try
+                {
+                    var key = $"{e.Guild.Id}:{e.User.Id}";
+                    if (_openSessions.TryRemove(key, out var v))
+                    {
+                        var dur = (long)(DateTime.UtcNow - v.joinedAtUtc).TotalSeconds;
+                        Logger.Info($"VcRankingService: record leave id={v.dbId} duration={dur}");
+                        await _repo.CloseVcSessionAsync(v.dbId, DateTime.UtcNow, dur);
+                    }
+                    else
+                    {
+                        Logger.Info($"VcRankingService: closing latest session fallback guild={e.Guild.Id} user={e.User.Id}");
+                        await _repo.CloseLatestSessionForUserAsync(e.Guild.Id, e.User.Id, DateTime.UtcNow);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error(ex, "VcRankingService: failed to persist leave");
+                }
+            }
+            else if (before != null && after != null && before.Id != after.Id)
+            {
+                // チャンネル移動: 前のセッションを閉じて新しいセッションを作成
+                try
+                {
+                    var key = $"{e.Guild.Id}:{e.User.Id}";
+                    if (_openSessions.TryRemove(key, out var v))
+                    {
+                        var dur = (long)(DateTime.UtcNow - v.joinedAtUtc).TotalSeconds;
+                        await _repo.CloseVcSessionAsync(v.dbId, DateTime.UtcNow, dur);
+                    }
+                    else
+                    {
+                        await _repo.CloseLatestSessionForUserAsync(e.Guild.Id, e.User.Id, DateTime.UtcNow);
+                    }
+
+                    var id = await _repo.CreateVcSessionAsync(e.Guild.Id, e.User.Id, after.Id, DateTime.UtcNow);
+                    _openSessions[key] = (id, DateTime.UtcNow, after.Id);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error(ex, "VcRankingService: failed to persist move");
+                }
+            }
+        }
+        catch
+        {
+            // 例外を握りつぶす
+        }
     }
 
     public async Task<DiscordEmbedBuilder> BuildRankingEmbedAsync(ulong guildId, string period, DiscordGuild guild, DiscordUser requestingUser)
@@ -51,8 +140,8 @@ public class VcRankingService
                 periodLabel = "全期間";
                 break;
             default:
-            embed.WithTitle("VCランキング")
-                    .WithDescription(Strings.VcRankingInvalidPeriod);
+                embed.WithTitle("VCランキング")
+                        .WithDescription(Strings.VcRankingInvalidPeriod);
                 return embed;
         }
 
@@ -66,7 +155,7 @@ public class VcRankingService
             return embed;
         }
 
-        // Build formatted ranking
+        // ランキングのフォーマットを組み立てる
         var sb = new StringBuilder();
         sb.AppendLine(Strings.VcRankingHeader);
         sb.AppendLine(Strings.VcRankingSeparator);
@@ -107,7 +196,7 @@ public class VcRankingService
         sb.AppendLine();
         sb.AppendLine(Strings.VcRankingSeparator);
 
-        // Find user's rank
+        // ユーザーの順位を見つける
         int userRankIndex = -1;
         long userTotal = 0;
         for (int i = 0; i < ranks.Count; i++)
