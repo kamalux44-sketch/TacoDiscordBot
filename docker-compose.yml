@@ -5,6 +5,9 @@ services:
       context: .
       dockerfile: TacoDiscordBot/Dockerfile
 
+    environment:
+      TZ: Asia/Tokyo
+
     container_name: tacodiscordbot
     restart: unless-stopped
 
@@ -16,6 +19,9 @@ services:
 
   postgres:
     image: postgres:17
+
+    environment:
+      TZ: Asia/Tokyo
 
     container_name: postgres
     restart: unless-stopped
