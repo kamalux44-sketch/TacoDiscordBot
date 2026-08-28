@@ -55,15 +55,17 @@ public class DeadlineCommands : ApplicationCommandModule
 
         var builder = new DiscordInteractionResponseBuilder()
             .WithContent("締め切り日時を選択してください")
-            .AsEphemeral(true)
-            .AddComponents(new DiscordComponent[]
-            {
-                dateSelect,
-                hourSelect,
-                minuteSelect,
-                new DiscordButtonComponent(ButtonStyle.Success, $"deadline_confirm:{ctx.User.Id}", "✅ 決定"),
-                new DiscordButtonComponent(ButtonStyle.Danger, $"deadline_cancel:{ctx.User.Id}", "❌ キャンセル")
-            });
+            .AsEphemeral(true);
+
+        // Select メニューはそれぞれアクション行に入れる（安全策）
+        builder.AddComponents(new DiscordActionRowComponent(new DiscordComponent[] { dateSelect }));
+        builder.AddComponents(new DiscordActionRowComponent(new DiscordComponent[] { hourSelect }));
+        builder.AddComponents(new DiscordActionRowComponent(new DiscordComponent[] { minuteSelect }));
+
+        // ボタンは同じ行にまとめる
+        var confirmBtn = new DiscordButtonComponent(ButtonStyle.Success, $"deadline_confirm:{ctx.User.Id}", "✅ 決定");
+        var cancelBtn = new DiscordButtonComponent(ButtonStyle.Danger, $"deadline_cancel:{ctx.User.Id}", "❌ キャンセル");
+        builder.AddComponents(new DiscordActionRowComponent(new DiscordComponent[] { confirmBtn, cancelBtn }));
         Logger.Info($"Deadline: sending response to User={ctx.User.Id}");
         await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, builder);
         Logger.Info($"Deadline: response sent to User={ctx.User.Id}");
