@@ -1,114 +1,250 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using DSharpPlus;
 using DSharpPlus.Entities;
 using DSharpPlus.SlashCommands;
-using System.Collections.Generic;
 using TacoDiscordBot.Util;
 
 namespace TacoDiscordBot.Commands;
 
 public class DeadlineCommands : ApplicationCommandModule
 {
-    [SlashCommand("deadline", "締め切りを設定します（本人のみ表示のUI）")]
+    [SlashCommand("deadline", "締め切りを設定します")]
     public async Task Deadline(InteractionContext ctx)
     {
-        Logger.Info($"Deadline command invoked by User={ctx.User.Id} Guild={ctx.Guild?.Id}");
-        // 応答はエフェメラル（本人のみ）でコンポーネントを表示します
+        Logger.Info(
+            $"Deadline command invoked by User={ctx.User.Id} Guild={ctx.Guild?.Id}"
+        );
+
         try
         {
-        var now = DateTime.Now;
+            var now = DateTime.Now;
 
-        // 日は当日から +24日まで（計25日）
-        var daysToShow = 25;
+            // ==================================================
+            // 日付
+            // 今日から25日分
+            // ==================================================
 
-        var dateOptions = new List<DiscordSelectComponentOption>();
-        for (int i = 0; i < daysToShow; i++)
-        {
-            var d = now.Date.AddDays(i);
-            var label = d.ToString("MM/dd");
-            var value = d.ToString("yyyy-MM-dd");
-            dateOptions.Add(new DiscordSelectComponentOption(label, value, d.ToString("yyyy/MM/dd")));
-        }
+            var dateOptions = new List<DiscordSelectComponentOption>();
 
-        var hourOptions = new List<DiscordSelectComponentOption>();
-        for (int h = 0; h < 24; h++)
-        {
-            var txt = h.ToString("00");
-            hourOptions.Add(new DiscordSelectComponentOption(txt, txt, null));
-        }
+            for (int i = 0; i < 25; i++)
+            {
+                var date = now.Date.AddDays(i);
 
-        var minuteOptions = new List<DiscordSelectComponentOption>();
-        var initMinute = (now.Minute / 5) * 5;
-        for (int m = 0; m < 60; m += 5)
-        {
-            var txt = m.ToString("00");
-            minuteOptions.Add(new DiscordSelectComponentOption(txt, txt, null));
-        }
+                var label = date.ToString("MM/dd");
+                var value = date.ToString("yyyy-MM-dd");
+                var description = date.ToString("yyyy/MM/dd");
 
-        var datePlaceholder = now.ToString("MM/dd");
-        var dateSelect = new DiscordSelectComponent($"deadline_date:{ctx.User.Id}", datePlaceholder, dateOptions, false, 1, 1);
-        var hourPlaceholder = now.Hour.ToString("00");
-        var hourSelect = new DiscordSelectComponent($"deadline_hour:{ctx.User.Id}", hourPlaceholder, hourOptions, false, 1, 1);
-        var minutePlaceholder = initMinute.ToString("00");
-        var minuteSelect = new DiscordSelectComponent($"deadline_min:{ctx.User.Id}", minutePlaceholder, minuteOptions, false, 1, 1);
+                dateOptions.Add(
+                    new DiscordSelectComponentOption(
+                        label,
+                        value,
+                        description
+                    )
+                );
+            }
 
-        var builder = new DiscordInteractionResponseBuilder()
-            .WithContent("締め切り日時を選択してください")
-            .AsEphemeral(true);
+            // ==================================================
+            // 時
+            // 00～23
+            // ==================================================
 
-        // 各 Select は別々のアクション行に入れる（Select は各行1つまで）
-        builder.AddComponents(new DiscordActionRowComponent(new DiscordComponent[] { dateSelect }));
-        builder.AddComponents(new DiscordActionRowComponent(new DiscordComponent[] { hourSelect }));
-        builder.AddComponents(new DiscordActionRowComponent(new DiscordComponent[] { minuteSelect }));
+            var hourOptions = new List<DiscordSelectComponentOption>();
 
-        // ボタンを1行にまとめる
-        var confirmBtn = new DiscordButtonComponent(ButtonStyle.Success, $"deadline_confirm:{ctx.User.Id}", "✅ 決定");
-        var cancelBtn = new DiscordButtonComponent(ButtonStyle.Danger, $"deadline_cancel:{ctx.User.Id}", "❌ キャンセル");
-        builder.AddComponents(new DiscordActionRowComponent(new DiscordComponent[] { confirmBtn, cancelBtn }));
+            for (int hour = 0; hour < 24; hour++)
+            {
+                var value = hour.ToString("00");
 
-        Logger.Info($"Deadline: sending (deferred) response to User={ctx.User.Id} dateOptions={dateOptions.Count} hourOptions={hourOptions.Count} minuteOptions={minuteOptions.Count}");
-        try
-        {
-            // まず Interaction を ACK してから Followup メッセージでコンポーネントを送る。
-            await ctx.CreateResponseAsync(InteractionResponseType.DeferredChannelMessageWithSource);
+                hourOptions.Add(
+                    new DiscordSelectComponentOption(
+                        value,
+                        value
+                    )
+                );
+            }
 
-            var webhook = new DiscordWebhookBuilder()
-                .WithContent("締め切り日時を選択してください")
-                .AddComponents(new DiscordComponent[] {
-                    new DiscordActionRowComponent(new DiscordComponent[] { dateSelect }),
-                    new DiscordActionRowComponent(new DiscordComponent[] { hourSelect }),
-                    new DiscordActionRowComponent(new DiscordComponent[] { minuteSelect }),
-                    new DiscordActionRowComponent(new DiscordComponent[] { new DiscordButtonComponent(ButtonStyle.Success, $"deadline_confirm:{ctx.User.Id}", "✅ 決定"), new DiscordButtonComponent(ButtonStyle.Danger, $"deadline_cancel:{ctx.User.Id}", "❌ キャンセル") })
-                });
+            // ==================================================
+            // 分
+            // 5分刻み
+            // 00, 05, 10 ... 55
+            // ==================================================
 
-            await ctx.EditResponseAsync(webhook);
-            Logger.Info($"Deadline: edited deferred response for User={ctx.User.Id}");
+            var minuteOptions = new List<DiscordSelectComponentOption>();
+
+            for (int minute = 0; minute < 60; minute += 5)
+            {
+                var value = minute.ToString("00");
+
+                minuteOptions.Add(
+                    new DiscordSelectComponentOption(
+                        value,
+                        value
+                    )
+                );
+            }
+
+            // ==================================================
+            // Select Menu
+            //
+            // DSharpPlus 5.0.0:
+            //
+            // DiscordSelectComponent(
+            //     customId,
+            //     placeholder,
+            //     options,
+            //     disabled,
+            //     minOptions,
+            //     maxOptions
+            // )
+            // ==================================================
+
+            var dateSelect = new DiscordSelectComponent(
+                $"deadline_date:{ctx.User.Id}",
+                $"日付: {now:MM/dd}",
+                dateOptions,
+                false,
+                1,
+                1
+            );
+
+            var hourSelect = new DiscordSelectComponent(
+                $"deadline_hour:{ctx.User.Id}",
+                $"時: {now:HH}",
+                hourOptions,
+                false,
+                1,
+                1
+            );
+
+            // 現在時刻を5分単位に切り捨て
+            var initialMinute = (now.Minute / 5) * 5;
+
+            var minuteSelect = new DiscordSelectComponent(
+                $"deadline_minute:{ctx.User.Id}",
+                $"分: {initialMinute:00}",
+                minuteOptions,
+                false,
+                1,
+                1
+            );
+
+            // ==================================================
+            // Buttons
+            // ==================================================
+
+            var confirmButton = new DiscordButtonComponent(
+                ButtonStyle.Success,
+                $"deadline_confirm:{ctx.User.Id}",
+                "✅ 決定"
+            );
+
+            var cancelButton = new DiscordButtonComponent(
+                ButtonStyle.Danger,
+                $"deadline_cancel:{ctx.User.Id}",
+                "❌ キャンセル"
+            );
+
+            // ==================================================
+            // Response
+            // ==================================================
+
+            var response = new DiscordInteractionResponseBuilder()
+                .WithContent(
+                    "**締め切り日時を選択してください**\n" +
+                    $"現在時刻: `{now:yyyy/MM/dd HH:mm}`"
+                )
+                .AsEphemeral(true);
+
+            // Row 1: 日付
+            response.AddComponents(
+                new DiscordActionRowComponent(
+                    new DiscordComponent[]
+                    {
+                        dateSelect
+                    }
+                )
+            );
+
+            // Row 2: 時
+            response.AddComponents(
+                new DiscordActionRowComponent(
+                    new DiscordComponent[]
+                    {
+                        hourSelect
+                    }
+                )
+            );
+
+            // Row 3: 分
+            response.AddComponents(
+                new DiscordActionRowComponent(
+                    new DiscordComponent[]
+                    {
+                        minuteSelect
+                    }
+                )
+            );
+
+            // Row 4: 決定 / キャンセル
+            response.AddComponents(
+                new DiscordActionRowComponent(
+                    new DiscordComponent[]
+                    {
+                        confirmButton,
+                        cancelButton
+                    }
+                )
+            );
+
+            Logger.Info(
+                $"Deadline: sending response " +
+                $"User={ctx.User.Id} " +
+                $"dateOptions={dateOptions.Count} " +
+                $"hourOptions={hourOptions.Count} " +
+                $"minuteOptions={minuteOptions.Count}"
+            );
+
+            // ==================================================
+            // Interaction Response
+            // ==================================================
+
+            await ctx.CreateResponseAsync(
+                InteractionResponseType.ChannelMessageWithSource,
+                response
+            );
+
+            Logger.Info(
+                $"Deadline: UI displayed successfully " +
+                $"User={ctx.User.Id}"
+            );
         }
         catch (Exception ex)
         {
-            Logger.Error(ex, "Deadline: deferred+followup send failed");
+            Logger.Error(
+                ex,
+                $"Deadline command failed User={ctx.User.Id}"
+            );
+
+            // Interactionにまだ応答していない可能性があるため、
+            // エラー応答を試みる
             try
             {
-                await ctx.EditResponseAsync(new DiscordWebhookBuilder().WithContent("締め切りUIの作成に失敗しました。代替のテキスト入力で締め切りを指定してください。例: /bo deadline 2026-08-28 18:30"));
+                await ctx.CreateResponseAsync(
+                    InteractionResponseType.ChannelMessageWithSource,
+                    new DiscordInteractionResponseBuilder()
+                        .WithContent(
+                            "❌ 締め切り設定UIの表示に失敗しました。"
+                        )
+                        .AsEphemeral(true)
+                );
             }
-            catch (Exception rex)
+            catch (Exception responseEx)
             {
-                Logger.Error(rex, "Failed to send final fallback response for Deadline command");
-            }
-        }
-        }
-        catch (Exception ex)
-        {
-            Logger.Error(ex, "Deadline command failed");
-            try
-            {
-                await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
-                    new DiscordInteractionResponseBuilder().WithContent("内部エラーが発生しました。管理者に連絡してください。").AsEphemeral(true));
-            }
-            catch (Exception rex)
-            {
-                Logger.Error(rex, "Failed to send error response for Deadline command");
+                Logger.Error(
+                    responseEx,
+                    "Failed to send Deadline error response"
+                );
             }
         }
     }
