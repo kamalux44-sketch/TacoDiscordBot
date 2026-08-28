@@ -147,7 +147,18 @@ public class DeadlineService
                 if (int.TryParse(val, out var h))
                 {
                     sel.Hour = h;
-                    await SafeCreateFollowupAsync(e, $"時を {h:D2} に設定しました。");
+                    try
+                    {
+                        await e.Interaction.CreateResponseAsync(
+                            DSharpPlus.InteractionResponseType.ChannelMessageWithSource,
+                            new DSharpPlus.Entities.DiscordInteractionResponseBuilder().WithContent($"時を {h:D2} に設定しました。").AsEphemeral(true)
+                        );
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Error(ex, "deadline_hour: failed to respond to interaction");
+                        await SafeCreateResponseAsync(e, $"時を {h:D2} に設定しました。");
+                    }
                 }
                 else
                 {
@@ -162,7 +173,18 @@ public class DeadlineService
                 if (int.TryParse(val, out var m))
                 {
                     sel.Minute = m;
-                    await SafeCreateFollowupAsync(e, $"分を {m:D2} に設定しました。");
+                    try
+                    {
+                        await e.Interaction.CreateResponseAsync(
+                            DSharpPlus.InteractionResponseType.ChannelMessageWithSource,
+                            new DSharpPlus.Entities.DiscordInteractionResponseBuilder().WithContent($"分を {m:D2} に設定しました。").AsEphemeral(true)
+                        );
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Error(ex, "deadline_min: failed to respond to interaction");
+                        await SafeCreateResponseAsync(e, $"分を {m:D2} に設定しました。");
+                    }
                 }
                 else
                 {
