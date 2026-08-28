@@ -191,25 +191,26 @@ public class DeadlineCommands : ApplicationCommandModule
                 $"Deadline command failed User={ctx.User.Id}"
             );
 
-            // Interactionにまだ応答していない可能性があるため、
-            // エラー応答を試みる
+            // 既に Deferred 応答済みの可能性が高いため、EditResponseAsync でエラーメッセージを上書きします
             try
             {
-                await ctx.CreateResponseAsync(
-                    InteractionResponseType.ChannelMessageWithSource,
-                    new DiscordInteractionResponseBuilder()
-                        .WithContent(
-                            "❌ 締め切り設定UIの表示に失敗しました。"
-                        )
-                        .AsEphemeral(true)
-                );
+                await ctx.EditResponseAsync(new DiscordWebhookBuilder().WithContent("❌ 締め切り設定UIの表示に失敗しました。"));
             }
             catch (Exception responseEx)
             {
-                Logger.Error(
-                    responseEx,
-                    "Failed to send Deadline error response"
-                );
+                Logger.Error(responseEx, "Failed to send Deadline error response via EditResponseAsync");
+                try
+                {
+                    // 最終手段: CreateResponse を試す
+                    await ctx.CreateResponseAsync(
+                        InteractionResponseType.ChannelMessageWithSource,
+                        new DiscordInteractionResponseBuilder().WithContent("❌ 締め切り設定UIの表示に失敗しました。")
+                    );
+                }
+                catch (Exception finalEx)
+                {
+                    Logger.Error(finalEx, "Failed to send Deadline error response via CreateResponseAsync");
+                }
             }
         }
     }
