@@ -233,7 +233,33 @@ public class DeadlineService
     {
         try
         {
-            await e.Interaction.CreateFollowupMessageAsync(new DSharpPlus.Entities.DiscordFollowupMessageBuilder().WithContent(content).AsEphemeral(true));
+            // Try to create a followup. If the interaction has not been responded to yet,
+            // CreateFollowupMessageAsync may fail with NotFound/InvalidOperation. In that case
+            // fall back to creating an initial response (ChannelMessageWithSource).
+            try
+            {
+                await e.Interaction.CreateFollowupMessageAsync(new DSharpPlus.Entities.DiscordFollowupMessageBuilder().WithContent(content).AsEphemeral(true));
+                return;
+            }
+            catch (DSharpPlus.Exceptions.NotFoundException)
+            {
+                // fall through to CreateResponseAsync
+            }
+            catch (DSharpPlus.Exceptions.UnauthorizedException)
+            {
+                // fall through
+            }
+
+            // If followup failed because no prior response exists, respond directly to the interaction.
+            try
+            {
+                await e.Interaction.CreateResponseAsync(DSharpPlus.InteractionResponseType.ChannelMessageWithSource,
+                    new DSharpPlus.Entities.DiscordInteractionResponseBuilder().WithContent(content).AsEphemeral(true));
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex, "SafeCreateFollowup failed to CreateResponse");
+            }
         }
         catch (Exception ex)
         {

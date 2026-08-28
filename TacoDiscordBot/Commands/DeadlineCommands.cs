@@ -118,13 +118,13 @@ public class DeadlineCommands : ApplicationCommandModule
             var confirmButton = new DiscordButtonComponent(
                 ButtonStyle.Success,
                 $"deadline_confirm:{ctx.User.Id}",
-                "✅ 決定"
+                "決定"
             );
 
             var cancelButton = new DiscordButtonComponent(
                 ButtonStyle.Danger,
                 $"deadline_cancel:{ctx.User.Id}",
-                "❌ キャンセル"
+                "キャンセル"
             );
 
             // ==================================================
