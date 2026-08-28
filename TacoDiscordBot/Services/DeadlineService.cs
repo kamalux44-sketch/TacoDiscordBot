@@ -233,32 +233,36 @@ public class DeadlineService
     {
         try
         {
-            // Try to create a followup. If the interaction has not been responded to yet,
-            // CreateFollowupMessageAsync may fail with NotFound/InvalidOperation. In that case
-            // fall back to creating an initial response (ChannelMessageWithSource).
+            // First try to create a followup directly
             try
             {
                 await e.Interaction.CreateFollowupMessageAsync(new DSharpPlus.Entities.DiscordFollowupMessageBuilder().WithContent(content).AsEphemeral(true));
                 return;
             }
-            catch (DSharpPlus.Exceptions.NotFoundException)
+            catch (Exception ex) when (ex is DSharpPlus.Exceptions.NotFoundException || ex is DSharpPlus.Exceptions.UnauthorizedException || ex is InvalidOperationException)
             {
-                // fall through to CreateResponseAsync
-            }
-            catch (DSharpPlus.Exceptions.UnauthorizedException)
-            {
-                // fall through
+                // If creating followup failed, attempt to ACK the interaction (deferred update) and then create followup
+                try
+                {
+                    await e.Interaction.CreateResponseAsync(DSharpPlus.InteractionResponseType.DeferredMessageUpdate);
+                    await e.Interaction.CreateFollowupMessageAsync(new DSharpPlus.Entities.DiscordFollowupMessageBuilder().WithContent(content).AsEphemeral(true));
+                    return;
+                }
+                catch (Exception ex2)
+                {
+                    Logger.Error(ex2, "SafeCreateFollowup: fallback deferred+followup failed");
+                }
             }
 
-            // If followup failed because no prior response exists, respond directly to the interaction.
+            // As a last resort, try to send an initial response (may fail if already responded)
             try
             {
                 await e.Interaction.CreateResponseAsync(DSharpPlus.InteractionResponseType.ChannelMessageWithSource,
                     new DSharpPlus.Entities.DiscordInteractionResponseBuilder().WithContent(content).AsEphemeral(true));
             }
-            catch (Exception ex)
+            catch (Exception ex3)
             {
-                Logger.Error(ex, "SafeCreateFollowup failed to CreateResponse");
+                Logger.Error(ex3, "SafeCreateFollowup failed to CreateResponse");
             }
         }
         catch (Exception ex)
