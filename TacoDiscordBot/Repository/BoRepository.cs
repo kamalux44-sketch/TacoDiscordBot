@@ -147,8 +147,28 @@ VALUES (@sid, @mid, @cid, @body, @at, @rank, @draw, @dutc, @desc, @oid, @closed,
     public async Task<System.Collections.Generic.List<BoSession>> LoadActiveSessionsAsync()
     {
         var list = new System.Collections.Generic.List<BoSession>();
-        var sql = "SELECT session_id, message_id, channel_id, body, at, rank, deadline_raw, deadline_utc, description, owner_id, is_closed, created_at FROM bo_sessions WHERE is_closed = false";
-        _base.Log("LoadActiveSessionsAsync: 読み込み開始");
+
+        // 一括でセッションと参加者を取得するクエリ。参加者は array_agg でまとめる。
+        var sql = @"SELECT
+  s.session_id,
+  s.message_id,
+  s.channel_id,
+  s.body,
+  s.at,
+  s.rank,
+  s.deadline_raw,
+  s.deadline_utc,
+  s.description,
+  s.owner_id,
+  s.is_closed,
+  s.created_at,
+  COALESCE(array_agg(bp.user_id ORDER BY bp.id) FILTER (WHERE bp.user_id IS NOT NULL), ARRAY[]::bigint[]) AS participants
+FROM bo_sessions s
+LEFT JOIN bo_participants bp ON bp.session_id = s.session_id
+WHERE s.is_closed = false
+GROUP BY s.session_id, s.message_id, s.channel_id, s.body, s.at, s.rank, s.deadline_raw, s.deadline_utc, s.description, s.owner_id, s.is_closed, s.created_at";
+
+        _base.Log("LoadActiveSessionsAsync: 読み込み開始 (JOINによる一括取得)");
         await _base.UseConnectionAsync(async conn =>
         {
             dynamic cmd = conn.CreateCommand();
@@ -170,18 +190,38 @@ VALUES (@sid, @mid, @cid, @body, @at, @rank, @draw, @dutc, @desc, @oid, @closed,
                 s.IsClosed = reader.GetBoolean(10);
                 s.CreatedAt = reader.GetDateTime(11);
 
-                // 参加者を読み込む
                 s.Participants = new System.Collections.Generic.List<ulong>();
-                var psql = "SELECT user_id FROM bo_participants WHERE session_id = @sid ORDER BY id";
-                dynamic pcmd = conn.CreateCommand();
-                pcmd.CommandText = psql;
-                pcmd.Parameters.AddWithValue("@sid", s.SessionId);
-                dynamic preader = await pcmd.ExecuteReaderAsync();
-                while (await preader.ReadAsync())
+
+                // participants は bigint[] で返るはず
+                if (!reader.IsDBNull(12))
                 {
-                    s.Participants.Add((ulong)preader.GetInt64(0));
+                    try
+                    {
+                        var raw = reader.GetValue(12);
+                        if (raw is long[] longs)
+                        {
+                            foreach (var v in longs)
+                                s.Participants.Add((ulong)v);
+                        }
+                        else if (raw is System.Array arr)
+                        {
+                            foreach (var item in arr)
+                            {
+                                if (item is long lv) s.Participants.Add((ulong)lv);
+                                else if (item is int iv) s.Participants.Add((ulong)iv);
+                                else if (item is DBNull) { }
+                                else
+                                {
+                                    try { s.Participants.Add(Convert.ToUInt64(item)); } catch { }
+                                }
+                            }
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _base.Log($"LoadActiveSessionsAsync: participants parse error: {ex}");
+                    }
                 }
-                await preader.DisposeAsync();
 
                 list.Add(s);
             }
