@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq; // パッチの位置合わせのためのプレースホルダ（無害）
+using System.Globalization;
 using System.Threading.Tasks;
 using DSharpPlus;
 using DSharpPlus.Entities;
@@ -19,7 +20,65 @@ public class BoManager
     // メモリ上でセッションを管理し、永続化はオプションで BoRepository を通じて行います。
     private readonly DiscordClient _client;
     private readonly ConcurrentDictionary<string, Models.BoSession> _sessions = new();
+    private readonly DeadlineService _deadlineService;
     private readonly BoRepository _repo;
+
+    private class DeadlineSelection
+    {
+        public int Year { get; set; }
+        public int Month { get; set; }
+        public int Day { get; set; }
+        public int Hour { get; set; }
+        public int Minute { get; set; }
+    }
+
+    /// <summary>
+    /// 指定ユーザーの直近の募集に締め切りを設定します。
+    /// 成功した場合 true を返します。
+    /// </summary>
+    internal async Task<bool> ApplyDeadlineToLatestSessionAsync(ulong userId, DateTime utcDeadline, string raw)
+    {
+        try
+        {
+            var session = _sessions.Values
+                .Where(x => x.OwnerId == userId && !x.IsClosed)
+                .OrderByDescending(x => x.CreatedAt)
+                .FirstOrDefault();
+
+            if (session == null)
+                return false;
+
+            session.Deadline = utcDeadline;
+            session.DeadlineRaw = raw;
+
+            try
+            {
+                await UpdateSessionMessageAsync(session);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex, "ApplyDeadline: メッセージ更新失敗");
+            }
+
+            // 永続化を試みる
+            try
+            {
+                if (_repo != null)
+                    await _repo.UpdateSessionAsync(session);
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex, "ApplyDeadline: 永続化失敗");
+            }
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(ex, "ApplyDeadlineToLatestSessionAsync");
+            return false;
+        }
+    }
 
     private static BoRepository CreateFromEnvOrNull()
     {
@@ -103,6 +162,9 @@ public class BoManager
         });
         Logger.Info("BoManager: 期限切れクリーンアップタスクを開始");
 
+        // 締め切り用サービスを初期化
+        _deadlineService = new DeadlineService(this);
+
         // 締め切りチェック用の定期タスク
         // 1分ごとに締め切りを確認します。
         _ = Task.Run(async () =>
@@ -180,6 +242,21 @@ public class BoManager
 
         if (string.IsNullOrEmpty(id))
             return;
+
+        // 締め切りコンポーネントは DeadlineService に委譲
+        if (id.StartsWith("deadline_"))
+        {
+            try
+            {
+                var handled = await _deadlineService.HandleInteractionAsync(e);
+                if (handled)
+                    return;
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex, "deadline service handling");
+            }
+        }
 
         // 参加
         // 参加取消

@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using DSharpPlus;
 using DSharpPlus.Entities;
 using DSharpPlus.SlashCommands;
+using System.Collections.Generic;
 
 namespace TacoDiscordBot.Commands;
 
@@ -84,4 +85,5 @@ public class BoCommands : ApplicationCommandModule
         // 保留中のレスポンスを編集して確定します
         await ctx.EditResponseAsync(new DiscordWebhookBuilder().WithContent(Strings.BoCreatedConfirmation));
     }
+
 }
