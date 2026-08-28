@@ -4,6 +4,7 @@ using DSharpPlus;
 using DSharpPlus.Entities;
 using DSharpPlus.SlashCommands;
 using System.Collections.Generic;
+using TacoDiscordBot.Util;
 
 namespace TacoDiscordBot.Commands;
 
@@ -12,7 +13,10 @@ public class DeadlineCommands : ApplicationCommandModule
     [SlashCommand("deadline", "締め切りを設定します（本人のみ表示のUI）")]
     public async Task Deadline(InteractionContext ctx)
     {
+        Logger.Info($"Deadline command invoked by User={ctx.User.Id} Guild={ctx.Guild?.Id}");
         // 応答はエフェメラル（本人のみ）でコンポーネントを表示します
+        try
+        {
         var now = DateTime.Now;
 
         // 日は当日から +24日まで（計25日）
@@ -60,7 +64,22 @@ public class DeadlineCommands : ApplicationCommandModule
                 new DiscordButtonComponent(ButtonStyle.Success, $"deadline_confirm:{ctx.User.Id}", "✅ 決定"),
                 new DiscordButtonComponent(ButtonStyle.Danger, $"deadline_cancel:{ctx.User.Id}", "❌ キャンセル")
             });
-
+        Logger.Info($"Deadline: sending response to User={ctx.User.Id}");
         await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, builder);
+        Logger.Info($"Deadline: response sent to User={ctx.User.Id}");
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(ex, "Deadline command failed");
+            try
+            {
+                await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
+                    new DiscordInteractionResponseBuilder().WithContent("内部エラーが発生しました。管理者に連絡してください。").AsEphemeral(true));
+            }
+            catch (Exception rex)
+            {
+                Logger.Error(rex, "Failed to send error response for Deadline command");
+            }
+        }
     }
 }
