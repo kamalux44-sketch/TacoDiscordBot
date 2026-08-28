@@ -90,13 +90,12 @@ public class DeadlineService
                 // 単純な ACK を返して選択を確認する
                 try
                 {
-                    await e.Interaction.CreateResponseAsync(DSharpPlus.InteractionResponseType.ChannelMessageWithSource,
-                        new DSharpPlus.Entities.DiscordInteractionResponseBuilder().WithContent($"日付を {dt:yyyy/MM/dd} に設定しました。").AsEphemeral(true));
+                    // ACK silently (no visible message) to avoid spamming confirmations
+                    await e.Interaction.CreateResponseAsync(DSharpPlus.InteractionResponseType.DeferredMessageUpdate);
                 }
                 catch (Exception ex)
                 {
-                    Logger.Error(ex, "deadline_date: failed to respond to interaction");
-                    await SafeCreateResponseAsync(e, $"日付を {dt:yyyy/MM/dd} に設定しました。");
+                    Logger.Error(ex, "deadline_date: failed to ACK interaction");
                 }
 
                 return true;
@@ -110,15 +109,12 @@ public class DeadlineService
                     sel.Hour = h;
                     try
                     {
-                        await e.Interaction.CreateResponseAsync(
-                            DSharpPlus.InteractionResponseType.ChannelMessageWithSource,
-                            new DSharpPlus.Entities.DiscordInteractionResponseBuilder().WithContent($"時を {h:D2} に設定しました。").AsEphemeral(true)
-                        );
+                        // acknowledge silently
+                        await e.Interaction.CreateResponseAsync(DSharpPlus.InteractionResponseType.DeferredMessageUpdate);
                     }
                     catch (Exception ex)
                     {
-                        Logger.Error(ex, "deadline_hour: failed to respond to interaction");
-                        await SafeCreateResponseAsync(e, $"時を {h:D2} に設定しました。");
+                        Logger.Error(ex, "deadline_hour: failed to ACK interaction");
                     }
                 }
                 else
@@ -136,15 +132,12 @@ public class DeadlineService
                     sel.Minute = m;
                     try
                     {
-                        await e.Interaction.CreateResponseAsync(
-                            DSharpPlus.InteractionResponseType.ChannelMessageWithSource,
-                            new DSharpPlus.Entities.DiscordInteractionResponseBuilder().WithContent($"分を {m:D2} に設定しました。").AsEphemeral(true)
-                        );
+                        // acknowledge silently
+                        await e.Interaction.CreateResponseAsync(DSharpPlus.InteractionResponseType.DeferredMessageUpdate);
                     }
                     catch (Exception ex)
                     {
-                        Logger.Error(ex, "deadline_min: failed to respond to interaction");
-                        await SafeCreateResponseAsync(e, $"分を {m:D2} に設定しました。");
+                        Logger.Error(ex, "deadline_min: failed to ACK interaction");
                     }
                 }
                 else
@@ -176,16 +169,8 @@ public class DeadlineService
                     await SafeCreateResponseAsync(e, "直近の募集が見つかりませんでした。");
                     return true;
                 }
-
                 await SafeCreateResponseAsync(e, "締め切りを設定しました。");
                 _selections.TryRemove(e.User.Id, out _);
-                return true;
-            }
-
-            if (action == "deadline_cancel")
-            {
-                _selections.TryRemove(e.User.Id, out _);
-                await SafeCreateResponseAsync(e, "キャンセルしました。");
                 return true;
             }
         }

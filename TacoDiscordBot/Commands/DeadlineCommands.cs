@@ -119,12 +119,6 @@ public class DeadlineCommands : ApplicationCommandModule
                 "決定"
             );
 
-            var cancelButton = new DiscordButtonComponent(
-                ButtonStyle.Danger,
-                $"deadline_cancel:{ctx.User.Id}",
-                "キャンセル"
-            );
-
             // ==================================================
             // Response
             // ==================================================
@@ -133,7 +127,8 @@ public class DeadlineCommands : ApplicationCommandModule
                 .WithContent(
                     "**締め切り日時を選択してください**\n" +
                     $"現在時刻: `{now:yyyy/MM/dd HH:mm}`"
-                );
+                )
+                .AsEphemeral(true);
 
             // Row 1: 日付
             response.AddComponents(dateSelect);
@@ -144,9 +139,8 @@ public class DeadlineCommands : ApplicationCommandModule
             // Row 3: 分
             response.AddComponents(minuteSelect);
 
-            // Row 4: 決定 / キャンセル
+            // Row 4: 決定
             response.AddComponents(confirmButton);
-            response.AddComponents(cancelButton);
 
             Logger.Info(
                 $"Deadline: sending response " +
