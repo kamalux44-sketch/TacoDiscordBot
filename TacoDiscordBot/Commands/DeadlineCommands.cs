@@ -153,8 +153,7 @@ public class DeadlineCommands : ApplicationCommandModule
                 .WithContent(
                     "**締め切り日時を選択してください**\n" +
                     $"現在時刻: `{now:yyyy/MM/dd HH:mm}`"
-                )
-                .AsEphemeral(true);
+                );
 
             // Row 1: 日付
             response.AddComponents(
@@ -209,15 +208,22 @@ public class DeadlineCommands : ApplicationCommandModule
             // Interaction Response
             // ==================================================
 
-            await ctx.CreateResponseAsync(
-                InteractionResponseType.ChannelMessageWithSource,
-                response
-            );
+            // Use deferred response then edit to send the full components (non-ephemeral)
+            Logger.Info($"Deadline: deferring response for User={ctx.User.Id}");
+            await ctx.CreateResponseAsync(InteractionResponseType.DeferredChannelMessageWithSource);
 
-            Logger.Info(
-                $"Deadline: UI displayed successfully " +
-                $"User={ctx.User.Id}"
-            );
+            var webhook = new DiscordWebhookBuilder()
+                .WithContent("**締め切り日時を選択してください**\n" + $"現在時刻: `{now:yyyy/MM/dd HH:mm}`")
+                .AddComponents(new DiscordComponent[] {
+                    new DiscordActionRowComponent(new DiscordComponent[] { dateSelect }),
+                    new DiscordActionRowComponent(new DiscordComponent[] { hourSelect }),
+                    new DiscordActionRowComponent(new DiscordComponent[] { minuteSelect }),
+                    new DiscordActionRowComponent(new DiscordComponent[] { confirmButton, cancelButton })
+                });
+
+            await ctx.EditResponseAsync(webhook);
+
+            Logger.Info($"Deadline: UI posted (channel message) for User={ctx.User.Id}");
         }
         catch (Exception ex)
         {
