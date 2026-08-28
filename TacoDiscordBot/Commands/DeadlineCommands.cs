@@ -108,26 +108,8 @@ public class DeadlineCommands : ApplicationCommandModule
                 1
             );
 
-            var hourSelect = new DiscordSelectComponent(
-                $"deadline_hour:{ctx.User.Id}",
-                $"時: {now:HH}",
-                hourOptions,
-                false,
-                1,
-                1
-            );
-
-            // 現在時刻を5分単位に切り捨て
+            // Hour/Minute selection will be shown after date is selected to keep payload small
             var initialMinute = (now.Minute / 5) * 5;
-
-            var minuteSelect = new DiscordSelectComponent(
-                $"deadline_minute:{ctx.User.Id}",
-                $"分: {initialMinute:00}",
-                minuteOptions,
-                false,
-                1,
-                1
-            );
 
             // ==================================================
             // Buttons
@@ -165,32 +147,11 @@ public class DeadlineCommands : ApplicationCommandModule
                 )
             );
 
-            // Row 2: 時
+            // Row 2: キャンセルボタンのみ（決定は時/分選択後に表示）
             response.AddComponents(
                 new DiscordActionRowComponent(
                     new DiscordComponent[]
                     {
-                        hourSelect
-                    }
-                )
-            );
-
-            // Row 3: 分
-            response.AddComponents(
-                new DiscordActionRowComponent(
-                    new DiscordComponent[]
-                    {
-                        minuteSelect
-                    }
-                )
-            );
-
-            // Row 4: 決定 / キャンセル
-            response.AddComponents(
-                new DiscordActionRowComponent(
-                    new DiscordComponent[]
-                    {
-                        confirmButton,
                         cancelButton
                     }
                 )
@@ -216,9 +177,7 @@ public class DeadlineCommands : ApplicationCommandModule
                 .WithContent("**締め切り日時を選択してください**\n" + $"現在時刻: `{now:yyyy/MM/dd HH:mm}`")
                 .AddComponents(new DiscordComponent[] {
                     new DiscordActionRowComponent(new DiscordComponent[] { dateSelect }),
-                    new DiscordActionRowComponent(new DiscordComponent[] { hourSelect }),
-                    new DiscordActionRowComponent(new DiscordComponent[] { minuteSelect }),
-                    new DiscordActionRowComponent(new DiscordComponent[] { confirmButton, cancelButton })
+                    new DiscordActionRowComponent(new DiscordComponent[] { cancelButton })
                 });
 
             await ctx.EditResponseAsync(webhook);
