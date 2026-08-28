@@ -142,6 +142,10 @@ public static class BotHost
 
             Console.WriteLine("[BotHost] BoCommands登録完了");
 
+            slash.RegisterCommands<Commands.DeadlineCommands>();
+
+            Console.WriteLine("[BotHost] DeadlineCommands登録完了");
+
             Console.WriteLine("[BotHost] Discordへ接続開始");
 
             await Client.ConnectAsync();
