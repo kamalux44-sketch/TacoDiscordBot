@@ -68,8 +68,64 @@ public class DeadlineCommands : ApplicationCommandModule
         builder.AddComponents(new DiscordActionRowComponent(new DiscordComponent[] { confirmBtn, cancelBtn }));
 
         Logger.Info($"Deadline: sending response to User={ctx.User.Id} dateOptions={dateOptions.Count} hourOptions={hourOptions.Count} minuteOptions={minuteOptions.Count}");
-        await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, builder);
-        Logger.Info($"Deadline: response sent to User={ctx.User.Id}");
+        try
+        {
+            await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, builder);
+            Logger.Info($"Deadline: response sent to User={ctx.User.Id}");
+        }
+        catch (DSharpPlus.Exceptions.BadRequestException bre)
+        {
+            Logger.Error(bre, "Deadline: CreateResponse full builder failed, attempting reduced builders");
+
+            // 1) Try date select + buttons
+            try
+            {
+                var altBuilder1 = new DiscordInteractionResponseBuilder()
+                    .WithContent("締め切り日時を選択してください")
+                    .AsEphemeral(true);
+                altBuilder1.AddComponents(new DiscordActionRowComponent(new DiscordComponent[] { dateSelect }));
+                altBuilder1.AddComponents(new DiscordActionRowComponent(new DiscordComponent[] { new DiscordButtonComponent(ButtonStyle.Success, $"deadline_confirm:{ctx.User.Id}", "✅ 決定"), new DiscordButtonComponent(ButtonStyle.Danger, $"deadline_cancel:{ctx.User.Id}", "❌ キャンセル") }));
+
+                await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, altBuilder1);
+                Logger.Info($"Deadline: altBuilder1 response sent to User={ctx.User.Id}");
+                return;
+            }
+            catch (DSharpPlus.Exceptions.BadRequestException bre2)
+            {
+                Logger.Error(bre2, "Deadline: altBuilder1 failed");
+            }
+
+            // 2) Try buttons-only (no selects)
+            try
+            {
+                var altBuilder2 = new DiscordInteractionResponseBuilder()
+                    .WithContent("締め切りUIを生成できませんでした。テキストで締め切りを指定してください（例: /bo deadline 2026-08-28 18:30）。")
+                    .AsEphemeral(true)
+                    .AddComponents(new DiscordComponent[] { new DiscordActionRowComponent(new DiscordComponent[] { new DiscordButtonComponent(ButtonStyle.Success, $"deadline_confirm:{ctx.User.Id}", "✅ 決定"), new DiscordButtonComponent(ButtonStyle.Danger, $"deadline_cancel:{ctx.User.Id}", "❌ キャンセル") }) });
+
+                await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, altBuilder2);
+                Logger.Info($"Deadline: altBuilder2 response sent to User={ctx.User.Id}");
+                return;
+            }
+            catch (Exception bre3)
+            {
+                Logger.Error(bre3, "Deadline: altBuilder2 failed");
+            }
+
+            // 最終フォールバック
+            try
+            {
+                await ctx.CreateResponseAsync(
+                    InteractionResponseType.ChannelMessageWithSource,
+                    new DiscordInteractionResponseBuilder()
+                        .WithContent("締め切りUIの作成に失敗しました。代替のテキスト入力で締め切りを指定してください。例: /bo deadline 2026-08-28 18:30")
+                        .AsEphemeral(true));
+            }
+            catch (Exception rex)
+            {
+                Logger.Error(rex, "Failed to send final fallback response for Deadline command");
+            }
+        }
         }
         catch (Exception ex)
         {
