@@ -87,55 +87,16 @@ public class DeadlineService
                 sel.Month = dt.Month;
                 sel.Day = dt.Day;
 
-                // 日付選択後は、時/分選択 UI を表示する
+                // 単純な ACK を返して選択を確認する
                 try
                 {
-                    // 時の選択肢
-                    var hourOptions = Enumerable.Range(0, 24)
-                        .Select(h => new DiscordSelectComponentOption(h.ToString("00"), h.ToString("00")))
-                        .ToList();
-
-                    // 分の選択肢（5分刻み）
-                    var minuteOptions = Enumerable.Range(0, 12)
-                        .Select(i => new DiscordSelectComponentOption((i * 5).ToString("00"), (i * 5).ToString("00")))
-                        .ToList();
-
-                    var hourSelect = new DiscordSelectComponent(
-                        $"deadline_hour:{e.User.Id}",
-                        "時を選択",
-                        hourOptions,
-                        false,
-                        1,
-                        1
-                    );
-
-                    var minuteSelect = new DiscordSelectComponent(
-                        $"deadline_min:{e.User.Id}",
-                        "分を選択",
-                        minuteOptions,
-                        false,
-                        1,
-                        1
-                    );
-
-                    var confirm = new DiscordButtonComponent(ButtonStyle.Success, $"deadline_confirm:{e.User.Id}", "✅ 決定");
-                    var cancel = new DiscordButtonComponent(ButtonStyle.Danger, $"deadline_cancel:{e.User.Id}", "❌ キャンセル");
-
-                    var builder = new DSharpPlus.Entities.DiscordInteractionResponseBuilder()
-                        .WithContent($"日付を {dt:yyyy/MM/dd} に設定しました。時刻を選択してください。")
-                        .AsEphemeral(true);
-
-                    // Add selects/buttons directly; let DSharpPlus create ActionRows
-                    builder.AddComponents(hourSelect);
-                    builder.AddComponents(minuteSelect);
-                    builder.AddComponents(new DSharpPlus.Entities.DiscordComponent[] { confirm, cancel });
-
-                    await e.Interaction.CreateResponseAsync(DSharpPlus.InteractionResponseType.ChannelMessageWithSource, builder);
+                    await e.Interaction.CreateResponseAsync(DSharpPlus.InteractionResponseType.ChannelMessageWithSource,
+                        new DSharpPlus.Entities.DiscordInteractionResponseBuilder().WithContent($"日付を {dt:yyyy/MM/dd} に設定しました。").AsEphemeral(true));
                 }
                 catch (Exception ex)
                 {
-                    Logger.Error(ex, "deadline: failed to send time selection UI");
-                    await SafeCreateResponseAsync(e, $"日付を {dt:yyyy/MM/dd} に設定しました。 (時刻UI表示に失敗しました)");
+                    Logger.Error(ex, "deadline_date: failed to respond to interaction");
+                    await SafeCreateResponseAsync(e, $"日付を {dt:yyyy/MM/dd} に設定しました。");
                 }
 
                 return true;

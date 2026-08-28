@@ -45,44 +45,7 @@ public class DeadlineCommands : ApplicationCommandModule
                 );
             }
 
-            // ==================================================
-            // 時
-            // 00～23
-            // ==================================================
-
-            var hourOptions = new List<DiscordSelectComponentOption>();
-
-            for (int hour = 0; hour < 24; hour++)
-            {
-                var value = hour.ToString("00");
-
-                hourOptions.Add(
-                    new DiscordSelectComponentOption(
-                        value,
-                        value
-                    )
-                );
-            }
-
-            // ==================================================
-            // 分
-            // 5分刻み
-            // 00, 05, 10 ... 55
-            // ==================================================
-
-            var minuteOptions = new List<DiscordSelectComponentOption>();
-
-            for (int minute = 0; minute < 60; minute += 5)
-            {
-                var value = minute.ToString("00");
-
-                minuteOptions.Add(
-                    new DiscordSelectComponentOption(
-                        value,
-                        value
-                    )
-                );
-            }
+            // 時/分の選択肢は下でまとめて作成します
 
             // ==================================================
             // Select Menu
@@ -108,8 +71,43 @@ public class DeadlineCommands : ApplicationCommandModule
                 1
             );
 
-            // Hour/Minute selection will be shown after date is selected to keep payload small
+            // 現在時刻を5分単位に切り捨て
             var initialMinute = (now.Minute / 5) * 5;
+
+            // ==================================================
+            // Selects for hour and minute (00-23, 5-min steps)
+            // ==================================================
+            var hourOptions = new List<DiscordSelectComponentOption>();
+            for (int hour = 0; hour < 24; hour++)
+            {
+                var value = hour.ToString("00");
+                hourOptions.Add(new DiscordSelectComponentOption(value, value));
+            }
+
+            var minuteOptions = new List<DiscordSelectComponentOption>();
+            for (int minute = 0; minute < 60; minute += 5)
+            {
+                var value = minute.ToString("00");
+                minuteOptions.Add(new DiscordSelectComponentOption(value, value));
+            }
+
+            var hourSelect = new DiscordSelectComponent(
+                $"deadline_hour:{ctx.User.Id}",
+                $"時: {now:HH}",
+                hourOptions,
+                false,
+                1,
+                1
+            );
+
+            var minuteSelect = new DiscordSelectComponent(
+                $"deadline_min:{ctx.User.Id}",
+                $"分: {initialMinute:00}",
+                minuteOptions,
+                false,
+                1,
+                1
+            );
 
             // ==================================================
             // Buttons
@@ -137,10 +135,17 @@ public class DeadlineCommands : ApplicationCommandModule
                     $"現在時刻: `{now:yyyy/MM/dd HH:mm}`"
                 );
 
-            // Row 1: 日付（Select をそのまま追加すると DSharpPlus が ActionRow を自動で作ります）
+            // Row 1: 日付
             response.AddComponents(dateSelect);
 
-            // Row 2: キャンセルボタン
+            // Row 2: 時
+            response.AddComponents(hourSelect);
+
+            // Row 3: 分
+            response.AddComponents(minuteSelect);
+
+            // Row 4: 決定 / キャンセル
+            response.AddComponents(confirmButton);
             response.AddComponents(cancelButton);
 
             Logger.Info(
