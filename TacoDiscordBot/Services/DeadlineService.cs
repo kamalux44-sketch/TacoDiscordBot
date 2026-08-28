@@ -125,9 +125,10 @@ public class DeadlineService
                         .WithContent($"日付を {dt:yyyy/MM/dd} に設定しました。時刻を選択してください。")
                         .AsEphemeral(true);
 
-                    builder.AddComponents(new DiscordActionRowComponent(new DiscordComponent[] { hourSelect }));
-                    builder.AddComponents(new DiscordActionRowComponent(new DiscordComponent[] { minuteSelect }));
-                    builder.AddComponents(new DiscordActionRowComponent(new DiscordComponent[] { confirm, cancel }));
+                    // Add selects/buttons directly; let DSharpPlus create ActionRows
+                    builder.AddComponents(hourSelect);
+                    builder.AddComponents(minuteSelect);
+                    builder.AddComponents(new DSharpPlus.Entities.DiscordComponent[] { confirm, cancel });
 
                     await e.Interaction.CreateResponseAsync(DSharpPlus.InteractionResponseType.ChannelMessageWithSource, builder);
                 }
