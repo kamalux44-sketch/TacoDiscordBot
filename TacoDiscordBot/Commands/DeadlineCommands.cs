@@ -137,25 +137,11 @@ public class DeadlineCommands : ApplicationCommandModule
                     $"現在時刻: `{now:yyyy/MM/dd HH:mm}`"
                 );
 
-            // Row 1: 日付
-            response.AddComponents(
-                new DiscordActionRowComponent(
-                    new DiscordComponent[]
-                    {
-                        dateSelect
-                    }
-                )
-            );
+            // Row 1: 日付（Select をそのまま追加すると DSharpPlus が ActionRow を自動で作ります）
+            response.AddComponents(dateSelect);
 
-            // Row 2: キャンセルボタンのみ（決定は時/分選択後に表示）
-            response.AddComponents(
-                new DiscordActionRowComponent(
-                    new DiscordComponent[]
-                    {
-                        cancelButton
-                    }
-                )
-            );
+            // Row 2: キャンセルボタン
+            response.AddComponents(cancelButton);
 
             Logger.Info(
                 $"Deadline: sending response " +
@@ -169,20 +155,10 @@ public class DeadlineCommands : ApplicationCommandModule
             // Interaction Response
             // ==================================================
 
-            // Use deferred response then edit to send the full components (non-ephemeral)
-            Logger.Info($"Deadline: deferring response for User={ctx.User.Id}");
-            await ctx.CreateResponseAsync(InteractionResponseType.DeferredChannelMessageWithSource);
-
-            var webhook = new DiscordWebhookBuilder()
-                .WithContent("**締め切り日時を選択してください**\n" + $"現在時刻: `{now:yyyy/MM/dd HH:mm}`")
-                .AddComponents(new DiscordComponent[] {
-                    new DiscordActionRowComponent(new DiscordComponent[] { dateSelect }),
-                    new DiscordActionRowComponent(new DiscordComponent[] { cancelButton })
-                });
-
-            await ctx.EditResponseAsync(webhook);
-
-            Logger.Info($"Deadline: UI posted (channel message) for User={ctx.User.Id}");
+            // Create interaction response directly (non-ephemeral)
+            Logger.Info($"Deadline: sending response for User={ctx.User.Id}");
+            await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, response);
+            Logger.Info($"Deadline: UI posted for User={ctx.User.Id}");
         }
         catch (Exception ex)
         {
