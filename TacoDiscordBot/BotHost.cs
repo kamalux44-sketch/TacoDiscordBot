@@ -167,6 +167,13 @@ public static class BotHost
 
             Console.WriteLine("[BotHost] Discord接続完了");
 
+            var key = Environment.GetEnvironmentVariable("GEMINI_API_KEY");
+
+            Console.WriteLine(
+                $"GEMINI_API_KEY: {(string.IsNullOrEmpty(key) ? "NOT SET" : $"SET (length={key.Length})")}"
+            );
+
+
             // Botを終了させないために待機
             await Task.Delay(Timeout.Infinite);
         }

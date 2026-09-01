@@ -22,6 +22,7 @@ public class BoManager
     private readonly ConcurrentDictionary<string, Models.BoSession> _sessions = new();
     private readonly DeadlineService _deadlineService;
     private readonly BoRepository _repo;
+    private DateTime _lastDeadlineCheck;
 
     private class DeadlineSelection
     {
@@ -174,6 +175,7 @@ public class BoManager
                 try
                 {
                     var now = DateTime.UtcNow;
+                    var prev = _lastDeadlineCheck;
 
                     foreach (var kv in _sessions)
                     {
@@ -186,8 +188,10 @@ public class BoManager
                         if (session.IsClosed)
                             continue;
 
+                        // 通知は「前回チェック時刻 < 締め切り <= 現在時刻」の場合のみ行う
                         if (session.Deadline.HasValue &&
-                            now >= session.Deadline.Value)
+                            session.Deadline.Value > prev &&
+                            session.Deadline.Value <= now)
                         {
                             // 二重通知防止
                             session.IsClosed = true;
@@ -218,6 +222,9 @@ public class BoManager
                             _ = SafeAppendToMessageAsync(session.ChannelId, session.MessageId, "\n\n**（締め切り済み）**");
                         }
                     }
+
+                    // チェック時刻を更新
+                    _lastDeadlineCheck = now;
                 }
                 catch (Exception ex)
                 {
