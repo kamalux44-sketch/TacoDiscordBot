@@ -28,8 +28,9 @@ public class AICommands : ApplicationCommandModule
             {
                 reply = await BotHost.AiService.SendToGeminiAsync(message);
             }
-            catch (InvalidOperationException)
+            catch (InvalidOperationException ex)
             {
+                Logger.Error(ex, "AICommands.Ai: InvalidOperationException");
                 await ctx.EditResponseAsync(new DiscordWebhookBuilder().WithContent("Gemini API キーが設定されていません。環境変数 GEMINI_API_KEY を設定してください。"));
                 return;
             }

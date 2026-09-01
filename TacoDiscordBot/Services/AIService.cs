@@ -134,7 +134,17 @@ public class AIService
     public async Task<string> SendToGeminiAsync(string prompt)
     {
         // Read API key from environment variable
-        var key = Environment.GetEnvironmentVariable("GEMINI_API_KEY");
+        string key = null;
+        try
+        {
+            key = Environment.GetEnvironmentVariable("GEMINI_API_KEY");
+            Logger.Info($"SendToGeminiAsync: GEMINI_API_KEY present: {!string.IsNullOrWhiteSpace(key)} length={(key?.Length ?? 0)}");
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(ex, "SendToGeminiAsync: 環境変数チェック失敗");
+        }
+
         if (string.IsNullOrWhiteSpace(key))
             throw new InvalidOperationException("Gemini API key is not configured. Set GEMINI_API_KEY environment variable.");
 
