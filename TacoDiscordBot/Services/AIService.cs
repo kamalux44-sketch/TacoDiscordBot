@@ -149,11 +149,22 @@ public class AIService
             endpoint = $"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={Uri.EscapeDataString(key)}";
         }
 
+        // リクエストペイロードを指定の構造にする
+        // {
+        //   "contents": [ { "parts": [ { "text": "..." } ] } ],
+        //   "generationConfig": { "temperature": 0.7, "maxOutputTokens": 1000 }
+        // }
         var reqObj = new
         {
-            prompt = new { text = prompt },
-            temperature = 0.2,
-            maxOutputTokens = 512
+            contents = new[] {
+                new {
+                    parts = new[] { new { text = prompt } }
+                }
+            },
+            generationConfig = new {
+                temperature = 0.7,
+                maxOutputTokens = 1000
+            }
         };
 
         var json = JsonSerializer.Serialize(reqObj);
