@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -17,83 +16,13 @@ namespace TacoDiscordBot.Services;
 public class AIService
 {
     private readonly DiscordClient _client;
-    private readonly AiTalkRepository _repo;
-    private readonly ConcurrentDictionary<ulong, ulong> _targets = new();
+    private readonly AiChannelService _channelService;
     private readonly HttpClient _http = new();
 
-    public AIService(DiscordClient client, AiTalkRepository repo = null)
+    public AIService(DiscordClient client, AiChannelService channelService)
     {
         _client = client ?? throw new ArgumentNullException(nameof(client));
-        _repo = repo ?? CreateFromEnvOrNull();
-
-        if (_repo != null)
-        {
-            try
-            {
-                var all = _repo.LoadAllAsync().GetAwaiter().GetResult();
-                foreach (var kv in all) _targets[kv.Key] = kv.Value;
-            }
-            catch
-            {
-                // ignore
-            }
-        }
-    }
-
-    private static AiTalkRepository CreateFromEnvOrNull()
-    {
-        try
-        {
-            var host = Environment.GetEnvironmentVariable("PGHOST");
-            if (string.IsNullOrWhiteSpace(host))
-                return null;
-
-            var port = Environment.GetEnvironmentVariable("PGPORT") ?? Strings.DefaultDBPPort;
-            var db = Environment.GetEnvironmentVariable("PGDATABASE") ?? Strings.DefaultDBName;
-            var user = Environment.GetEnvironmentVariable("PGUSER");
-            var pass = Environment.GetEnvironmentVariable("PGPASSWORD");
-            var ssl = Environment.GetEnvironmentVariable("PGSSLMODE");
-
-            var parts = new List<string>
-            {
-                $"Host={host}",
-                $"Port={port}",
-                $"Database={db}"
-            };
-            if (!string.IsNullOrWhiteSpace(user)) parts.Add($"Username={user}");
-            if (!string.IsNullOrWhiteSpace(pass)) parts.Add($"Password={pass}");
-            if (!string.IsNullOrWhiteSpace(ssl)) parts.Add($"SslMode={ssl}");
-
-            var conn = string.Join(";", parts);
-            var baseRepo = new Repository.BaseRepository(conn, s => Console.WriteLine($"[DB] {s}"));
-            if (!baseRepo.IsProviderAvailable()) return null;
-            return new AiTalkRepository(baseRepo);
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    public bool IsConfigured => _repo != null || _targets.Count > 0;
-
-    public bool IsTargetChannel(ulong guildId, ulong channelId)
-    {
-        if (_repo != null) return _targets.TryGetValue(guildId, out var v) && v == channelId;
-        return false;
-    }
-
-    public async Task SetChannelAsync(ulong guildId, ulong channelId)
-    {
-        if (_repo != null)
-        {
-            await _repo.SetTargetAsync(guildId, channelId);
-            _targets[guildId] = channelId;
-        }
-        else
-        {
-            _targets[guildId] = channelId; // in-memory fallback
-        }
+        _channelService = channelService; // may be null if not configured
     }
 
     public async Task HandleMessageCreated(DiscordClient sender, MessageCreateEventArgs e)
@@ -108,7 +37,7 @@ public class AIService
 
             var gid = e.Guild?.Id ?? 0UL;
             if (gid == 0) return;
-            if (!IsTargetChannel(gid, msg.Channel.Id)) return;
+            if (_channelService == null || !_channelService.IsTargetChannel(gid, msg.Channel.Id)) return;
 
             // Send typing indicator
             try { await msg.Channel.TriggerTypingAsync(); } catch { }

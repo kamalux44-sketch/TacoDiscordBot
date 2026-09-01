@@ -11,6 +11,7 @@ public static class BotHost
     public static Services.VcLogger VcLogger { get; private set; }
     public static Services.VcRankingService VcRankingService { get; private set; }
     public static Services.BoManager BoManager { get; private set; }
+    public static Services.AiChannelService AiChannelService { get; private set; }
     public static Services.AIService AiService { get; private set; }
 
     public static async Task RunAsync()
@@ -122,8 +123,12 @@ public static class BotHost
             VcRankingService = new Services.VcRankingService();
             Console.WriteLine("[BotHost] VcRankingService作成完了");
 
-            // AI サービスを作成（DB 未構成でも動作するように AiTalkRepository は optional）
-            AiService = new Services.AIService(Client, aiRepo);
+            // AI チャンネル管理サービスを作成（DB 未構成でも動作する）
+            AiChannelService = new Services.AiChannelService(aiRepo);
+            Console.WriteLine("[BotHost] AiChannelService作成完了");
+
+            // AI サービスを作成（チャンネルサービスを注入）
+            AiService = new Services.AIService(Client, AiChannelService);
             Console.WriteLine("[BotHost] AIService作成完了");
 
             Client.VoiceStateUpdated +=

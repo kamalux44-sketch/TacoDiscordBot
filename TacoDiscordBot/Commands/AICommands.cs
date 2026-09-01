@@ -77,13 +77,13 @@ public class AICommands : ApplicationCommandModule
             return;
         }
 
-        if (BotHost.AiService == null)
+        if (BotHost.AiChannelService == null)
         {
             await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder().WithContent("AI サービスは未設定です。管理者が DB と GEMINI_API_KEY を設定しているか確認してください。"));
             return;
         }
 
-        await BotHost.AiService.SetChannelAsync(guildId, ctx.Channel.Id);
+        await BotHost.AiChannelService.SetChannelAsync(guildId, ctx.Channel.Id);
         await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder().WithContent($"このチャンネルを AI 会話チャンネルとして設定しました。 (# {ctx.Channel.Name})").AsEphemeral(true));
     }
 }
