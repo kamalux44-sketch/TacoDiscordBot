@@ -139,9 +139,15 @@ public class AIService
             throw new InvalidOperationException("Gemini API key is not configured. Set GEMINI_API_KEY environment variable.");
 
         // Basic implementation targeting Google Generative Language endpoint for Gemini models.
+        // Use API key in query string with the v1beta generateContent endpoint by default.
         // The exact request/response schema may differ; we attempt a best-effort approach and
         // fall back to returning raw response text if structured parsing fails.
-        var endpoint = Environment.GetEnvironmentVariable("GEMINI_API_ENDPOINT") ?? "https://generativelanguage.googleapis.com/v1/models/gemini-3.1-flash-lite:generate";
+        var model = Environment.GetEnvironmentVariable("GEMINI_MODEL") ?? "gemini-3.1-flash-lite";
+        var endpoint = Environment.GetEnvironmentVariable("GEMINI_API_ENDPOINT");
+        if (string.IsNullOrWhiteSpace(endpoint))
+        {
+            endpoint = $"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={Uri.EscapeDataString(key)}";
+        }
 
         var reqObj = new
         {
@@ -152,7 +158,6 @@ public class AIService
 
         var json = JsonSerializer.Serialize(reqObj);
         using var request = new HttpRequestMessage(HttpMethod.Post, endpoint);
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", key);
         request.Content = new StringContent(json, Encoding.UTF8, "application/json");
 
         try
