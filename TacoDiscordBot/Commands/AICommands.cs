@@ -26,7 +26,15 @@ public class AICommands : ApplicationCommandModule
             string reply;
             try
             {
-                reply = await BotHost.AiService.SendToGeminiAsync(message);
+                // コマンドからの呼び出しには指定の設定プロンプトを先頭に追加する
+                var systemPrompt = string.Join("\n", new[] {
+                    "あなたは Discord 上で動作する AI Bot です。",
+                    "メッセージは Discord に適した長さで、読みやすく簡潔に出力します。",
+                    "ユーザーの質問には少し毒舌でフレンドリーに答えます。",
+                    "過度に長文にせず、必要な情報をまとめて返します。"
+                });
+                var combined = systemPrompt + "\n\n" + message;
+                reply = await BotHost.AiService.SendToGeminiAsync(combined);
             }
             catch (InvalidOperationException ex)
             {
