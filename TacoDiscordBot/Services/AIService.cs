@@ -44,8 +44,37 @@ public class AIService
 
             var input = msg.Content ?? string.Empty;
             if (string.IsNullOrWhiteSpace(input)) return;
+            string reply;
+            try
+            {
+                reply = await SendToGeminiAsync(input);
+            }
+            catch (InvalidOperationException)
+            {
+                await msg.Channel.SendMessageAsync("Gemini API キーが設定されていません。環境変数 GEMINI_API_KEY を設定してください。");
+                return;
+            }
+            catch (UnauthorizedAccessException)
+            {
+                await msg.Channel.SendMessageAsync("Gemini API キーが無効または権限がありません。");
+                return;
+            }
+            catch (HttpRequestException ex)
+            {
+                if (ex.Message.Contains("429"))
+                    await msg.Channel.SendMessageAsync("Gemini API がレート制限されました。しばらくしてから再度お試しください。");
+                else
+                    await msg.Channel.SendMessageAsync($"Gemini API エラー: {ex.Message}");
+                return;
+            }
+            catch (Exception ex)
+            {
+                // 予期しない例外はログに出し、ユーザへ一般的なエラーメッセージを返す
+                Logger.Error(ex, "AIService.HandleMessageCreated: 未処理の例外");
+                try { await msg.Channel.SendMessageAsync("AI 処理中にエラーが発生しました。ログを確認してください。"); } catch { }
+                return;
+            }
 
-            var reply = await SendToGeminiAsync(input);
             if (reply == null)
             {
                 await msg.Channel.SendMessageAsync("AI 応答を取得できませんでした。後でもう一度試してください。");
