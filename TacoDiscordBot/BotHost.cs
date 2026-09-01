@@ -11,6 +11,7 @@ public static class BotHost
     public static Services.VcLogger VcLogger { get; private set; }
     public static Services.VcRankingService VcRankingService { get; private set; }
     public static Services.BoManager BoManager { get; private set; }
+    public static Services.AIService AiService { get; private set; }
 
     public static async Task RunAsync()
     {
@@ -45,6 +46,7 @@ public static class BotHost
             Repository.VcLogRepository vclogRepo = null;
             Repository.VcRankingRepository vrankRepo = null;
             Repository.BoRepository boRepo = null;
+            Repository.AiTalkRepository aiRepo = null;
 
             var host = Environment.GetEnvironmentVariable("PGHOST");
             if (!string.IsNullOrWhiteSpace(host))
@@ -86,6 +88,9 @@ public static class BotHost
                             vclogRepo.EnsureTableExistsAsync().GetAwaiter().GetResult();
                             vrankRepo.EnsureTableExistsAsync().GetAwaiter().GetResult();
                             boRepo.EnsureTablesExistAsync().GetAwaiter().GetResult();
+                            // AI 会話ターゲットテーブル
+                            aiRepo = new Repository.AiTalkRepository(baseRepo);
+                            aiRepo.EnsureTableExistsAsync().GetAwaiter().GetResult();
                             Console.WriteLine("[BotHost] DB テーブル確認・作成完了");
                         }
                         catch (Exception ex)
@@ -117,6 +122,10 @@ public static class BotHost
             VcRankingService = new Services.VcRankingService();
             Console.WriteLine("[BotHost] VcRankingService作成完了");
 
+            // AI サービスを作成（DB 未構成でも動作するように AiTalkRepository は optional）
+            AiService = new Services.AIService(Client, aiRepo);
+            Console.WriteLine("[BotHost] AIService作成完了");
+
             Client.VoiceStateUpdated +=
                 VcLogger.HandleVoiceStateUpdated;
             // メッセージ送信とは独立してランキングの永続化を行う
@@ -125,6 +134,9 @@ public static class BotHost
 
             Client.ComponentInteractionCreated +=
                 BoManager.HandleComponentInteraction;
+
+            Client.MessageCreated +=
+                AiService.HandleMessageCreated;
 
             Console.WriteLine("[BotHost] イベント登録完了");
 
@@ -141,6 +153,9 @@ public static class BotHost
             slash.RegisterCommands<Commands.BoCommands>();
 
             Console.WriteLine("[BotHost] BoCommands登録完了");
+
+            slash.RegisterCommands<Commands.AICommands>();
+            Console.WriteLine("[BotHost] AICommands登録完了");
 
             slash.RegisterCommands<Commands.DeadlineCommands>();
 

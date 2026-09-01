@@ -64,7 +64,7 @@ public class DeadlineCommands : ApplicationCommandModule
 
             var dateSelect = new DiscordSelectComponent(
                 $"deadline_date:{ctx.User.Id}",
-                $"日付: {now:MM/dd}",
+                $"{now:MM/dd}",
                 dateOptions,
                 false,
                 1,
@@ -93,7 +93,7 @@ public class DeadlineCommands : ApplicationCommandModule
 
             var hourSelect = new DiscordSelectComponent(
                 $"deadline_hour:{ctx.User.Id}",
-                $"時: {now:HH}",
+                $"{now:HH}",
                 hourOptions,
                 false,
                 1,
@@ -102,7 +102,7 @@ public class DeadlineCommands : ApplicationCommandModule
 
             var minuteSelect = new DiscordSelectComponent(
                 $"deadline_min:{ctx.User.Id}",
-                $"分: {initialMinute:00}",
+                $"{initialMinute:00}",
                 minuteOptions,
                 false,
                 1,
@@ -125,8 +125,7 @@ public class DeadlineCommands : ApplicationCommandModule
 
             var response = new DiscordInteractionResponseBuilder()
                 .WithContent(
-                    "**締め切り日時を選択してください**\n" +
-                    $"現在時刻: `{now:yyyy/MM/dd HH:mm}`"
+                    "**締め切り日時を選択してください**\n"
                 )
                 .AsEphemeral(true);
 
