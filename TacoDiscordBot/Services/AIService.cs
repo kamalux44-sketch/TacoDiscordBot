@@ -205,7 +205,27 @@ public class AIService
                     var first = cand[0];
                     if (first.TryGetProperty("content", out var content))
                     {
-                        return content.GetString();
+                        // content is typically an object containing parts array
+                        if (content.ValueKind == JsonValueKind.Object)
+                        {
+                            if (content.TryGetProperty("parts", out var parts) && parts.ValueKind == JsonValueKind.Array && parts.GetArrayLength() > 0)
+                            {
+                                var part = parts[0];
+                                if (part.ValueKind == JsonValueKind.Object && part.TryGetProperty("text", out var textEl) && textEl.ValueKind == JsonValueKind.String)
+                                {
+                                    return textEl.GetString();
+                                }
+                            }
+                            // fallback: maybe content has a text property directly
+                            if (content.TryGetProperty("text", out var directText) && directText.ValueKind == JsonValueKind.String)
+                            {
+                                return directText.GetString();
+                            }
+                        }
+                        else if (content.ValueKind == JsonValueKind.String)
+                        {
+                            return content.GetString();
+                        }
                     }
                 }
 
