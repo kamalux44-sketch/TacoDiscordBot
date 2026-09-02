@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using TacoDiscordBot.Models;
+using TacoDiscordBot.Util;
 
 namespace TacoDiscordBot.Repository;
 
@@ -17,7 +18,10 @@ public class BoRepository
 
     public async Task EnsureTablesExistAsync()
     {
-        var sql = @"CREATE TABLE IF NOT EXISTS bo_sessions (
+        // 募集本体と参加者を保存するテーブルを初期化します。
+        var sql =
+            @"
+CREATE TABLE IF NOT EXISTS bo_sessions (
   session_id TEXT PRIMARY KEY,
   message_id BIGINT NOT NULL,
   channel_id BIGINT NOT NULL,
@@ -39,23 +43,62 @@ CREATE TABLE IF NOT EXISTS bo_participants (
   joined_at TIMESTAMPTZ NOT NULL
 );
 
-CREATE INDEX IF NOT EXISTS idx_bo_participants_session ON bo_participants(session_id);";
+CREATE INDEX IF NOT EXISTS idx_bo_participants_session
+    ON bo_participants(session_id);";
 
-        // テーブルの存在を確認し、必要なら作成する
-        _base.Log("EnsureTablesExistAsync: bo_sessions/bo_participants の存在確認開始");
+        Logger.Info("BoRepository: テーブル存在確認開始");
+
         await _base.ExecuteNonQueryAsync(sql);
-        _base.Log("EnsureTablesExistAsync: 完了");
+
+        Logger.Info("BoRepository: テーブル存在確認完了");
     }
 
     public async Task CreateSessionAsync(BoSession session)
     {
-        var sql = @"INSERT INTO bo_sessions (session_id, message_id, channel_id, body, at, rank, deadline_raw, deadline_utc, description, owner_id, is_closed, created_at)
-VALUES (@sid, @mid, @cid, @body, @at, @rank, @draw, @dutc, @desc, @oid, @closed, @created);";
+        // 募集本体を保存した後、参加者を同じ接続で登録します。
+        var sql =
+            @"
+INSERT INTO bo_sessions
+(
+    session_id,
+    message_id,
+    channel_id,
+    body,
+    at,
+    rank,
+    deadline_raw,
+    deadline_utc,
+    description,
+    owner_id,
+    is_closed,
+    created_at
+)
+VALUES
+(
+    @sid,
+    @mid,
+    @cid,
+    @body,
+    @at,
+    @rank,
+    @draw,
+    @dutc,
+    @desc,
+    @oid,
+    @closed,
+    @created
+);";
 
-        _base.Log($"CreateSessionAsync: session={session.SessionId} owner={session.OwnerId}");
+        Logger.Info(
+            "BoRepository: 募集作成 session={SessionId} owner={OwnerId}",
+            session.SessionId,
+            session.OwnerId
+        );
+
         await _base.UseConnectionAsync(async conn =>
         {
             dynamic cmd = conn.CreateCommand();
+
             cmd.CommandText = sql;
             cmd.Parameters.AddWithValue("@sid", session.SessionId);
             cmd.Parameters.AddWithValue("@mid", (long)session.MessageId);
@@ -64,7 +107,10 @@ VALUES (@sid, @mid, @cid, @body, @at, @rank, @draw, @dutc, @desc, @oid, @closed,
             cmd.Parameters.AddWithValue("@at", session.At);
             cmd.Parameters.AddWithValue("@rank", session.Rank ?? (object)DBNull.Value);
             cmd.Parameters.AddWithValue("@draw", session.DeadlineRaw ?? (object)DBNull.Value);
-            cmd.Parameters.AddWithValue("@dutc", session.Deadline.HasValue ? (object)session.Deadline.Value : DBNull.Value);
+            cmd.Parameters.AddWithValue(
+                "@dutc",
+                session.Deadline.HasValue ? (object)session.Deadline.Value : DBNull.Value
+            );
             cmd.Parameters.AddWithValue("@desc", session.Description ?? (object)DBNull.Value);
             cmd.Parameters.AddWithValue("@oid", (long)session.OwnerId);
             cmd.Parameters.AddWithValue("@closed", session.IsClosed);
@@ -72,29 +118,63 @@ VALUES (@sid, @mid, @cid, @body, @at, @rank, @draw, @dutc, @desc, @oid, @closed,
 
             await cmd.ExecuteNonQueryAsync();
 
-            // 参加者を挿入
             foreach (var uid in session.Participants)
             {
-                var psql = "INSERT INTO bo_participants(session_id, user_id, joined_at) VALUES(@sid, @uid, @joined)";
-                dynamic pcmd = conn.CreateCommand();
-                pcmd.CommandText = psql;
-                pcmd.Parameters.AddWithValue("@sid", session.SessionId);
-                pcmd.Parameters.AddWithValue("@uid", (long)uid);
-                pcmd.Parameters.AddWithValue("@joined", DateTime.UtcNow);
-                await pcmd.ExecuteNonQueryAsync();
+                const string participantSql =
+                    @"
+INSERT INTO bo_participants
+(
+    session_id,
+    user_id,
+    joined_at
+)
+VALUES
+(
+    @sid,
+    @uid,
+    @joined
+);";
+
+                dynamic participantCommand = conn.CreateCommand();
+
+                participantCommand.CommandText = participantSql;
+                participantCommand.Parameters.AddWithValue("@sid", session.SessionId);
+                participantCommand.Parameters.AddWithValue("@uid", (long)uid);
+                participantCommand.Parameters.AddWithValue("@joined", DateTime.UtcNow);
+
+                await participantCommand.ExecuteNonQueryAsync();
             }
         });
-        _base.Log("CreateSessionAsync: 完了");
+
+        Logger.Info("BoRepository: 募集作成完了");
     }
 
     public async Task UpdateSessionAsync(BoSession session)
     {
-        var sql = @"UPDATE bo_sessions SET message_id=@mid, channel_id=@cid, body=@body, at=@at, rank=@rank, deadline_raw=@draw, deadline_utc=@dutc, description=@desc, owner_id=@oid, is_closed=@closed, created_at=@created WHERE session_id=@sid";
+        // 募集情報を更新し、参加者一覧を最新状態へ置き換えます。
+        var sql =
+            @"
+UPDATE bo_sessions
+SET
+    message_id = @mid,
+    channel_id = @cid,
+    body = @body,
+    at = @at,
+    rank = @rank,
+    deadline_raw = @draw,
+    deadline_utc = @dutc,
+    description = @desc,
+    owner_id = @oid,
+    is_closed = @closed,
+    created_at = @created
+WHERE session_id = @sid;";
 
-        _base.Log($"UpdateSessionAsync: session={session.SessionId}");
+        Logger.Info("BoRepository: 募集更新 session={SessionId}", session.SessionId);
+
         await _base.UseConnectionAsync(async conn =>
         {
             dynamic cmd = conn.CreateCommand();
+
             cmd.CommandText = sql;
             cmd.Parameters.AddWithValue("@mid", (long)session.MessageId);
             cmd.Parameters.AddWithValue("@cid", (long)session.ChannelId);
@@ -102,134 +182,174 @@ VALUES (@sid, @mid, @cid, @body, @at, @rank, @draw, @dutc, @desc, @oid, @closed,
             cmd.Parameters.AddWithValue("@at", session.At);
             cmd.Parameters.AddWithValue("@rank", session.Rank ?? (object)DBNull.Value);
             cmd.Parameters.AddWithValue("@draw", session.DeadlineRaw ?? (object)DBNull.Value);
-            cmd.Parameters.AddWithValue("@dutc", session.Deadline.HasValue ? (object)session.Deadline.Value : DBNull.Value);
+            cmd.Parameters.AddWithValue(
+                "@dutc",
+                session.Deadline.HasValue ? (object)session.Deadline.Value : DBNull.Value
+            );
             cmd.Parameters.AddWithValue("@desc", session.Description ?? (object)DBNull.Value);
             cmd.Parameters.AddWithValue("@oid", (long)session.OwnerId);
             cmd.Parameters.AddWithValue("@closed", session.IsClosed);
             cmd.Parameters.AddWithValue("@created", session.CreatedAt);
             cmd.Parameters.AddWithValue("@sid", session.SessionId);
+
             await cmd.ExecuteNonQueryAsync();
 
-            // 参加者を置換: 既存を削除してから挿入
-            var dsql = "DELETE FROM bo_participants WHERE session_id = @sid";
-            dynamic dcmd = conn.CreateCommand();
-            dcmd.CommandText = dsql;
-            dcmd.Parameters.AddWithValue("@sid", session.SessionId);
-            await dcmd.ExecuteNonQueryAsync();
+            const string deleteSql = "DELETE FROM bo_participants WHERE session_id = @sid";
+
+            dynamic deleteCommand = conn.CreateCommand();
+
+            deleteCommand.CommandText = deleteSql;
+            deleteCommand.Parameters.AddWithValue("@sid", session.SessionId);
+
+            await deleteCommand.ExecuteNonQueryAsync();
+
+            const string participantSql =
+                @"
+INSERT INTO bo_participants
+(
+    session_id,
+    user_id,
+    joined_at
+)
+VALUES
+(
+    @sid,
+    @uid,
+    @joined
+);";
 
             foreach (var uid in session.Participants)
             {
-                var psql = "INSERT INTO bo_participants(session_id, user_id, joined_at) VALUES(@sid, @uid, @joined)";
-                dynamic pcmd = conn.CreateCommand();
-                pcmd.CommandText = psql;
-                pcmd.Parameters.AddWithValue("@sid", session.SessionId);
-                pcmd.Parameters.AddWithValue("@uid", (long)uid);
-                pcmd.Parameters.AddWithValue("@joined", DateTime.UtcNow);
-                await pcmd.ExecuteNonQueryAsync();
+                dynamic participantCommand = conn.CreateCommand();
+
+                participantCommand.CommandText = participantSql;
+                participantCommand.Parameters.AddWithValue("@sid", session.SessionId);
+                participantCommand.Parameters.AddWithValue("@uid", (long)uid);
+                participantCommand.Parameters.AddWithValue("@joined", DateTime.UtcNow);
+
+                await participantCommand.ExecuteNonQueryAsync();
             }
         });
-        _base.Log("UpdateSessionAsync: 完了");
+
+        Logger.Info("BoRepository: 募集更新完了");
     }
+
     public async Task DeleteSessionAsync(string sessionId)
     {
-        _base.Log($"DeleteSessionAsync: session={sessionId}");
-        var sql = "DELETE FROM bo_sessions WHERE session_id = @sid";
+        Logger.Info("BoRepository: 募集削除 session={SessionId}", sessionId);
+
+        const string sql = "DELETE FROM bo_sessions WHERE session_id = @sid";
+
         await _base.UseConnectionAsync(async conn =>
         {
             dynamic cmd = conn.CreateCommand();
+
             cmd.CommandText = sql;
             cmd.Parameters.AddWithValue("@sid", sessionId);
+
             await cmd.ExecuteNonQueryAsync();
         });
-        _base.Log("DeleteSessionAsync: 完了");
+
+        Logger.Info("BoRepository: 募集削除完了");
     }
 
-    public async Task<System.Collections.Generic.List<BoSession>> LoadActiveSessionsAsync()
+    public async Task<List<BoSession>> LoadActiveSessionsAsync()
     {
-        var list = new System.Collections.Generic.List<BoSession>();
+        var list = new List<BoSession>();
 
-        // 一括でセッションと参加者を取得するクエリ。参加者は array_agg でまとめる。
-        var sql = @"SELECT
-  s.session_id,
-  s.message_id,
-  s.channel_id,
-  s.body,
-  s.at,
-  s.rank,
-  s.deadline_raw,
-  s.deadline_utc,
-  s.description,
-  s.owner_id,
-  s.is_closed,
-  s.created_at,
-  COALESCE(array_agg(bp.user_id ORDER BY bp.id) FILTER (WHERE bp.user_id IS NOT NULL), ARRAY[]::bigint[]) AS participants
+        var sql =
+            @"
+SELECT
+    s.session_id,
+    s.message_id,
+    s.channel_id,
+    s.body,
+    s.at,
+    s.rank,
+    s.deadline_raw,
+    s.deadline_utc,
+    s.description,
+    s.owner_id,
+    s.is_closed,
+    s.created_at,
+    COALESCE(
+        array_agg(bp.user_id ORDER BY bp.id)
+        FILTER (WHERE bp.user_id IS NOT NULL),
+        ARRAY[]::bigint[]
+    ) AS participants
 FROM bo_sessions s
-LEFT JOIN bo_participants bp ON bp.session_id = s.session_id
+LEFT JOIN bo_participants bp
+    ON bp.session_id = s.session_id
 WHERE s.is_closed = false
-GROUP BY s.session_id, s.message_id, s.channel_id, s.body, s.at, s.rank, s.deadline_raw, s.deadline_utc, s.description, s.owner_id, s.is_closed, s.created_at";
+GROUP BY
+    s.session_id,
+    s.message_id,
+    s.channel_id,
+    s.body,
+    s.at,
+    s.rank,
+    s.deadline_raw,
+    s.deadline_utc,
+    s.description,
+    s.owner_id,
+    s.is_closed,
+    s.created_at;";
 
-        _base.Log("LoadActiveSessionsAsync: 読み込み開始 (JOINによる一括取得)");
+        Logger.Info("BoRepository: 有効な募集を読み込み開始");
+
         await _base.UseConnectionAsync(async conn =>
         {
             dynamic cmd = conn.CreateCommand();
             cmd.CommandText = sql;
+
             dynamic reader = await cmd.ExecuteReaderAsync();
+
             while (await reader.ReadAsync())
             {
-                var s = new BoSession();
-                s.SessionId = reader.GetString(0);
-                s.MessageId = (ulong)reader.GetInt64(1);
-                s.ChannelId = (ulong)reader.GetInt64(2);
-                s.Body = reader.IsDBNull(3) ? string.Empty : reader.GetString(3);
-                s.At = reader.GetInt32(4);
-                s.Rank = reader.IsDBNull(5) ? string.Empty : reader.GetString(5);
-                s.DeadlineRaw = reader.IsDBNull(6) ? string.Empty : reader.GetString(6);
-                s.Deadline = reader.IsDBNull(7) ? (DateTime?)null : reader.GetDateTime(7);
-                s.Description = reader.IsDBNull(8) ? string.Empty : reader.GetString(8);
-                s.OwnerId = (ulong)reader.GetInt64(9);
-                s.IsClosed = reader.GetBoolean(10);
-                s.CreatedAt = reader.GetDateTime(11);
+                var session = new BoSession
+                {
+                    SessionId = reader.GetString(0),
+                    MessageId = (ulong)reader.GetInt64(1),
+                    ChannelId = (ulong)reader.GetInt64(2),
+                    Body = reader.IsDBNull(3) ? string.Empty : reader.GetString(3),
+                    At = reader.GetInt32(4),
+                    Rank = reader.IsDBNull(5) ? string.Empty : reader.GetString(5),
+                    DeadlineRaw = reader.IsDBNull(6) ? string.Empty : reader.GetString(6),
+                    Deadline = reader.IsDBNull(7) ? null : reader.GetDateTime(7),
+                    Description = reader.IsDBNull(8) ? string.Empty : reader.GetString(8),
+                    OwnerId = (ulong)reader.GetInt64(9),
+                    IsClosed = reader.GetBoolean(10),
+                    CreatedAt = reader.GetDateTime(11),
+                    Participants = new List<ulong>(),
+                };
 
-                s.Participants = new System.Collections.Generic.List<ulong>();
-
-                // participants は bigint[] で返るはず
                 if (!reader.IsDBNull(12))
                 {
-                    try
+                    var raw = reader.GetValue(12);
+
+                    if (raw is long[] participants)
                     {
-                        var raw = reader.GetValue(12);
-                        if (raw is long[] longs)
+                        foreach (var userId in participants)
                         {
-                            foreach (var v in longs)
-                                s.Participants.Add((ulong)v);
-                        }
-                        else if (raw is System.Array arr)
-                        {
-                            foreach (var item in arr)
-                            {
-                                if (item is long lv) s.Participants.Add((ulong)lv);
-                                else if (item is int iv) s.Participants.Add((ulong)iv);
-                                else if (item is DBNull) { }
-                                else
-                                {
-                                    try { s.Participants.Add(Convert.ToUInt64(item)); } catch { }
-                                }
-                            }
+                            session.Participants.Add((ulong)userId);
                         }
                     }
-                    catch (Exception ex)
+                    else
                     {
-                        _base.Log($"LoadActiveSessionsAsync: participants parse error: {ex}");
+                        throw new InvalidOperationException(
+                            $"Unexpected participants type: {raw.GetType().FullName}"
+                        );
                     }
                 }
 
-                list.Add(s);
+                list.Add(session);
             }
+
             await reader.DisposeAsync();
         });
 
-        _base.Log($"LoadActiveSessionsAsync: 読み込み完了 件数={list.Count}");
+        Logger.Info("BoRepository: 有効な募集を読み込み完了 件数={Count}", list.Count);
+
         return list;
     }
 }
-

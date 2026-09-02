@@ -9,7 +9,8 @@ namespace TacoDiscordBot;
 public static class Strings
 {
     // --- 全般 ---
-    public const string EnvTokenMissing = "Environment variable DISCORD_TOKEN is not set. Set it to your bot token.";
+    public const string EnvTokenMissing =
+        "Environment variable DISCORD_TOKEN is not set. Set it to your bot token.";
 
     // デフォルトの接続情報は、環境変数が設定されていない場合に使用されます。
     public const string DefaultDBName = "postgres";
@@ -23,6 +24,7 @@ public static class Strings
     public const string VcLogJoinFmt = "参加: {0} が {1} に入室 ({2})"; // {0}=user, {1}=channel, {2}=time
     public const string VcLogLeaveFmt = "退出: {0} が {1} から退室 ({2})"; // {0}=user, {1}=channel, {2}=time
     public const string VcLogMoveFmt = "移動: {0} が {1} → {2} ({3})"; // {0}=user, {1}=from, {2}=to, {3}=time
+
     // 環境変数: VC ログ送信先チャンネル ID (例: "123456789012345678")
     public const string EnvVcLogChannel = "VCLOG_CHANNEL";
 
@@ -31,13 +33,16 @@ public static class Strings
 
     // VCランキング用メッセージ
     public const string VcRankingDbNotSet = "VC セッション集計は未設定です（Postgres 未接続）。";
-    public const string VcRankingInvalidPeriod = "period は day/week/month/all のいずれかを指定してください。";
-    public const string VcRankingNoData = "順位データがありません。注意: サーバー内でVCログが有効になっているか確認してください。";
+    public const string VcRankingInvalidPeriod =
+        "period は day/week/month/all のいずれかを指定してください。";
+    public const string VcRankingNoData =
+        "順位データがありません。注意: サーバー内でVCログが有効になっているか確認してください。";
     public const string VcRankingHeader = "👑 VCランキング";
     public const string VcRankingSeparator = "━━━━━━━━━━━━━━━━━━";
 
     // BO（募集）用メッセージ
-    public const string BoDeadlineInvalid = "締め切りの日時が正しくありません。\n以下の形式で入力してください：\n`2026-08-13 01:30`";
+    public const string BoDeadlineInvalid =
+        "締め切りの日時が正しくありません。\n以下の形式で入力してください：\n`2026-08-13 01:30`";
     public const string BoCreatedConfirmation = "募集を作成しました。";
 
     // --- BO（募集） ---
@@ -94,7 +99,6 @@ public static class Strings
         "エラー発生！システムが一時的にやる気を失いました！",
         "エラー発生！ご不便をおかけします。こちらも困っています！",
         "エラー発生！とりあえず、もう一回やってみましょう！",
-        "エラー発生！このbotは壊れてます！叩けば直るかも！"
+        "エラー発生！このbotは壊れてます！叩けば直るかも！",
     };
 }
-

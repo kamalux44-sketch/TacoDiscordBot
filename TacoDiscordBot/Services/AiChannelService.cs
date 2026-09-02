@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Concurrent;
 using System.Threading.Tasks;
 using TacoDiscordBot.Repository;
@@ -14,38 +13,45 @@ public class AiChannelService
     {
         _repo = repo;
 
-        if (_repo != null)
+        if (_repo == null)
+            return;
+
+        var all = _repo.LoadAllAsync().GetAwaiter().GetResult();
+
+        foreach (var kv in all)
         {
-            try
-            {
-                var all = _repo.LoadAllAsync().GetAwaiter().GetResult();
-                foreach (var kv in all) _targets[kv.Key] = kv.Value;
-            }
-            catch
-            {
-                // ignore
-            }
+            _targets[kv.Key] = kv.Value;
         }
     }
 
-    public bool IsConfigured => _repo != null || _targets.Count > 0;
+    public bool IsConfigured => _targets.Count > 0;
 
+    // ギルドごとの設定チャンネルと受信チャンネルが一致するか確認します。
     public bool IsTargetChannel(ulong guildId, ulong channelId)
     {
-        if (_repo != null) return _targets.TryGetValue(guildId, out var v) && v == channelId;
-        return false;
+        return _targets.TryGetValue(guildId, out var targetChannelId)
+            && targetChannelId == channelId;
     }
 
     public async Task SetChannelAsync(ulong guildId, ulong channelId)
     {
+        // DB が利用可能な場合は設定を永続化してからメモリ上の設定を更新します。
         if (_repo != null)
         {
             await _repo.SetTargetAsync(guildId, channelId);
-            _targets[guildId] = channelId;
         }
-        else
+
+        _targets[guildId] = channelId;
+    }
+
+    public async Task RemoveChannelAsync(ulong guildId)
+    {
+        // 永続化された設定とメモリ上の設定を同時に削除します。
+        if (_repo != null)
         {
-            _targets[guildId] = channelId; // in-memory fallback
+            await _repo.RemoveTargetAsync(guildId);
         }
+
+        _targets.TryRemove(guildId, out _);
     }
 }

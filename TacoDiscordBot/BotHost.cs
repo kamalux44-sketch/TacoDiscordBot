@@ -1,47 +1,62 @@
-using System;
-using System.Threading.Tasks;
 using DSharpPlus;
 using DSharpPlus.SlashCommands;
+using Microsoft.Extensions.Logging;
+using TacoDiscordBot.Util;
 
 namespace TacoDiscordBot;
 
 public static class BotHost
 {
     public static DiscordClient Client { get; private set; }
+
     public static Services.VcLogger VcLogger { get; private set; }
+
     public static Services.VcRankingService VcRankingService { get; private set; }
+
     public static Services.BoManager BoManager { get; private set; }
+
     public static Services.AiChannelService AiChannelService { get; private set; }
+
     public static Services.AIService AiService { get; private set; }
 
     public static async Task RunAsync()
     {
         try
         {
-            Console.WriteLine("[BotHost] RunAsync開始");
+            using var loggerFactory = LoggerFactory.Create(builder =>
+                builder
+                    .SetMinimumLevel(LogLevel.Information)
+                    .AddSimpleConsole(options => options.SingleLine = true)
+            );
+            Logger.Configure(loggerFactory);
+
+            Logger.Info("BotHost: RunAsync 開始");
 
             var token = Environment.GetEnvironmentVariable("DISCORD_TOKEN");
 
             if (string.IsNullOrWhiteSpace(token))
             {
-                Console.WriteLine(Strings.EnvTokenMissing);
+                Logger.Info("BotHost: {Message}", Strings.EnvTokenMissing);
+
                 return;
             }
 
-            Console.WriteLine("[BotHost] Discord token確認OK");
+            Logger.Info("BotHost: Discord token 確認 OK");
 
-            Client = new DiscordClient(new DiscordConfiguration
-            {
-                Token = token,
-                TokenType = TokenType.Bot,
-                Intents =
-                    DiscordIntents.Guilds |
-                    DiscordIntents.GuildMessages |
-                    DiscordIntents.GuildVoiceStates |
-                    DiscordIntents.GuildMembers
-            });
+            Client = new DiscordClient(
+                new DiscordConfiguration
+                {
+                    Token = token,
+                    TokenType = TokenType.Bot,
+                    Intents =
+                        DiscordIntents.Guilds
+                        | DiscordIntents.GuildMessages
+                        | DiscordIntents.GuildVoiceStates
+                        | DiscordIntents.GuildMembers,
+                }
+            );
 
-            Console.WriteLine("[BotHost] DiscordClient作成完了");
+            Logger.Info("BotHost: DiscordClient 作成完了");
 
             // DB 環境から接続情報を構築する
             Repository.VcLogRepository vclogRepo = null;
@@ -50,142 +65,189 @@ public static class BotHost
             Repository.AiTalkRepository aiRepo = null;
 
             var host = Environment.GetEnvironmentVariable("PGHOST");
+
             if (!string.IsNullOrWhiteSpace(host))
             {
                 try
                 {
-                    var port = Environment.GetEnvironmentVariable("PGPORT") ?? Strings.DefaultDBPPort;
-                    var db = Environment.GetEnvironmentVariable("PGDATABASE") ?? Strings.DefaultDBName;
+                    var port =
+                        Environment.GetEnvironmentVariable("PGPORT") ?? Strings.DefaultDBPPort;
+
+                    var db =
+                        Environment.GetEnvironmentVariable("PGDATABASE") ?? Strings.DefaultDBName;
+
                     var user = Environment.GetEnvironmentVariable("PGUSER");
+
                     var pass = Environment.GetEnvironmentVariable("PGPASSWORD");
+
                     var ssl = Environment.GetEnvironmentVariable("PGSSLMODE");
 
                     var parts = new System.Collections.Generic.List<string>
                     {
                         $"Host={host}",
                         $"Port={port}",
-                        $"Database={db}"
+                        $"Database={db}",
                     };
-                    if (!string.IsNullOrWhiteSpace(user)) parts.Add($"Username={user}");
-                    if (!string.IsNullOrWhiteSpace(pass)) parts.Add($"Password={pass}");
-                    if (!string.IsNullOrWhiteSpace(ssl)) parts.Add($"SslMode={ssl}");
+
+                    if (!string.IsNullOrWhiteSpace(user))
+                    {
+                        parts.Add($"Username={user}");
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(pass))
+                    {
+                        parts.Add($"Password={pass}");
+                    }
+
+                    if (!string.IsNullOrWhiteSpace(ssl))
+                    {
+                        parts.Add($"SslMode={ssl}");
+                    }
 
                     var conn = string.Join(";", parts);
-                    var baseRepo = new Repository.BaseRepository(conn, s => Console.WriteLine($"[DB] {s}"));
+
+                    var baseRepo = new Repository.BaseRepository(conn);
 
                     if (baseRepo.IsProviderAvailable())
                     {
-                        Console.WriteLine("[BotHost] DB ドライバ確認 OK");
+                        Logger.Info("BotHost: DB ドライバ確認 OK");
 
                         // DI を使ってリポジトリのインスタンスを作成
                         vclogRepo = new Repository.VcLogRepository(baseRepo);
+
                         vrankRepo = new Repository.VcRankingRepository(baseRepo);
+
                         boRepo = new Repository.BoRepository(baseRepo);
 
-                        // すべてのリポジトリについてテーブルの存在確認と作成を行う
+                        // すべてのリポジトリについて
+                        // テーブルの存在確認と作成を行う
                         try
                         {
-                            Console.WriteLine("[BotHost] DB テーブル確認・作成開始");
+                            Logger.Info("BotHost: DB テーブル確認・作成開始");
+
                             vclogRepo.EnsureTableExistsAsync().GetAwaiter().GetResult();
+
                             vrankRepo.EnsureTableExistsAsync().GetAwaiter().GetResult();
+
                             boRepo.EnsureTablesExistAsync().GetAwaiter().GetResult();
+
                             // AI 会話ターゲットテーブル
                             aiRepo = new Repository.AiTalkRepository(baseRepo);
+
                             aiRepo.EnsureTableExistsAsync().GetAwaiter().GetResult();
-                            Console.WriteLine("[BotHost] DB テーブル確認・作成完了");
+
+                            Logger.Info("BotHost: DB テーブル確認・作成完了");
                         }
                         catch (Exception ex)
                         {
-                            Console.WriteLine("[BotHost] DB テーブル作成中にエラーが発生しました");
-                            Console.WriteLine(ex.ToString());
+                            Logger.Error(ex, "BotHost: DB テーブル作成中にエラーが発生");
                         }
                     }
                     else
                     {
-                        Console.WriteLine("[BotHost] DB ドライバが見つかりません。Postgres 機能は無効になります。");
+                        Logger.Info(
+                            "[BotHost] DB ドライバが見つかりません。"
+                                + "Postgres 機能は無効になります。"
+                        );
                     }
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine("[BotHost] DB 初期化エラー");
-                    Console.WriteLine(ex.ToString());
+                    Logger.Error(ex, "BotHost: DB 初期化エラー");
                 }
             }
 
             // リポジトリ（任意）を注入してサービスを作成
             VcLogger = new Services.VcLogger(vclogRepo, vrankRepo);
-            Console.WriteLine("[BotHost] VcLogger作成完了");
+
+            Logger.Info("BotHost: VcLogger 作成完了");
 
             BoManager = new Services.BoManager(Client, boRepo);
-            Console.WriteLine("[BotHost] BoManager作成完了");
 
-            // ランキングサービスを作成（DB 未構成の場合は何もしません）
+            Logger.Info("BotHost: BoManager 作成完了");
+
+            // ランキングサービスを作成
+            // DB 未構成の場合は何もしません
             VcRankingService = new Services.VcRankingService();
-            Console.WriteLine("[BotHost] VcRankingService作成完了");
 
-            // AI チャンネル管理サービスを作成（DB 未構成でも動作する）
+            Logger.Info("BotHost: VcRankingService 作成完了");
+
+            // AI チャンネル管理サービスを作成
+            // DB 未構成でも動作します
             AiChannelService = new Services.AiChannelService(aiRepo);
-            Console.WriteLine("[BotHost] AiChannelService作成完了");
 
-            // AI サービスを作成（チャンネルサービスを注入）
+            Logger.Info("BotHost: AiChannelService 作成完了");
+
+            // AI サービスを作成
+            // チャンネルサービスを注入
             AiService = new Services.AIService(Client, AiChannelService);
-            Console.WriteLine("[BotHost] AIService作成完了");
 
-            Client.VoiceStateUpdated +=
-                VcLogger.HandleVoiceStateUpdated;
-            // メッセージ送信とは独立してランキングの永続化を行う
-            Client.VoiceStateUpdated +=
-                VcRankingService.HandleVoiceStateUpdated;
+            Logger.Info("BotHost: AIService 作成完了");
 
-            Client.ComponentInteractionCreated +=
-                BoManager.HandleComponentInteraction;
+            // VC ログ
+            Client.VoiceStateUpdated += VcLogger.HandleVoiceStateUpdated;
 
-            Client.MessageCreated +=
-                AiService.HandleMessageCreated;
+            // VC ランキング
+            // メッセージ送信とは独立して
+            // ランキングの永続化を行う
+            Client.VoiceStateUpdated += VcRankingService.HandleVoiceStateUpdated;
 
-            Console.WriteLine("[BotHost] イベント登録完了");
+            // BO コンポーネント
+            Client.ComponentInteractionCreated += BoManager.HandleComponentInteraction;
+
+            // AI メッセージ
+            Client.MessageCreated += AiService.HandleMessageCreated;
+
+            Logger.Info("BotHost: イベント登録完了");
 
             var slash = Client.UseSlashCommands();
 
-            Console.WriteLine("[BotHost] SlashCommandsExtension作成完了");
+            Logger.Info("BotHost: SlashCommandsExtension 作成完了");
 
             slash.RegisterCommands<Commands.VcLogCommands>();
-            Console.WriteLine("[BotHost] VcLogCommands登録完了");
+
+            Logger.Info("BotHost: VcLogCommands 登録完了");
 
             slash.RegisterCommands<Commands.VcRankingCommands>();
-            Console.WriteLine("[BotHost] VcRankingCommands登録完了");
+
+            Logger.Info("BotHost: VcRankingCommands 登録完了");
 
             slash.RegisterCommands<Commands.BoCommands>();
 
-            Console.WriteLine("[BotHost] BoCommands登録完了");
+            Logger.Info("BotHost: BoCommands 登録完了");
 
             slash.RegisterCommands<Commands.AICommands>();
-            Console.WriteLine("[BotHost] AICommands登録完了");
+
+            Logger.Info("BotHost: AICommands 登録完了");
+
+            slash.RegisterCommands<Commands.AIChannelCommands>();
+
+            Logger.Info("BotHost: AIChannelCommands 登録完了");
 
             slash.RegisterCommands<Commands.DeadlineCommands>();
 
-            Console.WriteLine("[BotHost] DeadlineCommands登録完了");
+            Logger.Info("BotHost: DeadlineCommands 登録完了");
 
-            Console.WriteLine("[BotHost] Discordへ接続開始");
+            Logger.Info("BotHost: Discord へ接続開始");
 
             await Client.ConnectAsync();
 
-            Console.WriteLine("[BotHost] Discord接続完了");
+            Logger.Info("BotHost: Discord 接続完了");
 
             var key = Environment.GetEnvironmentVariable("GEMINI_API_KEY");
 
-            Console.WriteLine(
-                $"GEMINI_API_KEY: {(string.IsNullOrEmpty(key) ? "NOT SET" : $"SET (length={key.Length})")}"
+            Logger.Info(
+                "BotHost: GEMINI_API_KEY 設定状態={ApiKeyState} 長さ={ApiKeyLength}",
+                string.IsNullOrEmpty(key) ? "NOT SET" : "SET",
+                key?.Length ?? 0
             );
-
 
             // Botを終了させないために待機
             await Task.Delay(Timeout.Infinite);
         }
         catch (Exception ex)
         {
-            Console.WriteLine("[BotHost] 致命的な例外が発生しました");
-            Console.WriteLine(ex.ToString());
+            Logger.Error(ex, "BotHost: 致命的な例外が発生");
 
             throw;
         }

@@ -3,7 +3,6 @@ using System.Threading.Tasks;
 using DSharpPlus;
 using DSharpPlus.Entities;
 using DSharpPlus.SlashCommands;
-using System.Collections.Generic;
 
 namespace TacoDiscordBot.Commands;
 
@@ -12,66 +11,41 @@ public class BoCommands : ApplicationCommandModule
     [SlashCommand("bo", "募集を作成します")]
     public async Task Bo(
         InteractionContext ctx,
-
-        [Option("content", "募集内容 (任意)")]
-        string content = "",
-
-        [Option(
-            "at",
-            "募集人数（募集主含めない。例: @3 は募集主＋3人）(任意)")]
-        long at = 0,
-
-        [Option(
-            "rank",
-            "ランク(任意)")]
-        string rank = "",
-
-        [Option(
-            "deadline",
-            "締め切り（任意、例: 2026-08-13 01:30）")]
-        string deadline = "",
-
-        [Option(
-            "description",
-            "募集の説明（任意）")]
-        string description = "")
+        [Option("content", "募集内容 (任意)")] string content = "",
+        [Option("at", "募集人数（募集主含めない。例: @3 は募集主＋3人）(任意)")] long at = 0,
+        [Option("rank", "ランク(任意)")] string rank = "",
+        [Option("deadline", "締め切り（任意、例: 2026-08-13 01:30）")] string deadline = "",
+        [Option("description", "募集の説明（任意）")] string description = ""
+    )
     {
-        // 応答が遅延すると "application did not respond" になるため、Interaction を ACK します
+        // Interaction を ACK します
         await ctx.CreateResponseAsync(InteractionResponseType.DeferredChannelMessageWithSource);
 
         DateTime? parsedDeadline = null;
 
         if (!string.IsNullOrWhiteSpace(deadline))
         {
-            // 締め切りは「yyyy-MM-dd HH:mm」の形式で入力します。
-            //
-            // 入力例：
-            // 2026-08-13 01:30
-            //
-            // この日時は必ず日本時間（JST）として扱います。
-            if (!DateTime.TryParseExact(
+            // 締め切りは yyyy-MM-dd HH:mm の形式で入力します。
+            // 入力された日時は日本時間（JST）として扱います。
+            if (
+                !DateTime.TryParseExact(
                     deadline.Trim(),
                     "yyyy-MM-dd HH:mm",
                     System.Globalization.CultureInfo.InvariantCulture,
                     System.Globalization.DateTimeStyles.None,
-                    out var parsed))
+                    out var parsed
+                )
+            )
             {
-                await ctx.CreateResponseAsync(
-                    InteractionResponseType.ChannelMessageWithSource,
-                    new DiscordInteractionResponseBuilder()
-                        .WithContent(Strings.BoDeadlineInvalid)
-                        .AsEphemeral(true));
+                await ctx.EditResponseAsync(
+                    new DiscordWebhookBuilder().WithContent(Strings.BoDeadlineInvalid)
+                );
 
                 return;
             }
 
-            // 入力された日時を「日本時間」として扱います。
-            //
-            // Local / UTC などの環境依存を避けるため、
-            // DateTimeKind.Unspecified にします。
-            parsedDeadline = DateTime.SpecifyKind(
-                parsed,
-                DateTimeKind.Unspecified);
+            // 環境の Local / UTC に依存しないように Unspecified にします。
+            parsedDeadline = DateTime.SpecifyKind(parsed, DateTimeKind.Unspecified);
         }
 
         await BotHost.BoManager.CreateSessionAsync(
@@ -80,10 +54,12 @@ public class BoCommands : ApplicationCommandModule
             (int)at,
             rank,
             parsedDeadline,
-            description);
+            description
+        );
 
-        // 保留中のレスポンスを編集して確定します
-        await ctx.EditResponseAsync(new DiscordWebhookBuilder().WithContent(Strings.BoCreatedConfirmation));
+        // 保留中のレスポンスを編集して確定します。
+        await ctx.EditResponseAsync(
+            new DiscordWebhookBuilder().WithContent(Strings.BoCreatedConfirmation)
+        );
     }
-
 }

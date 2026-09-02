@@ -4,123 +4,157 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using DSharpPlus;
-using DSharpPlus.EventArgs;
 using DSharpPlus.Entities;
+using DSharpPlus.EventArgs;
 using TacoDiscordBot.Repository;
 using TacoDiscordBot.Util;
-
 
 namespace TacoDiscordBot.Services;
 
 public class VcLogger
 {
-    // ギルドごとのターゲットは DB に保存されます。利用できない場合はレガシーな単一チャンネル環境変数を使用します。
+    // ギルドごとのターゲットは DB に保存されます。
+    // 利用できない場合はレガシーな単一チャンネル環境変数を使用します。
     private readonly VcLogRepository _repo;
-    private readonly System.Collections.Concurrent.ConcurrentDictionary<ulong, ulong> _targets = new();
+    private readonly ConcurrentDictionary<ulong, ulong> _targets = new();
+
     // レガシーフォールバック
-    private ulong _legacyChannelId; // 0=未設定
+    private ulong _legacyChannelId; // 0 = 未設定
     private bool _legacyEnabled;
-    // 開いているセッションのインメモリマップ: key = "{guildId}:{userId}" -> (dbId, joinedAtUtc, channelId)
-    // （ランキングの永続化は VcRankingService に移管しました）
 
     /// <summary>
-    /// コンストラクタ。環境変数からチャンネルIDを読み取り、初期状態を設定します。
+    /// コンストラクタ。
+    /// リポジトリからギルドごとの VC ログチャンネルを読み込みます。
     /// </summary>
-    // DI 対応コンストラクタ。リポジトリは null 可。
     public VcLogger(VcLogRepository repo, VcRankingRepository rankingRepo)
     {
         _legacyChannelId = 0;
         _legacyEnabled = false;
 
         _repo = repo;
-        // rankingRepo は意図的に保持しません。ランキング永続化は VcRankingService が担当します。
+
+        // rankingRepo は意図的に保持しません。
+        // ランキング永続化は VcRankingService が担当します。
 
         if (_repo != null)
         {
             try
             {
                 var all = _repo.LoadAllAsync().GetAwaiter().GetResult();
+
                 foreach (var kv in all)
                     _targets[kv.Key] = kv.Value;
             }
-            catch
+            catch (Exception ex)
             {
-                // 無視します
+                Logger.Error(ex, "VcLogger: DB から VC ログ設定の読み込みに失敗");
             }
         }
 
         LoadFromEnv();
     }
 
-    // 既存の呼び出し互換のための引数無しコンストラクタ。
-    public VcLogger() : this(CreateFromEnvOrNull(), CreateRankingFromEnvOrNull()) { }
+    /// <summary>
+    /// 既存の呼び出し互換のための引数無しコンストラクタ。
+    /// </summary>
+    public VcLogger()
+        : this(CreateFromEnvOrNull(), CreateRankingFromEnvOrNull()) { }
 
+    /// <summary>
+    /// 環境変数から VcLogRepository を作成します。
+    /// DB 設定が存在しない場合は null を返します。
+    /// </summary>
     private static VcLogRepository CreateFromEnvOrNull()
     {
         try
         {
             var host = Environment.GetEnvironmentVariable("PGHOST");
+
             if (string.IsNullOrWhiteSpace(host))
                 return null;
 
             var port = Environment.GetEnvironmentVariable("PGPORT") ?? Strings.DefaultDBPPort;
+
             var db = Environment.GetEnvironmentVariable("PGDATABASE") ?? Strings.DefaultDBName;
+
             var user = Environment.GetEnvironmentVariable("PGUSER");
+
             var pass = Environment.GetEnvironmentVariable("PGPASSWORD");
+
             var ssl = Environment.GetEnvironmentVariable("PGSSLMODE");
 
-            var parts = new System.Collections.Generic.List<string>
-            {
-                $"Host={host}",
-                $"Port={port}",
-                $"Database={db}"
-            };
-            if (!string.IsNullOrWhiteSpace(user)) parts.Add($"Username={user}");
-            if (!string.IsNullOrWhiteSpace(pass)) parts.Add($"Password={pass}");
-            if (!string.IsNullOrWhiteSpace(ssl)) parts.Add($"SslMode={ssl}");
+            var parts = new List<string> { $"Host={host}", $"Port={port}", $"Database={db}" };
+
+            if (!string.IsNullOrWhiteSpace(user))
+                parts.Add($"Username={user}");
+
+            if (!string.IsNullOrWhiteSpace(pass))
+                parts.Add($"Password={pass}");
+
+            if (!string.IsNullOrWhiteSpace(ssl))
+                parts.Add($"SslMode={ssl}");
 
             var conn = string.Join(";", parts);
-            var baseRepo = new Repository.BaseRepository(conn, s => Console.WriteLine($"[DB] {s}"));
-            if (!baseRepo.IsProviderAvailable()) return null;
+
+            var baseRepo = new Repository.BaseRepository(conn);
+
+            if (!baseRepo.IsProviderAvailable())
+                return null;
+
             return new VcLogRepository(baseRepo);
         }
-        catch
+        catch (Exception ex)
         {
+            Logger.Error(ex, "VcLogger: VC ログリポジトリの作成に失敗");
             return null;
         }
     }
 
+    /// <summary>
+    /// 環境変数から VcRankingRepository を作成します。
+    /// </summary>
     private static VcRankingRepository CreateRankingFromEnvOrNull()
     {
         try
         {
             var host = Environment.GetEnvironmentVariable("PGHOST");
+
             if (string.IsNullOrWhiteSpace(host))
                 return null;
 
             var port = Environment.GetEnvironmentVariable("PGPORT") ?? Strings.DefaultDBPPort;
+
             var db = Environment.GetEnvironmentVariable("PGDATABASE") ?? Strings.DefaultDBName;
+
             var user = Environment.GetEnvironmentVariable("PGUSER");
+
             var pass = Environment.GetEnvironmentVariable("PGPASSWORD");
+
             var ssl = Environment.GetEnvironmentVariable("PGSSLMODE");
 
-            var parts = new System.Collections.Generic.List<string>
-            {
-                $"Host={host}",
-                $"Port={port}",
-                $"Database={db}"
-            };
-            if (!string.IsNullOrWhiteSpace(user)) parts.Add($"Username={user}");
-            if (!string.IsNullOrWhiteSpace(pass)) parts.Add($"Password={pass}");
-            if (!string.IsNullOrWhiteSpace(ssl)) parts.Add($"SslMode={ssl}");
+            var parts = new List<string> { $"Host={host}", $"Port={port}", $"Database={db}" };
+
+            if (!string.IsNullOrWhiteSpace(user))
+                parts.Add($"Username={user}");
+
+            if (!string.IsNullOrWhiteSpace(pass))
+                parts.Add($"Password={pass}");
+
+            if (!string.IsNullOrWhiteSpace(ssl))
+                parts.Add($"SslMode={ssl}");
 
             var conn = string.Join(";", parts);
-            var baseRepo = new Repository.BaseRepository(conn, s => Console.WriteLine($"[DB] {s}"));
-            if (!baseRepo.IsProviderAvailable()) return null;
+
+            var baseRepo = new Repository.BaseRepository(conn);
+
+            if (!baseRepo.IsProviderAvailable())
+                return null;
+
             return new VcRankingRepository(baseRepo);
         }
-        catch
+        catch (Exception ex)
         {
+            Logger.Error(ex, "VcLogger: VC ランキングリポジトリの作成に失敗");
             return null;
         }
     }
@@ -128,44 +162,53 @@ public class VcLogger
     /// <summary>
     /// チャンネルが設定されているかを示します。
     /// </summary>
-    // リポジトリまたはレガシー設定が存在するかどうかを示します
     public bool IsConfigured => _repo != null || _legacyChannelId != 0;
 
+    /// <summary>
+    /// 指定ギルドに VC ログチャンネルが設定されているかを示します。
+    /// </summary>
     public bool IsConfiguredForGuild(ulong guildId)
     {
         if (_repo != null)
             return _targets.ContainsKey(guildId);
+
         return _legacyChannelId != 0;
     }
 
     /// <summary>
-    /// 環境変数から単一チャンネルIDを読み込みます。
-    /// 環境変数が無い場合は未設定のままになります。
+    /// 環境変数から単一チャンネル ID を読み込みます。
     /// </summary>
     private void LoadFromEnv()
     {
         try
         {
             var raw = Environment.GetEnvironmentVariable(Strings.EnvVcLogChannel);
-            if (string.IsNullOrWhiteSpace(raw)) return;
+
+            if (string.IsNullOrWhiteSpace(raw))
+                return;
+
             if (ulong.TryParse(raw.Trim(), out var cid))
             {
                 _legacyChannelId = cid;
-                _legacyEnabled = true; // 起動時は有効にする
-                Logger.Info($"VcLogger: 環境変数からレガシーチャンネルを読み込み channel={cid}");
+                _legacyEnabled = true;
+
+                Logger.Info(
+                    "VcLogger: 環境変数からレガシーチャンネルを読み込み channel={ChannelId}",
+                    cid
+                );
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // 無視します
+            Logger.Error(ex, "VcLogger: レガシーチャンネル設定の読み込みに失敗");
         }
     }
 
     /// <summary>
-    /// /vclog コマンドなどから呼ばれて、VC ログ機能のオン/オフを切り替えます。
+    /// /vclog コマンドなどから呼ばれて、
+    /// VC ログ機能のオン / オフを切り替えます。
     /// 戻り値は現在の有効状態です。
     /// </summary>
-    // リポジトリがある場合はギルド単位でターゲットを切り替え、ない場合はレガシーなグローバルチャンネルを切り替えます。
     public bool ToggleChannel(ulong guildId)
     {
         if (_repo != null)
@@ -173,73 +216,113 @@ public class VcLogger
             if (_targets.ContainsKey(guildId))
             {
                 // 削除
-                try { _repo.RemoveTargetAsync(guildId).GetAwaiter().GetResult(); } catch { }
+                try
+                {
+                    _repo.RemoveTargetAsync(guildId).GetAwaiter().GetResult();
+                }
+                catch (Exception ex)
+                {
+                    Logger.Error(
+                        ex,
+                        "VcLogger: VC ログチャンネル設定の削除に失敗 guild={GuildId}",
+                        guildId
+                    );
+                }
+
                 _targets.TryRemove(guildId, out _);
-                Logger.Info($"VcLogger: ToggleChannel - removed guild={guildId}");
+
+                Logger.Info("VcLogger: ToggleChannel - removed guild={GuildId}", guildId);
+
                 return false;
             }
-            else
-            {
-                // 空に設定します: 呼び出し元は SetChannel でチャンネルを指定してください
-                Logger.Info($"VcLogger: ToggleChannel - will enable for guild={guildId}");
-                return true;
-            }
+
+            // DB を使用する場合、
+            // 実際のチャンネル設定は SetChannelAsync で行います。
+            Logger.Info("VcLogger: ToggleChannel - will enable for guild={GuildId}", guildId);
+
+            return true;
         }
 
         _legacyEnabled = !_legacyEnabled;
-        Logger.Info($"VcLogger: ToggleChannel - legacyEnabled={_legacyEnabled}");
+
+        Logger.Info("VcLogger: ToggleChannel - legacyEnabled={LegacyEnabled}", _legacyEnabled);
+
         return _legacyEnabled;
     }
 
     /// <summary>
-    /// 環境変数がない場合に、現在のチャンネルを VC ログ先として設定するために使います（メモリのみ）。
+    /// レガシーフォールバック用。
+    /// 現在のチャンネルを VC ログ先として設定します。
     /// </summary>
     public void SetChannel(ulong channelId)
     {
-        // レガシーフォールバック: グローバルチャンネルを設定
         _legacyChannelId = channelId;
         _legacyEnabled = true;
     }
 
-    // ギルド単位のターゲットを設定します（リポジトリがあれば永続化します）
+    /// <summary>
+    /// ギルド単位の VC ログターゲットを設定します。
+    /// リポジトリが存在する場合は DB に永続化します。
+    /// </summary>
     public async Task SetChannelAsync(ulong guildId, ulong channelId)
     {
         if (_repo != null)
         {
-            Logger.Info($"VcLogger: SetChannelAsync guild={guildId} channel={channelId}");
+            Logger.Info(
+                "VcLogger: SetChannelAsync guild={GuildId} channel={ChannelId}",
+                guildId,
+                channelId
+            );
+
             await _repo.SetTargetAsync(guildId, channelId);
+
             _targets[guildId] = channelId;
+
             return;
         }
 
-        // フォールバック: レガシーチャンネルを設定
+        // フォールバック
         _legacyChannelId = channelId;
         _legacyEnabled = true;
-        Logger.Info($"VcLogger: SetChannelAsync - legacy channel set={channelId}");
+
+        Logger.Info("VcLogger: SetChannelAsync - legacy channel set={ChannelId}", channelId);
     }
 
+    /// <summary>
+    /// ギルドの VC ログチャンネル設定を削除します。
+    /// </summary>
     public async Task RemoveChannelAsync(ulong guildId)
     {
         if (_repo != null)
         {
-            Logger.Info($"VcLogger: RemoveChannelAsync guild={guildId}");
+            Logger.Info("VcLogger: RemoveChannelAsync guild={GuildId}", guildId);
+
             await _repo.RemoveTargetAsync(guildId);
+
             _targets.TryRemove(guildId, out _);
+
             return;
         }
+
         _legacyChannelId = 0;
         _legacyEnabled = false;
+
         Logger.Info("VcLogger: RemoveChannelAsync - legacy channel disabled");
     }
 
+    /// <summary>
+    /// VC の入退室・移動イベントを処理します。
+    /// </summary>
     public async Task HandleVoiceStateUpdated(DiscordClient client, VoiceStateUpdateEventArgs e)
     {
         try
         {
-            if (e.Guild == null) return;
+            if (e.Guild == null)
+                return;
 
-            // どのチャンネルにログを送るかを決定
+            // 送信先チャンネルを決定
             ulong targetChannel = 0;
+
             if (_repo != null)
             {
                 _targets.TryGetValue(e.Guild.Id, out targetChannel);
@@ -247,46 +330,69 @@ public class VcLogger
             else
             {
                 if (_legacyEnabled && _legacyChannelId != 0)
+                {
                     targetChannel = _legacyChannelId;
+                }
             }
 
-            // メッセージ送信は targetChannel が設定されている場合のみ行います。
-            // ランキングの永続化は VcRankingService 側で行うため、ここでは送信可否のみ判定します。
+            // ログ送信先が設定されている場合のみ送信します。
             var willSend = targetChannel != 0;
 
             var before = e.Before?.Channel;
+
             var after = e.After?.Channel;
+
             string text = null;
+
             if (before == null && after != null)
             {
-                // ユーザーが VC に入室した場合のログ文字列を作成します。
-                // 出力に "誰が / どこに / いつ" が分かるようにする
-                text = string.Format(Strings.VcLogJoinFmt, e.User.Mention, after.Name, DateTime.Now.ToString(Strings.DateTimeFormat));
+                // VC 入室
+                text = string.Format(
+                    Strings.VcLogJoinFmt,
+                    e.User.Mention,
+                    after.Name,
+                    DateTime.Now.ToString(Strings.DateTimeFormat)
+                );
             }
             else if (before != null && after == null)
             {
-                // ユーザーが VC から退室した場合のログ
-                text = string.Format(Strings.VcLogLeaveFmt, e.User.Mention, before.Name, DateTime.Now.ToString(Strings.DateTimeFormat));
+                // VC 退室
+                text = string.Format(
+                    Strings.VcLogLeaveFmt,
+                    e.User.Mention,
+                    before.Name,
+                    DateTime.Now.ToString(Strings.DateTimeFormat)
+                );
             }
             else if (before != null && after != null && before.Id != after.Id)
             {
-                // チャンネル移動が発生した場合のログ
-                text = string.Format(Strings.VcLogMoveFmt, e.User.Mention, before.Name, after.Name, DateTime.Now.ToString(Strings.DateTimeFormat));
+                // VC 移動
+                text = string.Format(
+                    Strings.VcLogMoveFmt,
+                    e.User.Mention,
+                    before.Name,
+                    after.Name,
+                    DateTime.Now.ToString(Strings.DateTimeFormat)
+                );
             }
 
-            if (text == null) return;
+            if (text == null)
+                return;
 
-            // ギルドに対して送信先チャンネルが設定されている場合のみ Embed を送信します
-            if (!willSend) return;
+            // 送信先が設定されていなければ終了
+            if (!willSend)
+                return;
 
             try
             {
                 var ch = await client.GetChannelAsync(targetChannel);
-                if (ch == null) return;
 
-                // イベント種別に応じてサイドバーの色を変えた Embed を作成
+                if (ch == null)
+                    return;
+
                 DiscordColor color;
                 string title;
+
                 if (before == null && after != null)
                 {
                     color = DiscordColor.Green;
@@ -311,15 +417,19 @@ public class VcLogger
 
                 await ch.SendMessageAsync(new DiscordMessageBuilder().AddEmbed(embed));
             }
-            catch
+            catch (Exception ex)
             {
-                // 送信エラーは無視します
+                Logger.Error(
+                    ex,
+                    "VcLogger: VC ログの送信に失敗 guild={GuildId} channel={ChannelId}",
+                    e.Guild.Id,
+                    targetChannel
+                );
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // 例外を握りつぶす
+            Logger.Error(ex, "VcLogger: VC 状態更新の処理に失敗 guild={GuildId}", e.Guild?.Id);
         }
     }
 }
-

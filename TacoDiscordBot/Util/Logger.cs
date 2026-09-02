@@ -1,32 +1,27 @@
 using System;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace TacoDiscordBot.Util;
 
 public static class Logger
 {
-    public static void Info(string message)
+    private static ILogger _logger = NullLogger.Instance;
+
+    public static void Configure(ILoggerFactory loggerFactory)
     {
-        try
-        {
-            Console.WriteLine($"[Logger] {message}");
-        }
-        catch
-        {
-            // ログ失敗は無視
-        }
+        ArgumentNullException.ThrowIfNull(loggerFactory);
+
+        _logger = loggerFactory.CreateLogger("TacoDiscordBot");
     }
 
-    public static void Error(Exception ex, string? context = null)
+    public static void Info(string message, params object?[] args)
     {
-        try
-        {
-            var ctx = string.IsNullOrEmpty(context) ? string.Empty : $" {context}";
-            Console.WriteLine($"[Logger] ERROR{ctx}: {ex}");
-        }
-        catch
-        {
-            // ログ失敗は無視
-        }
+        _logger.LogInformation(message, args);
+    }
+
+    public static void Error(Exception ex, string? context = null, params object?[] args)
+    {
+        _logger.LogError(ex, context ?? string.Empty, args);
     }
 }
-

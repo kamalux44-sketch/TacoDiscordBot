@@ -13,179 +13,116 @@ public class DeadlineCommands : ApplicationCommandModule
     [SlashCommand("deadline", "締め切りを設定します")]
     public async Task Deadline(InteractionContext ctx)
     {
-        Logger.Info(
-            $"Deadline command invoked by User={ctx.User.Id} Guild={ctx.Guild?.Id}"
+        Logger.Info($"Deadline command invoked by User={ctx.User.Id} Guild={ctx.Guild?.Id}");
+
+        var now = DateTime.Now;
+
+        // ==================================================
+        // 日付
+        // 今日から25日分
+        // ==================================================
+
+        var dateOptions = new List<DiscordSelectComponentOption>();
+
+        for (int i = 0; i < 25; i++)
+        {
+            var date = now.Date.AddDays(i);
+
+            var label = date.ToString("MM/dd");
+            var value = date.ToString("yyyy-MM-dd");
+            var description = date.ToString("yyyy/MM/dd");
+
+            dateOptions.Add(new DiscordSelectComponentOption(label, value, description));
+        }
+
+        // ==================================================
+        // 時間
+        // ==================================================
+
+        var initialMinute = (now.Minute / 5) * 5;
+
+        var hourOptions = new List<DiscordSelectComponentOption>();
+
+        for (int hour = 0; hour < 24; hour++)
+        {
+            var value = hour.ToString("00");
+
+            hourOptions.Add(new DiscordSelectComponentOption(value, value));
+        }
+
+        var minuteOptions = new List<DiscordSelectComponentOption>();
+
+        for (int minute = 0; minute < 60; minute += 5)
+        {
+            var value = minute.ToString("00");
+
+            minuteOptions.Add(new DiscordSelectComponentOption(value, value));
+        }
+
+        // ==================================================
+        // Select Menu
+        // ==================================================
+
+        var dateSelect = new DiscordSelectComponent(
+            $"deadline_date:{ctx.User.Id}",
+            $"{now:MM/dd}",
+            dateOptions,
+            false,
+            1,
+            1
         );
 
-        try
-        {
-            var now = DateTime.Now;
+        var hourSelect = new DiscordSelectComponent(
+            $"deadline_hour:{ctx.User.Id}",
+            $"{now:HH}",
+            hourOptions,
+            false,
+            1,
+            1
+        );
 
-            // ==================================================
-            // 日付
-            // 今日から25日分
-            // ==================================================
+        var minuteSelect = new DiscordSelectComponent(
+            $"deadline_min:{ctx.User.Id}",
+            $"{initialMinute:00}",
+            minuteOptions,
+            false,
+            1,
+            1
+        );
 
-            var dateOptions = new List<DiscordSelectComponentOption>();
+        // ==================================================
+        // Button
+        // ==================================================
 
-            for (int i = 0; i < 25; i++)
-            {
-                var date = now.Date.AddDays(i);
+        var confirmButton = new DiscordButtonComponent(
+            ButtonStyle.Success,
+            $"deadline_confirm:{ctx.User.Id}",
+            "決定"
+        );
 
-                var label = date.ToString("MM/dd");
-                var value = date.ToString("yyyy-MM-dd");
-                var description = date.ToString("yyyy/MM/dd");
+        // ==================================================
+        // Response
+        // ==================================================
 
-                dateOptions.Add(
-                    new DiscordSelectComponentOption(
-                        label,
-                        value,
-                        description
-                    )
-                );
-            }
+        var response = new DiscordInteractionResponseBuilder()
+            .WithContent("**締め切り日時を選択してください**\n")
+            .AsEphemeral(true);
 
-            // 時/分の選択肢は下でまとめて作成します
+        response.AddComponents(dateSelect);
+        response.AddComponents(hourSelect);
+        response.AddComponents(minuteSelect);
+        response.AddComponents(confirmButton);
 
-            // ==================================================
-            // Select Menu
-            //
-            // DSharpPlus 5.0.0:
-            //
-            // DiscordSelectComponent(
-            //     customId,
-            //     placeholder,
-            //     options,
-            //     disabled,
-            //     minOptions,
-            //     maxOptions
-            // )
-            // ==================================================
+        Logger.Info(
+            $"Deadline: sending response "
+                + $"User={ctx.User.Id} "
+                + $"dateOptions={dateOptions.Count} "
+                + $"hourOptions={hourOptions.Count} "
+                + $"minuteOptions={minuteOptions.Count}"
+        );
 
-            var dateSelect = new DiscordSelectComponent(
-                $"deadline_date:{ctx.User.Id}",
-                $"{now:MM/dd}",
-                dateOptions,
-                false,
-                1,
-                1
-            );
+        await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, response);
 
-            // 現在時刻を5分単位に切り捨て
-            var initialMinute = (now.Minute / 5) * 5;
-
-            // ==================================================
-            // Selects for hour and minute (00-23, 5-min steps)
-            // ==================================================
-            var hourOptions = new List<DiscordSelectComponentOption>();
-            for (int hour = 0; hour < 24; hour++)
-            {
-                var value = hour.ToString("00");
-                hourOptions.Add(new DiscordSelectComponentOption(value, value));
-            }
-
-            var minuteOptions = new List<DiscordSelectComponentOption>();
-            for (int minute = 0; minute < 60; minute += 5)
-            {
-                var value = minute.ToString("00");
-                minuteOptions.Add(new DiscordSelectComponentOption(value, value));
-            }
-
-            var hourSelect = new DiscordSelectComponent(
-                $"deadline_hour:{ctx.User.Id}",
-                $"{now:HH}",
-                hourOptions,
-                false,
-                1,
-                1
-            );
-
-            var minuteSelect = new DiscordSelectComponent(
-                $"deadline_min:{ctx.User.Id}",
-                $"{initialMinute:00}",
-                minuteOptions,
-                false,
-                1,
-                1
-            );
-
-            // ==================================================
-            // Buttons
-            // ==================================================
-
-            var confirmButton = new DiscordButtonComponent(
-                ButtonStyle.Success,
-                $"deadline_confirm:{ctx.User.Id}",
-                "決定"
-            );
-
-            // ==================================================
-            // Response
-            // ==================================================
-
-            var response = new DiscordInteractionResponseBuilder()
-                .WithContent(
-                    "**締め切り日時を選択してください**\n"
-                )
-                .AsEphemeral(true);
-
-            // Row 1: 日付
-            response.AddComponents(dateSelect);
-
-            // Row 2: 時
-            response.AddComponents(hourSelect);
-
-            // Row 3: 分
-            response.AddComponents(minuteSelect);
-
-            // Row 4: 決定
-            response.AddComponents(confirmButton);
-
-            Logger.Info(
-                $"Deadline: sending response " +
-                $"User={ctx.User.Id} " +
-                $"dateOptions={dateOptions.Count} " +
-                $"hourOptions={hourOptions.Count} " +
-                $"minuteOptions={minuteOptions.Count}"
-            );
-
-            // ==================================================
-            // Interaction Response
-            // ==================================================
-
-            // Create interaction response directly (non-ephemeral)
-            Logger.Info($"Deadline: sending response for User={ctx.User.Id}");
-            await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, response);
-            Logger.Info($"Deadline: UI posted for User={ctx.User.Id}");
-        }
-        catch (Exception ex)
-        {
-            Logger.Error(
-                ex,
-                $"Deadline command failed User={ctx.User.Id}"
-            );
-
-            // 既に Deferred 応答済みの可能性が高いため、EditResponseAsync でエラーメッセージを上書きします
-            try
-            {
-                await ctx.EditResponseAsync(new DiscordWebhookBuilder().WithContent("❌ 締め切り設定UIの表示に失敗しました。"));
-            }
-            catch (Exception responseEx)
-            {
-                Logger.Error(responseEx, "Failed to send Deadline error response via EditResponseAsync");
-                try
-                {
-                    // 最終手段: CreateResponse を試す
-                    await ctx.CreateResponseAsync(
-                        InteractionResponseType.ChannelMessageWithSource,
-                        new DiscordInteractionResponseBuilder().WithContent("❌ 締め切り設定UIの表示に失敗しました。")
-                    );
-                }
-                catch (Exception finalEx)
-                {
-                    Logger.Error(finalEx, "Failed to send Deadline error response via CreateResponseAsync");
-                }
-            }
-        }
+        Logger.Info($"Deadline: UI posted for User={ctx.User.Id}");
     }
 }

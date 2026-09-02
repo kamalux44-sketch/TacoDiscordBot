@@ -1,11 +1,11 @@
 using System;
 using System.Collections.Generic;
-using System.Reflection;
 using System.Threading.Tasks;
+using TacoDiscordBot.Util;
 
 namespace TacoDiscordBot.Repository;
 
-// 軽量リポジトリ。実行時に Npgsql が利用可能であれば使用します。
+// 軽量リポジトリ。実行時に Npgsql が利用可能であれば使用します.
 /// <summary>
 /// VC ログの永続化リポジトリ。
 /// BaseRepository を介して DB 接続を行い、操作の開始・終了をログ出力します。
@@ -17,7 +17,8 @@ public class VcLogRepository
     public VcLogRepository(BaseRepository baseRepo)
     {
         _base = baseRepo ?? throw new ArgumentNullException(nameof(baseRepo));
-        _base.Log("VcLogRepository 作成");
+
+        Logger.Info("VcLogRepository 作成");
     }
 
     /// <summary>
@@ -26,40 +27,50 @@ public class VcLogRepository
     /// </summary>
     public async Task EnsureTableExistsAsync()
     {
-        var sql = @"CREATE TABLE IF NOT EXISTS vc_log_targets (
-            guild_id BIGINT PRIMARY KEY,
-            channel_id BIGINT NOT NULL,
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
-        );";
+        const string sql =
+            @"
+CREATE TABLE IF NOT EXISTS vc_log_targets (
+    guild_id BIGINT PRIMARY KEY,
+    channel_id BIGINT NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);";
 
-        _base.Log("Ensuring table vc_log_targets exists");
+        Logger.Info("VcLogRepository: テーブル存在確認開始");
+
         await _base.ExecuteNonQueryAsync(sql);
     }
 
     /// <summary>
     /// 全てのターゲット設定を読み込みます。
     /// </summary>
-    public async Task<System.Collections.Generic.IDictionary<ulong, ulong>> LoadAllAsync()
+    public async Task<IDictionary<ulong, ulong>> LoadAllAsync()
     {
-        _base.Log("LoadAllAsync: 全ターゲットを読み込み開始");
-        var dict = new System.Collections.Generic.Dictionary<ulong, ulong>();
-        var sql = "SELECT guild_id, channel_id FROM vc_log_targets";
+        Logger.Info("VcLogRepository: 全ターゲットを読み込み開始");
+
+        var dict = new Dictionary<ulong, ulong>();
+
+        const string sql = "SELECT guild_id, channel_id FROM vc_log_targets";
 
         await _base.UseConnectionAsync(async conn =>
         {
             dynamic cmd = conn.CreateCommand();
             cmd.CommandText = sql;
+
             dynamic reader = await cmd.ExecuteReaderAsync();
+
             while (await reader.ReadAsync())
             {
-                long g = reader.GetInt64(0);
-                long c = reader.GetInt64(1);
-                dict[(ulong)g] = (ulong)c;
+                var guildId = reader.GetInt64(0);
+                var channelId = reader.GetInt64(1);
+
+                dict[(ulong)guildId] = (ulong)channelId;
             }
+
             await reader.DisposeAsync();
         });
 
-        _base.Log($"LoadAllAsync: 読み込み完了 件数={dict.Count}");
+        Logger.Info("VcLogRepository: 読み込み完了 件数={Count}", dict.Count);
+
         return dict;
     }
 
@@ -68,10 +79,21 @@ public class VcLogRepository
     /// </summary>
     public async Task SetTargetAsync(ulong guildId, ulong channelId)
     {
-        _base.Log($"SetTargetAsync: guild={guildId} channel={channelId}");
-        var sql = $"INSERT INTO vc_log_targets(guild_id, channel_id) VALUES({(long)guildId}, {(long)channelId}) ON CONFLICT (guild_id) DO UPDATE SET channel_id = EXCLUDED.channel_id";
+        Logger.Info(
+            "VcLogRepository: 設定 guild={GuildId} channel={ChannelId}",
+            guildId,
+            channelId
+        );
+
+        var sql =
+            $"INSERT INTO vc_log_targets(guild_id, channel_id) "
+            + $"VALUES({(long)guildId}, {(long)channelId}) "
+            + "ON CONFLICT (guild_id) "
+            + "DO UPDATE SET channel_id = EXCLUDED.channel_id";
+
         await _base.ExecuteNonQueryAsync(sql);
-        _base.Log("SetTargetAsync: 完了");
+
+        Logger.Info("VcLogRepository: 設定完了");
     }
 
     /// <summary>
@@ -79,10 +101,13 @@ public class VcLogRepository
     /// </summary>
     public async Task RemoveTargetAsync(ulong guildId)
     {
-        _base.Log($"RemoveTargetAsync: guild={guildId}");
-        var sql = $"DELETE FROM vc_log_targets WHERE guild_id = {(long)guildId}";
+        Logger.Info("VcLogRepository: 設定削除 guild={GuildId}", guildId);
+
+        var sql = $"DELETE FROM vc_log_targets " + $"WHERE guild_id = {(long)guildId}";
+
         await _base.ExecuteNonQueryAsync(sql);
-        _base.Log("RemoveTargetAsync: 完了");
+
+        Logger.Info("VcLogRepository: 設定削除完了");
     }
 
     /// <summary>
@@ -90,25 +115,35 @@ public class VcLogRepository
     /// </summary>
     public async Task<ulong?> GetTargetAsync(ulong guildId)
     {
-        _base.Log($"GetTargetAsync: guild={guildId}");
-        var sql = $"SELECT channel_id FROM vc_log_targets WHERE guild_id = {(long)guildId} LIMIT 1";
+        // 指定ギルドの VC ログ先チャンネルを取得します。
+        Logger.Info("VcLogRepository: 設定取得 guild={GuildId}", guildId);
+
+        var sql =
+            $"SELECT channel_id "
+            + $"FROM vc_log_targets "
+            + $"WHERE guild_id = {(long)guildId} "
+            + "LIMIT 1";
+
         object obj = null;
+
         await _base.UseConnectionAsync(async conn =>
         {
             dynamic cmd = conn.CreateCommand();
             cmd.CommandText = sql;
+
             obj = await cmd.ExecuteScalarAsync();
         });
 
         if (obj == null || obj == DBNull.Value)
         {
-            _base.Log("GetTargetAsync: 未設定");
+            Logger.Info("VcLogRepository: 設定なし");
             return null;
         }
 
-        var val = (ulong)(long)obj;
-        _base.Log($"GetTargetAsync: found channel={val}");
-        return val;
+        var channelId = (ulong)(long)obj;
+
+        Logger.Info("VcLogRepository: チャンネル取得 channel={ChannelId}", channelId);
+
+        return channelId;
     }
 }
-
