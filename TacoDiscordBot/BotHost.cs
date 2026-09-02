@@ -42,6 +42,13 @@ public static class BotHost
             }
 
             Logger.Info("BotHost: Discord token 確認 OK");
+            var key = Environment.GetEnvironmentVariable("GEMINI_API_KEY");
+
+            Logger.Info(
+                "BotHost: GEMINI_API_KEY 設定状態={ApiKeyState} 長さ={ApiKeyLength}",
+                string.IsNullOrEmpty(key) ? "NOT SET" : "OK",
+                key?.Length ?? 0
+            );
 
             Client = new DiscordClient(
                 new DiscordConfiguration
@@ -51,6 +58,7 @@ public static class BotHost
                     Intents =
                         DiscordIntents.Guilds
                         | DiscordIntents.GuildMessages
+                        | DiscordIntents.MessageContents
                         | DiscordIntents.GuildVoiceStates
                         | DiscordIntents.GuildMembers,
                 }
@@ -233,14 +241,6 @@ public static class BotHost
             await Client.ConnectAsync();
 
             Logger.Info("BotHost: Discord 接続完了");
-
-            var key = Environment.GetEnvironmentVariable("GEMINI_API_KEY");
-
-            Logger.Info(
-                "BotHost: GEMINI_API_KEY 設定状態={ApiKeyState} 長さ={ApiKeyLength}",
-                string.IsNullOrEmpty(key) ? "NOT SET" : "SET",
-                key?.Length ?? 0
-            );
 
             // Botを終了させないために待機
             await Task.Delay(Timeout.Infinite);
