@@ -4,7 +4,7 @@ using TacoDiscordBot.Repository;
 
 namespace TacoDiscordBot.Services;
 
-public class AiChannelService
+public class AiChannelService : IAiChannelService
 {
     private readonly AiTalkRepository _repo;
     private readonly ConcurrentDictionary<ulong, ulong> _targets = new();

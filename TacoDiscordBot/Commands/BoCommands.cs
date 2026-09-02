@@ -3,6 +3,8 @@ using System.Threading.Tasks;
 using DSharpPlus;
 using DSharpPlus.Entities;
 using DSharpPlus.SlashCommands;
+using TacoDiscordBot.Contexts;
+using TacoDiscordBot.Services;
 
 namespace TacoDiscordBot.Commands;
 
@@ -18,8 +20,38 @@ public class BoCommands : ApplicationCommandModule
         [Option("description", "募集の説明（任意）")] string description = ""
     )
     {
-        // Interaction を ACK します
-        await ctx.CreateResponseAsync(InteractionResponseType.DeferredChannelMessageWithSource);
+        await BoAsync(
+            new InteractionResponseContext(ctx),
+            ctx,
+            content,
+            at,
+            rank,
+            deadline,
+            description,
+            BotHost.BoManager
+        );
+    }
+
+    public async Task BoAsync(
+        IInteractionResponseContext response,
+        InteractionContext context,
+        string content = "",
+        long at = 0,
+        string rank = "",
+        string deadline = "",
+        string description = "",
+        IBoManager manager = null
+    )
+    {
+        manager ??= BotHost.BoManager;
+
+        if (manager == null)
+        {
+            await response.RespondAsync("募集サービスは未設定です。", true);
+            return;
+        }
+
+        await response.DeferResponseAsync();
 
         DateTime? parsedDeadline = null;
 
@@ -37,9 +69,7 @@ public class BoCommands : ApplicationCommandModule
                 )
             )
             {
-                await ctx.EditResponseAsync(
-                    new DiscordWebhookBuilder().WithContent(Strings.BoDeadlineInvalid)
-                );
+                await response.EditResponseAsync(Strings.BoDeadlineInvalid);
 
                 return;
             }
@@ -48,8 +78,8 @@ public class BoCommands : ApplicationCommandModule
             parsedDeadline = DateTime.SpecifyKind(parsed, DateTimeKind.Unspecified);
         }
 
-        await BotHost.BoManager.CreateSessionAsync(
-            ctx,
+        await manager.CreateSessionAsync(
+            context,
             content,
             (int)at,
             rank,
@@ -58,8 +88,6 @@ public class BoCommands : ApplicationCommandModule
         );
 
         // 保留中のレスポンスを編集して確定します。
-        await ctx.EditResponseAsync(
-            new DiscordWebhookBuilder().WithContent(Strings.BoCreatedConfirmation)
-        );
+        await response.EditResponseAsync(Strings.BoCreatedConfirmation);
     }
 }

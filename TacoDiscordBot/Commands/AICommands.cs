@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using DSharpPlus;
 using DSharpPlus.Entities;
 using DSharpPlus.SlashCommands;
+using TacoDiscordBot.Contexts;
 using TacoDiscordBot.Services;
 using TacoDiscordBot.Util;
 
@@ -17,21 +18,26 @@ public class AICommands : ApplicationCommandModule
         [Option("message", "AI に送信するメッセージ")] string message
     )
     {
-        if (BotHost.AiService == null)
+        await AiAsync(new InteractionResponseContext(ctx), message, BotHost.AiService);
+    }
+
+    public async Task AiAsync(
+        IInteractionResponseContext context,
+        string message,
+        IAiService aiService
+    )
+    {
+        if (aiService == null)
         {
-            await ctx.CreateResponseAsync(
-                InteractionResponseType.ChannelMessageWithSource,
-                new DiscordInteractionResponseBuilder()
-                    .WithContent(
-                        "AI サービスは未設定です。管理者が GEMINI_API_KEY を設定しているか確認してください。"
-                    )
-                    .AsEphemeral(true)
+            await context.RespondAsync(
+                "AI サービスは未設定です。管理者が GEMINI_API_KEY を設定しているか確認してください。",
+                true
             );
 
             return;
         }
 
-        await ctx.CreateResponseAsync(InteractionResponseType.DeferredChannelMessageWithSource);
+        await context.DeferResponseAsync();
 
         var systemPrompt = string.Join(
             "\n",
@@ -50,27 +56,21 @@ public class AICommands : ApplicationCommandModule
 
         try
         {
-            reply = await BotHost.AiService.SendToGeminiAsync(combined);
+            reply = await aiService.SendToGeminiAsync(combined);
         }
         catch (InvalidOperationException ex)
         {
             Logger.Error(ex, "AICommands.Ai: InvalidOperationException");
 
-            await ctx.EditResponseAsync(
-                new DiscordWebhookBuilder().WithContent(
-                    "Gemini API キーが設定されていません。環境変数 GEMINI_API_KEY を設定してください。"
-                )
+            await context.EditResponseAsync(
+                "Gemini API キーが設定されていません。環境変数 GEMINI_API_KEY を設定してください。"
             );
 
             return;
         }
         catch (UnauthorizedAccessException)
         {
-            await ctx.EditResponseAsync(
-                new DiscordWebhookBuilder().WithContent(
-                    "Gemini API キーが無効または権限がありません。"
-                )
-            );
+                await context.EditResponseAsync("Gemini API キーが無効または権限がありません。");
 
             return;
         }
@@ -80,7 +80,7 @@ public class AICommands : ApplicationCommandModule
                 ? "Gemini API がレート制限されました。しばらくしてから再度お試しください。"
                 : $"Gemini API エラー: {ex.Message}";
 
-            await ctx.EditResponseAsync(new DiscordWebhookBuilder().WithContent(content));
+            await context.EditResponseAsync(content);
 
             return;
         }
@@ -88,7 +88,7 @@ public class AICommands : ApplicationCommandModule
         if (string.IsNullOrWhiteSpace(reply))
             reply = "(応答が空でした)";
 
-        await ctx.EditResponseAsync(new DiscordWebhookBuilder().WithContent(reply));
+        await context.EditResponseAsync(reply);
     }
 
 }

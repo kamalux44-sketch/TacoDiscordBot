@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using DSharpPlus;
 using DSharpPlus.Entities;
 using DSharpPlus.SlashCommands;
+using TacoDiscordBot.Contexts;
 using TacoDiscordBot.Util;
 
 namespace TacoDiscordBot.Commands;
@@ -14,6 +15,12 @@ public class DeadlineCommands : ApplicationCommandModule
     public async Task Deadline(InteractionContext ctx)
     {
         Logger.Info($"Deadline command invoked by User={ctx.User.Id} Guild={ctx.Guild?.Id}");
+
+        await DeadlineAsync(new InteractionResponseContext(ctx), ctx.User.Id);
+    }
+
+    public async Task DeadlineAsync(IInteractionResponseContext response, ulong userId)
+    {
 
         var now = DateTime.Now;
 
@@ -64,7 +71,7 @@ public class DeadlineCommands : ApplicationCommandModule
         // ==================================================
 
         var dateSelect = new DiscordSelectComponent(
-            $"deadline_date:{ctx.User.Id}",
+            $"deadline_date:{userId}",
             $"{now:MM/dd}",
             dateOptions,
             false,
@@ -73,7 +80,7 @@ public class DeadlineCommands : ApplicationCommandModule
         );
 
         var hourSelect = new DiscordSelectComponent(
-            $"deadline_hour:{ctx.User.Id}",
+            $"deadline_hour:{userId}",
             $"{now:HH}",
             hourOptions,
             false,
@@ -82,7 +89,7 @@ public class DeadlineCommands : ApplicationCommandModule
         );
 
         var minuteSelect = new DiscordSelectComponent(
-            $"deadline_min:{ctx.User.Id}",
+            $"deadline_min:{userId}",
             $"{initialMinute:00}",
             minuteOptions,
             false,
@@ -96,7 +103,7 @@ public class DeadlineCommands : ApplicationCommandModule
 
         var confirmButton = new DiscordButtonComponent(
             ButtonStyle.Success,
-            $"deadline_confirm:{ctx.User.Id}",
+            $"deadline_confirm:{userId}",
             "決定"
         );
 
@@ -104,25 +111,19 @@ public class DeadlineCommands : ApplicationCommandModule
         // Response
         // ==================================================
 
-        var response = new DiscordInteractionResponseBuilder()
-            .WithContent("**締め切り日時を選択してください**\n")
-            .AsEphemeral(true);
-
-        response.AddComponents(dateSelect);
-        response.AddComponents(hourSelect);
-        response.AddComponents(minuteSelect);
-        response.AddComponents(confirmButton);
-
         Logger.Info(
             $"Deadline: sending response "
-                + $"User={ctx.User.Id} "
+                + $"User={userId} "
                 + $"dateOptions={dateOptions.Count} "
                 + $"hourOptions={hourOptions.Count} "
                 + $"minuteOptions={minuteOptions.Count}"
         );
 
-        await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, response);
+        await response.RespondWithComponentsAsync(
+            "**締め切り日時を選択してください**\n",
+            new DiscordComponent[] { dateSelect, hourSelect, minuteSelect, confirmButton }
+        );
 
-        Logger.Info($"Deadline: UI posted for User={ctx.User.Id}");
+        Logger.Info($"Deadline: UI posted for User={userId}");
     }
 }

@@ -2,6 +2,8 @@ using System.Threading.Tasks;
 using DSharpPlus;
 using DSharpPlus.Entities;
 using DSharpPlus.SlashCommands;
+using TacoDiscordBot.Contexts;
+using TacoDiscordBot.Services;
 
 namespace TacoDiscordBot.Commands;
 
@@ -10,41 +12,46 @@ public class VcLogCommands : ApplicationCommandModule
     [SlashCommand("vclog", "このテキストチャンネルへのVC参加・退出・移動のログ表示を切り替える")]
     public async Task VcLog(InteractionContext ctx)
     {
-        var guildId = ctx.Guild?.Id ?? 0UL;
+        await VcLogAsync(
+            new InteractionResponseContext(ctx),
+            ctx.Guild?.Id ?? 0UL,
+            ctx.Channel.Id,
+            BotHost.VcLogger
+        );
+    }
+
+    public async Task VcLogAsync(
+        IInteractionResponseContext response,
+        ulong guildId,
+        ulong channelId,
+        IVcLogger logger
+    )
+    {
 
         if (guildId == 0)
         {
-            await ctx.CreateResponseAsync(
-                InteractionResponseType.ChannelMessageWithSource,
-                new DiscordInteractionResponseBuilder()
-                    .WithContent(Strings.CommandGuildOnly)
-                    .AsEphemeral(true)
-            );
+            await response.RespondAsync(Strings.CommandGuildOnly, true);
 
             return;
         }
 
-        if (BotHost.VcLogger.IsConfiguredForGuild(guildId))
+        if (logger == null)
         {
-            await BotHost.VcLogger.RemoveChannelAsync(guildId);
+            await response.RespondAsync("VCログサービスは未設定です。", true);
+            return;
+        }
 
-            await ctx.CreateResponseAsync(
-                InteractionResponseType.ChannelMessageWithSource,
-                new DiscordInteractionResponseBuilder()
-                    .WithContent(Strings.VcToggleOff)
-                    .AsEphemeral(true)
-            );
+        if (logger.IsConfiguredForGuild(guildId))
+        {
+            await logger.RemoveChannelAsync(guildId);
+
+            await response.RespondAsync(Strings.VcToggleOff, true);
 
             return;
         }
 
-        await BotHost.VcLogger.SetChannelAsync(guildId, ctx.Channel.Id);
+        await logger.SetChannelAsync(guildId, channelId);
 
-        await ctx.CreateResponseAsync(
-            InteractionResponseType.ChannelMessageWithSource,
-            new DiscordInteractionResponseBuilder()
-                .WithContent(Strings.VcToggleOn)
-                .AsEphemeral(true)
-        );
+        await response.RespondAsync(Strings.VcToggleOn, true);
     }
 }

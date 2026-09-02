@@ -9,15 +9,15 @@ public static class BotHost
 {
     public static DiscordClient Client { get; private set; }
 
-    public static Services.VcLogger VcLogger { get; private set; }
+    public static Services.IVcLogger VcLogger { get; private set; }
 
-    public static Services.VcRankingService VcRankingService { get; private set; }
+    public static Services.IVcRankingService VcRankingService { get; private set; }
 
-    public static Services.BoManager BoManager { get; private set; }
+    public static Services.IBoManager BoManager { get; private set; }
 
-    public static Services.AiChannelService AiChannelService { get; private set; }
+    public static Services.IAiChannelService AiChannelService { get; private set; }
 
-    public static Services.AIService AiService { get; private set; }
+    public static Services.IAiService AiService { get; private set; }
 
     public static async Task RunAsync()
     {

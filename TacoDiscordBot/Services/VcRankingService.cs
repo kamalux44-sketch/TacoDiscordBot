@@ -11,7 +11,7 @@ using TacoDiscordBot.Util;
 
 namespace TacoDiscordBot.Services;
 
-public sealed class VcRankingService
+public sealed class VcRankingService : IVcRankingService
 {
     // ランキング永続化:
     // 開いているセッションを管理し、リポジトリ経由で永続化します。

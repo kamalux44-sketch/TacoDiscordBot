@@ -11,17 +11,19 @@ using TacoDiscordBot.Util;
 
 namespace TacoDiscordBot.Services;
 
-public class AIService
+public class AIService : IAiService
 {
-    private readonly DiscordClient _client;
-    private readonly AiChannelService _channelService;
-    private readonly HttpClient _http = new();
+    private readonly IAiChannelService _channelService;
+    private readonly HttpClient _http;
 
-    public AIService(DiscordClient client, AiChannelService channelService)
+    public AIService(
+        DiscordClient client,
+        IAiChannelService channelService,
+        HttpClient httpClient = null
+    )
     {
-        _client = client ?? throw new ArgumentNullException(nameof(client));
-
         _channelService = channelService;
+        _http = httpClient ?? new HttpClient();
     }
 
     public async Task HandleMessageCreated(DiscordClient sender, MessageCreateEventArgs e)
@@ -180,86 +182,91 @@ public class AIService
 
         using var doc = JsonDocument.Parse(body);
 
-        if (
-            doc.RootElement.TryGetProperty("candidates", out var candidates)
-            && candidates.ValueKind == JsonValueKind.Array
-            && candidates.GetArrayLength() > 0
-        )
+        return ExtractResponseText(doc.RootElement) ?? body;
+    }
+
+    private static string ExtractResponseText(JsonElement root)
+    {
+        if (TryExtractGeminiText(root, out var text))
+            return text;
+
+        if (TryExtractOutputText(root, out text))
+            return text;
+
+        return null;
+    }
+
+    private static bool TryExtractGeminiText(JsonElement root, out string text)
+    {
+        text = null;
+
+        if (!root.TryGetProperty("candidates", out var candidates)
+            || candidates.ValueKind != JsonValueKind.Array
+            || candidates.GetArrayLength() == 0)
+            return false;
+
+        var first = candidates[0];
+
+        if (!first.TryGetProperty("content", out var content))
+            return false;
+
+        if (content.ValueKind == JsonValueKind.String)
         {
-            var first = candidates[0];
-
-            if (first.TryGetProperty("content", out var content))
-            {
-                if (content.ValueKind == JsonValueKind.Object)
-                {
-                    if (
-                        content.TryGetProperty("parts", out var parts)
-                        && parts.ValueKind == JsonValueKind.Array
-                        && parts.GetArrayLength() > 0
-                    )
-                    {
-                        var part = parts[0];
-
-                        if (
-                            part.ValueKind == JsonValueKind.Object
-                            && part.TryGetProperty("text", out var textElement)
-                            && textElement.ValueKind == JsonValueKind.String
-                        )
-                        {
-                            return textElement.GetString();
-                        }
-                    }
-
-                    if (
-                        content.TryGetProperty("text", out var directText)
-                        && directText.ValueKind == JsonValueKind.String
-                    )
-                    {
-                        return directText.GetString();
-                    }
-                }
-                else if (content.ValueKind == JsonValueKind.String)
-                {
-                    return content.GetString();
-                }
-            }
+            text = content.GetString();
+            return true;
         }
 
-        if (
-            doc.RootElement.TryGetProperty("output", out var output)
-            && output.ValueKind == JsonValueKind.Array
-            && output.GetArrayLength() > 0
-        )
+        if (content.ValueKind != JsonValueKind.Object)
+            return false;
+
+        if (content.TryGetProperty("parts", out var parts)
+            && parts.ValueKind == JsonValueKind.Array
+            && parts.GetArrayLength() > 0
+            && parts[0].TryGetProperty("text", out var partText)
+            && partText.ValueKind == JsonValueKind.String)
         {
-            var first = output[0];
-
-            if (first.TryGetProperty("content", out var outputContent))
-            {
-                if (
-                    outputContent.ValueKind == JsonValueKind.Array
-                    && outputContent.GetArrayLength() > 0
-                )
-                {
-                    var sb = new StringBuilder();
-
-                    foreach (var item in outputContent.EnumerateArray())
-                    {
-                        if (item.ValueKind == JsonValueKind.String)
-                        {
-                            sb.Append(item.GetString());
-                        }
-                    }
-
-                    return sb.ToString();
-                }
-
-                if (outputContent.ValueKind == JsonValueKind.String)
-                {
-                    return outputContent.GetString();
-                }
-            }
+            text = partText.GetString();
+            return true;
         }
 
-        return body;
+        if (content.TryGetProperty("text", out var directText)
+            && directText.ValueKind == JsonValueKind.String)
+        {
+            text = directText.GetString();
+            return true;
+        }
+
+        return false;
+    }
+
+    private static bool TryExtractOutputText(JsonElement root, out string text)
+    {
+        text = null;
+
+        if (!root.TryGetProperty("output", out var output)
+            || output.ValueKind != JsonValueKind.Array
+            || output.GetArrayLength() == 0
+            || !output[0].TryGetProperty("content", out var content))
+            return false;
+
+        if (content.ValueKind == JsonValueKind.String)
+        {
+            text = content.GetString();
+            return true;
+        }
+
+        if (content.ValueKind != JsonValueKind.Array)
+            return false;
+
+        var builder = new StringBuilder();
+
+        foreach (var item in content.EnumerateArray())
+        {
+            if (item.ValueKind == JsonValueKind.String)
+                builder.Append(item.GetString());
+        }
+
+        text = builder.ToString();
+        return true;
     }
 }

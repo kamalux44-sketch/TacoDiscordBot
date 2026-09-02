@@ -2,6 +2,8 @@ using System.Threading.Tasks;
 using DSharpPlus;
 using DSharpPlus.Entities;
 using DSharpPlus.SlashCommands;
+using TacoDiscordBot.Contexts;
+using TacoDiscordBot.Services;
 using TacoDiscordBot.Util;
 
 namespace TacoDiscordBot.Commands;
@@ -11,42 +13,46 @@ public class AIChannelCommands : ApplicationCommandModule
     [SlashCommand("aichannel", "このチャンネルを AI 会話チャンネルとして設定します（管理用）")]
     public async Task AiChannel(InteractionContext ctx)
     {
+        await AiChannelAsync(
+            new InteractionResponseContext(ctx),
+            ctx.Guild?.Id ?? 0UL,
+            ctx.Channel.Id,
+            ctx.Channel.Name,
+            BotHost.AiChannelService
+        );
+    }
+
+    public async Task AiChannelAsync(
+        IInteractionResponseContext response,
+        ulong guildId,
+        ulong channelId,
+        string channelName,
+        IAiChannelService service
+    )
+    {
         // ギルドと AI チャンネルサービスの設定を確認してから、対象チャンネルを登録します。
-        var guildId = ctx.Guild?.Id ?? 0UL;
 
         if (guildId == 0)
         {
-            await ctx.CreateResponseAsync(
-                InteractionResponseType.ChannelMessageWithSource,
-                new DiscordInteractionResponseBuilder()
-                    .WithContent(Strings.CommandGuildOnly)
-                    .AsEphemeral(true)
-            );
+            await response.RespondAsync(Strings.CommandGuildOnly, true);
 
             return;
         }
 
-        if (BotHost.AiChannelService == null)
+        if (service == null)
         {
-            await ctx.CreateResponseAsync(
-                InteractionResponseType.ChannelMessageWithSource,
-                new DiscordInteractionResponseBuilder().WithContent(
-                    "AI サービスは未設定です。管理者が DB と GEMINI_API_KEY を設定しているか確認してください。"
-                )
+            await response.RespondAsync(
+                "AI サービスは未設定です。管理者が DB と GEMINI_API_KEY を設定しているか確認してください。"
             );
 
             return;
         }
 
-        await BotHost.AiChannelService.SetChannelAsync(guildId, ctx.Channel.Id);
+        await service.SetChannelAsync(guildId, channelId);
 
-        await ctx.CreateResponseAsync(
-            InteractionResponseType.ChannelMessageWithSource,
-            new DiscordInteractionResponseBuilder()
-                .WithContent(
-                    $"このチャンネルを AI 会話チャンネルとして設定しました。 (#{ctx.Channel.Name})"
-                )
-                .AsEphemeral(true)
+        await response.RespondAsync(
+            $"このチャンネルを AI 会話チャンネルとして設定しました。 (#{channelName})",
+            true
         );
     }
 }

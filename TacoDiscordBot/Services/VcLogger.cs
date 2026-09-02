@@ -11,7 +11,7 @@ using TacoDiscordBot.Util;
 
 namespace TacoDiscordBot.Services;
 
-public class VcLogger
+public class VcLogger : IVcLogger
 {
     // ギルドごとのターゲットは DB に保存されます。
     // 利用できない場合はレガシーな単一チャンネル環境変数を使用します。
@@ -162,7 +162,7 @@ public class VcLogger
     /// <summary>
     /// チャンネルが設定されているかを示します。
     /// </summary>
-    public bool IsConfigured => _repo != null || _legacyChannelId != 0;
+    public bool IsConfigured => _repo != null || (_legacyEnabled && _legacyChannelId != 0);
 
     /// <summary>
     /// 指定ギルドに VC ログチャンネルが設定されているかを示します。
@@ -172,7 +172,7 @@ public class VcLogger
         if (_repo != null)
             return _targets.ContainsKey(guildId);
 
-        return _legacyChannelId != 0;
+        return _legacyEnabled && _legacyChannelId != 0;
     }
 
     /// <summary>
@@ -320,116 +320,105 @@ public class VcLogger
             if (e.Guild == null)
                 return;
 
-            // 送信先チャンネルを決定
-            ulong targetChannel = 0;
+            var targetChannel = GetTargetChannelId(e.Guild.Id);
+            var log = CreateVoiceLog(e);
 
-            if (_repo != null)
-            {
-                _targets.TryGetValue(e.Guild.Id, out targetChannel);
-            }
-            else
-            {
-                if (_legacyEnabled && _legacyChannelId != 0)
-                {
-                    targetChannel = _legacyChannelId;
-                }
-            }
-
-            // ログ送信先が設定されている場合のみ送信します。
-            var willSend = targetChannel != 0;
-
-            var before = e.Before?.Channel;
-
-            var after = e.After?.Channel;
-
-            string text = null;
-
-            if (before == null && after != null)
-            {
-                // VC 入室
-                text = string.Format(
-                    Strings.VcLogJoinFmt,
-                    e.User.Mention,
-                    after.Name,
-                    DateTime.Now.ToString(Strings.DateTimeFormat)
-                );
-            }
-            else if (before != null && after == null)
-            {
-                // VC 退室
-                text = string.Format(
-                    Strings.VcLogLeaveFmt,
-                    e.User.Mention,
-                    before.Name,
-                    DateTime.Now.ToString(Strings.DateTimeFormat)
-                );
-            }
-            else if (before != null && after != null && before.Id != after.Id)
-            {
-                // VC 移動
-                text = string.Format(
-                    Strings.VcLogMoveFmt,
-                    e.User.Mention,
-                    before.Name,
-                    after.Name,
-                    DateTime.Now.ToString(Strings.DateTimeFormat)
-                );
-            }
-
-            if (text == null)
+            if (targetChannel == 0 || log == null)
                 return;
 
-            // 送信先が設定されていなければ終了
-            if (!willSend)
-                return;
-
-            try
-            {
-                var ch = await client.GetChannelAsync(targetChannel);
-
-                if (ch == null)
-                    return;
-
-                DiscordColor color;
-                string title;
-
-                if (before == null && after != null)
-                {
-                    color = DiscordColor.Green;
-                    title = Strings.VcEnterTitle;
-                }
-                else if (before != null && after == null)
-                {
-                    color = DiscordColor.Red;
-                    title = Strings.VcLeaveTitle;
-                }
-                else
-                {
-                    color = DiscordColor.Yellow;
-                    title = Strings.VcMoveTitle;
-                }
-
-                var embed = new DiscordEmbedBuilder()
-                    .WithTitle(title)
-                    .WithDescription(text)
-                    .WithColor(color)
-                    .WithTimestamp(DateTime.UtcNow);
-
-                await ch.SendMessageAsync(new DiscordMessageBuilder().AddEmbed(embed));
-            }
-            catch (Exception ex)
-            {
-                Logger.Error(
-                    ex,
-                    "VcLogger: VC ログの送信に失敗 guild={GuildId} channel={ChannelId}",
-                    e.Guild.Id,
-                    targetChannel
-                );
-            }
+            await SendVoiceLogAsync(client, e, targetChannel, log.Value);
         }
         catch (Exception ex)
         {
             Logger.Error(ex, "VcLogger: VC 状態更新の処理に失敗 guild={GuildId}", e.Guild?.Id);
+        }
+    }
+
+    private ulong GetTargetChannelId(ulong guildId)
+    {
+        if (_repo != null)
+        {
+            _targets.TryGetValue(guildId, out var targetChannel);
+            return targetChannel;
+        }
+
+        return _legacyEnabled ? _legacyChannelId : 0;
+    }
+
+    private (string Text, string Title, DiscordColor Color)? CreateVoiceLog(
+        VoiceStateUpdateEventArgs e
+    )
+    {
+        var before = e.Before?.Channel;
+        var after = e.After?.Channel;
+        var timestamp = DateTime.Now.ToString(Strings.DateTimeFormat);
+
+        if (before == null && after != null)
+        {
+            return (
+                string.Format(Strings.VcLogJoinFmt, e.User.Mention, after.Name, timestamp),
+                Strings.VcEnterTitle,
+                DiscordColor.Green
+            );
+        }
+
+        if (before != null && after == null)
+        {
+            return (
+                string.Format(Strings.VcLogLeaveFmt, e.User.Mention, before.Name, timestamp),
+                Strings.VcLeaveTitle,
+                DiscordColor.Red
+            );
+        }
+
+        if (before != null && after != null && before.Id != after.Id)
+        {
+            return (
+                string.Format(
+                    Strings.VcLogMoveFmt,
+                    e.User.Mention,
+                    before.Name,
+                    after.Name,
+                    timestamp
+                ),
+                Strings.VcMoveTitle,
+                DiscordColor.Yellow
+            );
+        }
+
+        return null;
+    }
+
+    private async Task SendVoiceLogAsync(
+        DiscordClient client,
+        VoiceStateUpdateEventArgs e,
+        ulong targetChannel,
+        (string Text, string Title, DiscordColor Color) log
+    )
+    {
+        try
+        {
+            var channel = await client.GetChannelAsync(targetChannel);
+
+            if (channel == null)
+                return;
+
+            var embed = new DiscordEmbedBuilder()
+                .WithTitle(log.Title)
+                .WithDescription(log.Text)
+                .WithColor(log.Color)
+                .WithTimestamp(DateTime.UtcNow);
+
+            await channel.SendMessageAsync(new DiscordMessageBuilder().AddEmbed(embed));
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(
+                ex,
+                "VcLogger: VC ログの送信に失敗 guild={GuildId} channel={ChannelId}",
+                e.Guild.Id,
+                targetChannel
+            );
         }
     }
 }

@@ -3,6 +3,7 @@ using DSharpPlus;
 using DSharpPlus.Entities;
 using DSharpPlus.SlashCommands;
 using TacoDiscordBot.Services;
+using TacoDiscordBot.Contexts;
 
 namespace TacoDiscordBot.Commands;
 
@@ -14,24 +15,42 @@ public class VcRankingCommands : ApplicationCommandModule
         [Option("period", "集計期間: day, week, month, all")] string period = "all"
     )
     {
-        // Interaction を ACK します
-        await ctx.CreateResponseAsync(InteractionResponseType.DeferredChannelMessageWithSource);
+        await VcRankAsync(
+            new InteractionResponseContext(ctx),
+            ctx.Guild?.Id ?? 0UL,
+            ctx.Guild,
+            ctx.User,
+            period,
+            BotHost.VcRankingService
+        );
+    }
 
-        var guildId = ctx.Guild?.Id ?? 0UL;
+    public async Task VcRankAsync(
+        IInteractionResponseContext response,
+        ulong guildId,
+        DiscordGuild guild,
+        DiscordUser user,
+        string period,
+        IVcRankingService service
+    )
+    {
+        await response.DeferResponseAsync();
 
         if (guildId == 0)
         {
-            await ctx.EditResponseAsync(
-                new DiscordWebhookBuilder().WithContent(Strings.CommandGuildOnly)
-            );
+            await response.EditResponseAsync(Strings.CommandGuildOnly);
 
             return;
         }
 
-        var svc = new VcRankingService();
+        if (service == null)
+        {
+            await response.EditResponseAsync("VCランキングサービスは未設定です。");
+            return;
+        }
 
-        var embed = await svc.BuildRankingEmbedAsync(guildId, period, ctx.Guild, ctx.User);
+        var embed = await service.BuildRankingEmbedAsync(guildId, period, guild, user);
 
-        await ctx.EditResponseAsync(new DiscordWebhookBuilder().AddEmbed(embed.Build()));
+        await response.EditResponseAsync(embed.Build());
     }
 }

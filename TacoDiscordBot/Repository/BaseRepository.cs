@@ -29,7 +29,7 @@ namespace TacoDiscordBot.Repository
         /// <summary>
         /// DB 接続を開き、処理完了後に必ず接続を解放します。
         /// </summary>
-        public async Task<T> UseConnectionAsync<T>(Func<dynamic, Task<T>> func)
+        public virtual async Task<T> UseConnectionAsync<T>(Func<dynamic, Task<T>> func)
         {
             var connectionType = GetConnectionType();
 
@@ -51,7 +51,7 @@ namespace TacoDiscordBot.Repository
             }
         }
 
-        public async Task UseConnectionAsync(Func<dynamic, Task> func)
+        public virtual async Task UseConnectionAsync(Func<dynamic, Task> func)
         {
             await UseConnectionAsync<object>(async conn =>
             {
@@ -63,7 +63,7 @@ namespace TacoDiscordBot.Repository
         /// <summary>
         /// 結果を返さない SQL を実行します。
         /// </summary>
-        public async Task ExecuteNonQueryAsync(string sql)
+        public virtual async Task ExecuteNonQueryAsync(string sql)
         {
             await UseConnectionAsync(async conn =>
             {

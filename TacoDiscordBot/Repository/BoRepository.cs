@@ -234,11 +234,12 @@ VALUES
         Logger.Info("BoRepository: 募集更新完了");
     }
 
-    public async Task DeleteSessionAsync(string sessionId)
+    public async Task CloseSessionAsync(string sessionId)
     {
-        Logger.Info("BoRepository: 募集削除 session={SessionId}", sessionId);
+        Logger.Info("BoRepository: 募集終了 session={SessionId}", sessionId);
 
-        const string sql = "DELETE FROM bo_sessions WHERE session_id = @sid";
+        const string sql =
+            "UPDATE bo_sessions SET is_closed = TRUE WHERE session_id = @sid";
 
         await _base.UseConnectionAsync(async conn =>
         {
@@ -250,7 +251,7 @@ VALUES
             await cmd.ExecuteNonQueryAsync();
         });
 
-        Logger.Info("BoRepository: 募集削除完了");
+        Logger.Info("BoRepository: 募集終了完了");
     }
 
     public async Task<List<BoSession>> LoadActiveSessionsAsync()

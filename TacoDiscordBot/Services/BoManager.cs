@@ -13,7 +13,7 @@ using TacoDiscordBot.Util;
 
 namespace TacoDiscordBot.Services;
 
-public class BoManager
+public class BoManager : IBoManager, IDeadlineOwner
 {
     // BO（募集）管理サービス。
     // メモリ上でセッションを管理し、永続化はオプションで BoRepository を通じて行います。
@@ -36,7 +36,7 @@ public class BoManager
     /// 指定ユーザーの直近の募集に締め切りを設定します。
     /// 成功した場合 true を返します。
     /// </summary>
-    internal async Task<bool> ApplyDeadlineToLatestSessionAsync(
+    public async Task<bool> ApplyDeadlineToLatestSessionAsync(
         ulong userId,
         DateTime utcDeadline,
         string raw
@@ -242,31 +242,11 @@ public class BoManager
         if (string.IsNullOrEmpty(id))
             return;
 
-        // 締め切りコンポーネントは DeadlineService に委譲
-        if (id.StartsWith("deadline_"))
-        {
-            var handled = await _deadlineService.HandleInteractionAsync(e);
-
-            if (handled)
-                return;
-        }
-
-        if (
-            !id.StartsWith("bo_join:")
-            && !id.StartsWith("bo_cancel:")
-            && !id.StartsWith("bo_close:")
-        )
-        {
-            return;
-        }
-
-        var parts = id.Split(':', 2);
-
-        if (parts.Length != 2)
+        if (await HandleDeadlineInteractionAsync(id, e))
             return;
 
-        var action = parts[0];
-        var sessionId = parts[1];
+        if (!TryParseBoInteraction(id, out var action, out var sessionId))
+            return;
 
         if (!_sessions.TryGetValue(sessionId, out var session))
         {
@@ -286,16 +266,56 @@ public class BoManager
 
         if (session.IsClosed)
         {
-            await e.Interaction.CreateFollowupMessageAsync(
-                new DiscordFollowupMessageBuilder()
-                    .WithContent("この募集はすでに終了しています。")
-                    .AsEphemeral(true)
-            );
-
+            await NotifyClosedSessionAsync(e);
             return;
         }
 
         await HandleJoinOrCancelAsync(e, action, session);
+    }
+
+    private async Task<bool> HandleDeadlineInteractionAsync(
+        string id,
+        ComponentInteractionCreateEventArgs e
+    )
+    {
+        if (!id.StartsWith("deadline_"))
+            return false;
+
+        // 締め切りコンポーネントは DeadlineService に委譲します。
+        return await _deadlineService.HandleInteractionAsync(e);
+    }
+
+    private static bool TryParseBoInteraction(
+        string id,
+        out string action,
+        out string sessionId
+    )
+    {
+        action = null;
+        sessionId = null;
+
+        if (!id.StartsWith("bo_join:")
+            && !id.StartsWith("bo_cancel:")
+            && !id.StartsWith("bo_close:"))
+            return false;
+
+        var parts = id.Split(':', 2);
+
+        if (parts.Length != 2)
+            return false;
+
+        action = parts[0];
+        sessionId = parts[1];
+        return true;
+    }
+
+    private static async Task NotifyClosedSessionAsync(ComponentInteractionCreateEventArgs e)
+    {
+        await e.Interaction.CreateFollowupMessageAsync(
+            new DiscordFollowupMessageBuilder()
+                .WithContent("この募集はすでに終了しています。")
+                .AsEphemeral(true)
+        );
     }
 
     private async Task HandleCloseActionAsync(
@@ -598,7 +618,7 @@ public class BoManager
     }
 
     /// <summary>
-    /// 作成から7日を超えた募集を破棄します。
+    /// 作成から7日を超えた、締め切り未設定の募集を終了します。
     /// メッセージも削除します。
     /// </summary>
     private async Task CleanExpiredSessionsAsync()
@@ -607,24 +627,19 @@ public class BoManager
 
         var now = DateTime.UtcNow;
 
-        var toRemove = new List<string>();
+        var toClose = new List<BoSession>();
 
-        foreach (var kv in _sessions)
+        foreach (var session in _sessions.Values)
         {
-            var session = kv.Value;
-
-            if (now - session.CreatedAt > expiry)
+            if (!session.IsClosed && !session.Deadline.HasValue && now - session.CreatedAt > expiry)
             {
-                toRemove.Add(kv.Key);
+                toClose.Add(session);
             }
         }
 
-        foreach (var id in toRemove)
+        foreach (var session in toClose)
         {
-            if (!_sessions.TryRemove(id, out var session))
-            {
-                continue;
-            }
+            session.IsClosed = true;
 
             var channel = await _client.GetChannelAsync(session.ChannelId);
 
@@ -640,7 +655,7 @@ public class BoManager
 
             if (_repo != null)
             {
-                await _repo.DeleteSessionAsync(session.SessionId);
+                await _repo.CloseSessionAsync(session.SessionId);
             }
         }
     }
