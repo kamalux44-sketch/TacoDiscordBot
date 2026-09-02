@@ -29,6 +29,13 @@ public class AIService
         // Bot や対象外チャンネルのメッセージを除外し、対象メッセージだけ AI へ渡します。
         var msg = e.Message;
 
+        Logger.Info(
+            "AIService: メッセージ受信 guild={GuildId} channel={ChannelId} author={AuthorId}",
+            e.Guild?.Id,
+            msg?.Channel?.Id,
+            msg?.Author?.Id
+        );
+
         if (msg == null)
             return;
         if (msg.Author == null)
@@ -51,7 +58,10 @@ public class AIService
         var input = msg.Content ?? string.Empty;
 
         if (string.IsNullOrWhiteSpace(input))
+        {
+            Logger.Info("AIService: メッセージ本文が空のため処理を終了");
             return;
+        }
 
         await msg.Channel.TriggerTypingAsync();
 
