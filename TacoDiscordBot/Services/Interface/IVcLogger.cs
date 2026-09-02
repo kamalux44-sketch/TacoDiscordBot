@@ -2,7 +2,7 @@ using System.Threading.Tasks;
 using DSharpPlus;
 using DSharpPlus.EventArgs;
 
-namespace TacoDiscordBot.Services;
+namespace TacoDiscordBot.Services.Interface;
 
 public interface IVcLogger
 {

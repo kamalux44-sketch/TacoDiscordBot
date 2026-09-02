@@ -5,6 +5,7 @@ using DSharpPlus;
 using DSharpPlus.Entities;
 using DSharpPlus.SlashCommands;
 using TacoDiscordBot.Contexts;
+using TacoDiscordBot.Services.Interface;
 using TacoDiscordBot.Services;
 using TacoDiscordBot.Util;
 
@@ -39,18 +40,7 @@ public class AICommands : ApplicationCommandModule
 
         await context.DeferResponseAsync();
 
-        var systemPrompt = string.Join(
-            "\n",
-            new[]
-            {
-                "あなたは Discord 上で動作する AI Bot です。",
-                "メッセージは Discord に適した長さで、読みやすく簡潔に出力します。",
-                "ユーザーの質問には少し毒舌でフレンドリーに答えます。",
-                "過度に長文にせず、必要な情報をまとめて返します。",
-            }
-        );
-
-        var combined = systemPrompt + "\n\n" + message;
+        var combined = AiPrompt.Build(message);
 
         string reply;
 

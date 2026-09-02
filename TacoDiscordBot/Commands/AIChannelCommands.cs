@@ -3,7 +3,7 @@ using DSharpPlus;
 using DSharpPlus.Entities;
 using DSharpPlus.SlashCommands;
 using TacoDiscordBot.Contexts;
-using TacoDiscordBot.Services;
+using TacoDiscordBot.Services.Interface;
 using TacoDiscordBot.Util;
 
 namespace TacoDiscordBot.Commands;

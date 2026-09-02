@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 using Moq;
 using TacoDiscordBot.Commands;
 using TacoDiscordBot.Contexts;
-using TacoDiscordBot.Services;
+using TacoDiscordBot.Services.Interface;
 using Xunit;
 
 namespace TacoDiscordBot.Tests.CommandTest;

@@ -7,6 +7,7 @@ using DSharpPlus;
 using DSharpPlus.Entities;
 using DSharpPlus.EventArgs;
 using TacoDiscordBot.Repository;
+using TacoDiscordBot.Services.Interface;
 using TacoDiscordBot.Util;
 
 namespace TacoDiscordBot.Services;

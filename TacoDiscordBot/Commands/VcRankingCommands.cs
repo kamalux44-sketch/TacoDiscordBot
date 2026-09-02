@@ -2,8 +2,8 @@ using System.Threading.Tasks;
 using DSharpPlus;
 using DSharpPlus.Entities;
 using DSharpPlus.SlashCommands;
-using TacoDiscordBot.Services;
 using TacoDiscordBot.Contexts;
+using TacoDiscordBot.Services.Interface;
 
 namespace TacoDiscordBot.Commands;
 

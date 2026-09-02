@@ -1,7 +1,7 @@
 using System;
 using System.Threading.Tasks;
 
-namespace TacoDiscordBot.Services;
+namespace TacoDiscordBot.Services.Interface;
 
 public interface IDeadlineOwner
 {

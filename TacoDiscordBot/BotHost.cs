@@ -1,6 +1,7 @@
 using DSharpPlus;
 using DSharpPlus.SlashCommands;
 using Microsoft.Extensions.Logging;
+using TacoDiscordBot.Services.Interface;
 using TacoDiscordBot.Util;
 
 namespace TacoDiscordBot;
@@ -9,15 +10,15 @@ public static class BotHost
 {
     public static DiscordClient Client { get; private set; }
 
-    public static Services.IVcLogger VcLogger { get; private set; }
+    public static IVcLogger VcLogger { get; private set; }
 
-    public static Services.IVcRankingService VcRankingService { get; private set; }
+    public static IVcRankingService VcRankingService { get; private set; }
 
-    public static Services.IBoManager BoManager { get; private set; }
+    public static IBoManager BoManager { get; private set; }
 
-    public static Services.IAiChannelService AiChannelService { get; private set; }
+    public static IAiChannelService AiChannelService { get; private set; }
 
-    public static Services.IAiService AiService { get; private set; }
+    public static IAiService AiService { get; private set; }
 
     public static async Task RunAsync()
     {
@@ -166,11 +167,11 @@ public static class BotHost
             }
 
             // リポジトリ（任意）を注入してサービスを作成
-            VcLogger = new Services.VcLogger(vclogRepo, vrankRepo);
+            VcLogger = new Services.VcLogService(vclogRepo, vrankRepo);
 
             Logger.Info("BotHost: VcLogger 作成完了");
 
-            BoManager = new Services.BoManager(Client, boRepo);
+            BoManager = new Services.BoService(Client, boRepo);
 
             Logger.Info("BotHost: BoManager 作成完了");
 

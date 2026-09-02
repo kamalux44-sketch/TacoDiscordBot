@@ -7,11 +7,12 @@ using DSharpPlus;
 using DSharpPlus.Entities;
 using DSharpPlus.EventArgs;
 using TacoDiscordBot.Repository;
+using TacoDiscordBot.Services.Interface;
 using TacoDiscordBot.Util;
 
 namespace TacoDiscordBot.Services;
 
-public class VcLogger : IVcLogger
+public class VcLogService : IVcLogger
 {
     // ギルドごとのターゲットは DB に保存されます。
     // 利用できない場合はレガシーな単一チャンネル環境変数を使用します。
@@ -26,7 +27,7 @@ public class VcLogger : IVcLogger
     /// コンストラクタ。
     /// リポジトリからギルドごとの VC ログチャンネルを読み込みます。
     /// </summary>
-    public VcLogger(VcLogRepository repo, VcRankingRepository rankingRepo)
+    public VcLogService(VcLogRepository repo, VcRankingRepository rankingRepo)
     {
         _legacyChannelId = 0;
         _legacyEnabled = false;
@@ -57,7 +58,7 @@ public class VcLogger : IVcLogger
     /// <summary>
     /// 既存の呼び出し互換のための引数無しコンストラクタ。
     /// </summary>
-    public VcLogger()
+    public VcLogService()
         : this(CreateFromEnvOrNull(), CreateRankingFromEnvOrNull()) { }
 
     /// <summary>

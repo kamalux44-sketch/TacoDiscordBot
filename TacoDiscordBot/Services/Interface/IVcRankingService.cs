@@ -3,7 +3,7 @@ using DSharpPlus;
 using DSharpPlus.Entities;
 using DSharpPlus.EventArgs;
 
-namespace TacoDiscordBot.Services;
+namespace TacoDiscordBot.Services.Interface;
 
 public interface IVcRankingService
 {

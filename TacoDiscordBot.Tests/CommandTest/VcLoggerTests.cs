@@ -9,7 +9,7 @@ public class VcLoggerTests
     [Fact]
     public void 初期状態ではレガシーVCログが未設定である()
     {
-        var logger = new VcLogger(null, null);
+        var logger = new VcLogService(null, null);
 
         Assert.False(logger.IsConfigured);
         Assert.False(logger.IsConfiguredForGuild(10));
@@ -18,7 +18,7 @@ public class VcLoggerTests
     [Fact]
     public void レガシーチャンネルを設定すると有効になる()
     {
-        var logger = new VcLogger(null, null);
+        var logger = new VcLogService(null, null);
 
         logger.SetChannel(123);
 
@@ -29,7 +29,7 @@ public class VcLoggerTests
     [Fact]
     public void レガシー設定はToggleChannelで無効化と有効化を切り替えられる()
     {
-        var logger = new VcLogger(null, null);
+        var logger = new VcLogService(null, null);
         logger.SetChannel(123);
 
         Assert.False(logger.ToggleChannel(10));
@@ -41,7 +41,7 @@ public class VcLoggerTests
     [Fact]
     public async Task レガシー設定を非同期で更新および削除できる()
     {
-        var logger = new VcLogger(null, null);
+        var logger = new VcLogService(null, null);
 
         await logger.SetChannelAsync(10, 123);
         Assert.True(logger.IsConfiguredForGuild(10));

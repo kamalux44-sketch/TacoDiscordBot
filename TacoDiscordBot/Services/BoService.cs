@@ -9,11 +9,12 @@ using DSharpPlus.EventArgs;
 using DSharpPlus.SlashCommands;
 using TacoDiscordBot.Models;
 using TacoDiscordBot.Repository;
+using TacoDiscordBot.Services.Interface;
 using TacoDiscordBot.Util;
 
 namespace TacoDiscordBot.Services;
 
-public class BoManager : IBoManager, IDeadlineOwner
+public class BoService : IBoManager, IDeadlineOwner
 {
     // BO（募集）管理サービス。
     // メモリ上でセッションを管理し、永続化はオプションで BoRepository を通じて行います。
@@ -99,7 +100,7 @@ public class BoManager : IBoManager, IDeadlineOwner
         return new BoRepository(baseRepo);
     }
 
-    public BoManager(DiscordClient client, BoRepository repo = null)
+    public BoService(DiscordClient client, BoRepository repo = null)
     {
         _client = client;
 

@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Threading.Tasks;
 using TacoDiscordBot.Repository;
+using TacoDiscordBot.Services.Interface;
 
 namespace TacoDiscordBot.Services;
 

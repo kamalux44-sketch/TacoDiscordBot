@@ -4,7 +4,7 @@ using DSharpPlus;
 using DSharpPlus.EventArgs;
 using DSharpPlus.SlashCommands;
 
-namespace TacoDiscordBot.Services;
+namespace TacoDiscordBot.Services.Interface;
 
 public interface IBoManager
 {

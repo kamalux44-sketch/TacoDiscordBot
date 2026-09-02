@@ -7,6 +7,7 @@ using DSharpPlus;
 using DSharpPlus.Entities;
 using DSharpPlus.EventArgs;
 using TacoDiscordBot.Repository;
+using TacoDiscordBot.Services.Interface;
 using TacoDiscordBot.Util;
 
 namespace TacoDiscordBot.Services;
@@ -71,7 +72,7 @@ public class AIService : IAiService
 
         try
         {
-            reply = await SendToGeminiAsync(input);
+            reply = await SendToGeminiAsync(AiPrompt.Build(input));
         }
         catch (InvalidOperationException ex)
         {
