@@ -11,6 +11,7 @@ namespace TacoDiscordBot.Repository;
 /// </summary>
 public class AiTalkRepository
 {
+    // AI 会話対象チャンネルの永続化を担当します。
     private readonly BaseRepository _base;
 
     public AiTalkRepository(BaseRepository baseRepo)
@@ -22,6 +23,7 @@ public class AiTalkRepository
 
     public async Task EnsureTableExistsAsync()
     {
+        // テーブルが存在しない場合、AI 会話対象チャンネル用のテーブルを作成します。
         const string sql = """
             CREATE TABLE IF NOT EXISTS ai_talk_targets (
                 guild_id BIGINT PRIMARY KEY,

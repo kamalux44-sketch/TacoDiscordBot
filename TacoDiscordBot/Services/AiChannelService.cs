@@ -7,6 +7,7 @@ namespace TacoDiscordBot.Services;
 
 public class AiChannelService : IAiChannelService
 {
+    // ギルドごとの AI 対象チャンネルを管理します。
     private readonly AiTalkRepository _repo;
     private readonly ConcurrentDictionary<ulong, ulong> _targets = new();
 

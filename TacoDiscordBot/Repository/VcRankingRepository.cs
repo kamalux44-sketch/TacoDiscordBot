@@ -7,6 +7,7 @@ namespace TacoDiscordBot.Repository;
 
 public class VcRankingRepository
 {
+    // VC 滞在セッションの保存とランキング集計を担当します。
     private readonly BaseRepository _base;
 
     public VcRankingRepository(BaseRepository baseRepo)

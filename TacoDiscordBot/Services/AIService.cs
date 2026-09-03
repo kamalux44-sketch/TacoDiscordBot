@@ -16,6 +16,7 @@ namespace TacoDiscordBot.Services;
 
 public class AIService : IAiService
 {
+    // Discord メッセージと Gemini API の連携を担当します。
     private readonly IAiChannelService _channelService;
     private readonly HttpClient _http;
     private readonly ConcurrentDictionary<ulong, string> _latestInteractionIds = new();

@@ -11,6 +11,7 @@ namespace TacoDiscordBot.Commands;
 
 public class DeadlineCommands : ApplicationCommandModule
 {
+    // 締切選択 UI を表示するコマンドを受け付けます。
     [SlashCommand("deadline", "締め切りを設定します")]
     public async Task Deadline(InteractionContext ctx)
     {

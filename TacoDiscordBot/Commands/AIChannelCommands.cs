@@ -10,6 +10,7 @@ namespace TacoDiscordBot.Commands;
 
 public class AIChannelCommands : ApplicationCommandModule
 {
+    // AI 会話チャンネル設定コマンドを受け付けます。
     [SlashCommand("aichannel", "このチャンネルを AI 会話チャンネルとして設定します（管理用）")]
     public async Task AiChannel(InteractionContext ctx)
     {

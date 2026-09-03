@@ -9,8 +9,8 @@ namespace TacoDiscordBot.Repository;
 // 軽量リポジトリ。実行時に Npgsql が利用可能であれば使用します。
 public class BoRepository
 {
+    // 募集セッションと参加者の永続化を担当します。
     private readonly BaseRepository _base;
-
     public BoRepository(BaseRepository baseRepo)
     {
         _base = baseRepo ?? throw new ArgumentNullException(nameof(baseRepo));

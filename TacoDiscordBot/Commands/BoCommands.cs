@@ -10,6 +10,7 @@ namespace TacoDiscordBot.Commands;
 
 public class BoCommands : ApplicationCommandModule
 {
+    // 募集作成コマンドを受け付けます。
     [SlashCommand("bo", "募集を作成します")]
     public async Task Bo(
         InteractionContext ctx,
