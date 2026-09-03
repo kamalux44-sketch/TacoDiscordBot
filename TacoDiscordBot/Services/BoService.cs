@@ -205,7 +205,7 @@ public class BoService : IBoManager, IDeadlineOwner
                                     m.ClearComponents();
                                     m.AddComponents(
                                         new DiscordButtonComponent(
-                                            ButtonStyle.Secondary,
+                                            ButtonStyle.Success,
                                             $"bo_recreate:{session.SessionId}",
                                             Strings.ButtonRecreateLabel
                                         )
@@ -393,7 +393,7 @@ public class BoService : IBoManager, IDeadlineOwner
                     m.ClearComponents();
                     m.AddComponents(
                         new DiscordButtonComponent(
-                            ButtonStyle.Secondary,
+                            ButtonStyle.Success,
                             $"bo_recreate:{session.SessionId}",
                             Strings.ButtonRecreateLabel
                         )
@@ -477,7 +477,7 @@ public class BoService : IBoManager, IDeadlineOwner
                     m.ClearComponents();
                     m.AddComponents(
                         new DiscordButtonComponent(
-                            ButtonStyle.Secondary,
+                            ButtonStyle.Success,
                             $"bo_recreate:{session.SessionId}",
                             Strings.ButtonRecreateLabel
                         )
