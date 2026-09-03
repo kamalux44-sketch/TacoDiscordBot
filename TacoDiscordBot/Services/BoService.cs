@@ -202,6 +202,14 @@ public class BoService : IBoManager, IDeadlineOwner
                                     m.Content =
                                         (message.Content ?? string.Empty)
                                         + "\n\n**（締め切り済み）**";
+                                    m.ClearComponents();
+                                    m.AddComponents(
+                                        new DiscordButtonComponent(
+                                            ButtonStyle.Secondary,
+                                            $"bo_recreate:{session.SessionId}",
+                                            Strings.ButtonRecreateLabel
+                                        )
+                                    );
                                 });
                             }
                         }
@@ -258,6 +266,18 @@ public class BoService : IBoManager, IDeadlineOwner
 
         await e.Interaction.CreateResponseAsync(InteractionResponseType.DeferredMessageUpdate);
 
+        if (action == "bo_recreate")
+        {
+            if (!session.IsClosed)
+            {
+                await NotifyActiveSessionAsync(e);
+                return;
+            }
+
+            await CreateSessionFromExistingAsync(e, session);
+            return;
+        }
+
         if (action == "bo_close")
         {
             await HandleCloseActionAsync(e, session);
@@ -297,7 +317,8 @@ public class BoService : IBoManager, IDeadlineOwner
 
         if (!id.StartsWith("bo_join:")
             && !id.StartsWith("bo_cancel:")
-            && !id.StartsWith("bo_close:"))
+            && !id.StartsWith("bo_close:")
+            && !id.StartsWith("bo_recreate:"))
             return false;
 
         var parts = id.Split(':', 2);
@@ -308,6 +329,15 @@ public class BoService : IBoManager, IDeadlineOwner
         action = parts[0];
         sessionId = parts[1];
         return true;
+    }
+
+    private static async Task NotifyActiveSessionAsync(ComponentInteractionCreateEventArgs e)
+    {
+        await e.Interaction.CreateFollowupMessageAsync(
+            new DiscordFollowupMessageBuilder()
+                .WithContent("この募集はまだ終了していません。")
+                .AsEphemeral(true)
+        );
     }
 
     private static async Task NotifyClosedSessionAsync(ComponentInteractionCreateEventArgs e)
@@ -360,6 +390,14 @@ public class BoService : IBoManager, IDeadlineOwner
                 await message.ModifyAsync(m =>
                 {
                     m.Content = (message.Content ?? string.Empty) + "\n\n**（募集終了）**";
+                    m.ClearComponents();
+                    m.AddComponents(
+                        new DiscordButtonComponent(
+                            ButtonStyle.Secondary,
+                            $"bo_recreate:{session.SessionId}",
+                            Strings.ButtonRecreateLabel
+                        )
+                    );
                 });
             }
         }
@@ -436,6 +474,14 @@ public class BoService : IBoManager, IDeadlineOwner
                 await message.ModifyAsync(m =>
                 {
                     m.Content = (message.Content ?? string.Empty) + "\n\n**（募集終了）**";
+                    m.ClearComponents();
+                    m.AddComponents(
+                        new DiscordButtonComponent(
+                            ButtonStyle.Secondary,
+                            $"bo_recreate:{session.SessionId}",
+                            Strings.ButtonRecreateLabel
+                        )
+                    );
                 });
             }
         }
@@ -455,59 +501,69 @@ public class BoService : IBoManager, IDeadlineOwner
         string description = ""
     )
     {
-        var sessionId = Guid.NewGuid().ToString();
-
         var session = new BoSession
         {
-            SessionId = sessionId,
+            SessionId = Guid.NewGuid().ToString(),
             MessageId = 0,
             ChannelId = ctx.Channel.Id,
             Body = body,
             At = at,
             Rank = rank ?? string.Empty,
-
             DeadlineRaw = deadline.HasValue
                 ? deadline.Value.ToString(Strings.DateTimeFormat)
                 : string.Empty,
-
             Description = description ?? string.Empty,
-
             OwnerId = ctx.User.Id,
-
             Participants = new List<ulong> { ctx.User.Id },
-
             CreatedAt = DateTime.UtcNow,
-
             IsClosed = false,
         };
 
-        // 入力された締め切りは日本時間として扱い、UTCに変換します。
         if (deadline.HasValue)
         {
             var jst = TimeZoneInfo.FindSystemTimeZoneById("Tokyo Standard Time");
-
-            var unspecifiedDeadline = DateTime.SpecifyKind(
-                deadline.Value,
-                DateTimeKind.Unspecified
-            );
-
+            var unspecifiedDeadline = DateTime.SpecifyKind(deadline.Value, DateTimeKind.Unspecified);
             session.Deadline = TimeZoneInfo.ConvertTimeToUtc(unspecifiedDeadline, jst);
         }
 
+        await SendSessionMessageAsync(session, ctx.Channel);
+    }
+
+    private async Task CreateSessionFromExistingAsync(
+        ComponentInteractionCreateEventArgs e,
+        BoSession originalSession
+    )
+    {
+        var session = new BoSession
+        {
+            SessionId = Guid.NewGuid().ToString(),
+            MessageId = 0,
+            ChannelId = originalSession.ChannelId,
+            Body = originalSession.Body,
+            At = originalSession.At,
+            Rank = originalSession.Rank ?? string.Empty,
+            DeadlineRaw = originalSession.DeadlineRaw ?? string.Empty,
+            Deadline = originalSession.Deadline,
+            Description = originalSession.Description ?? string.Empty,
+            OwnerId = e.User.Id,
+            Participants = new List<ulong> { e.User.Id },
+            CreatedAt = DateTime.UtcNow,
+            IsClosed = false,
+        };
+
+        await SendSessionMessageAsync(session, e.Channel);
+    }
+
+    private async Task SendSessionMessageAsync(BoSession session, DiscordChannel channel)
+    {
         var participantsText = string.Join(
             "\n",
             session.Participants.Select((id, idx) => $"{idx + 1}. <@{id}>")
         );
 
-        if (string.IsNullOrEmpty(participantsText))
-        {
-            participantsText = "—";
-        }
-
-        var atText =
-            session.At > 0
-                ? $"{session.Participants.Count}/{session.At + 1}"
-                : $"{session.Participants.Count}/任意";
+        var atText = session.At > 0
+            ? $"{session.Participants.Count}/{session.At + 1}"
+            : $"{session.Participants.Count}/任意";
 
         var embedBuilder = new DiscordEmbedBuilder()
             .WithTitle(Strings.EmbedTitle)
@@ -515,27 +571,21 @@ public class BoService : IBoManager, IDeadlineOwner
             .WithTimestamp(DateTime.UtcNow);
 
         if (!string.IsNullOrWhiteSpace(session.Body))
-        {
             embedBuilder.AddField("🎮 " + Strings.LabelContent, session.Body, false);
-        }
 
         embedBuilder.AddField("👤 " + Strings.LabelOwner, $"<@{session.OwnerId}>", false);
 
         if (!string.IsNullOrWhiteSpace(session.Rank))
-        {
             embedBuilder.AddField("🏅 " + Strings.LabelRank, session.Rank, false);
-        }
 
         if (session.Deadline.HasValue)
         {
             embedBuilder.AddField(
                 Strings.LabelDeadline,
-                TimeZoneInfo
-                    .ConvertTimeFromUtc(
-                        DateTime.SpecifyKind(session.Deadline.Value, DateTimeKind.Utc),
-                        TimeZoneInfo.FindSystemTimeZoneById("Tokyo Standard Time")
-                    )
-                    .ToString(Strings.DateTimeFormat),
+                TimeZoneInfo.ConvertTimeFromUtc(
+                    DateTime.SpecifyKind(session.Deadline.Value, DateTimeKind.Utc),
+                    TimeZoneInfo.FindSystemTimeZoneById("Tokyo Standard Time")
+                ).ToString(Strings.DateTimeFormat),
                 false
             );
         }
@@ -545,9 +595,7 @@ public class BoService : IBoManager, IDeadlineOwner
         }
 
         if (!string.IsNullOrWhiteSpace(session.Description))
-        {
             embedBuilder.AddField(Strings.LabelDescription, session.Description, false);
-        }
 
         embedBuilder.AddField(
             Strings.ParticipantsFieldPrefix + Strings.LabelParticipants,
@@ -556,31 +604,19 @@ public class BoService : IBoManager, IDeadlineOwner
         );
 
         if (session.At > 0)
-        {
             embedBuilder.WithFooter(Strings.FooterParticipantCount + atText);
-        }
 
-        var isMinimal =
-            string.IsNullOrWhiteSpace(session.Body)
+        var isMinimal = string.IsNullOrWhiteSpace(session.Body)
             && session.At == 0
             && string.IsNullOrWhiteSpace(session.Rank)
             && string.IsNullOrWhiteSpace(session.DeadlineRaw)
             && string.IsNullOrWhiteSpace(session.Description);
 
-        string content;
-
-        if (isMinimal)
-        {
-            content = string.Format(Strings.ContentMinimalTemplate, session.OwnerId);
-        }
-        else if (!string.IsNullOrWhiteSpace(session.Body))
-        {
-            content = string.Format(Strings.ContentWithBodyTemplate, session.OwnerId, session.Body);
-        }
-        else
-        {
-            content = Strings.EmbedStartContent;
-        }
+        var content = isMinimal
+            ? string.Format(Strings.ContentMinimalTemplate, session.OwnerId)
+            : !string.IsNullOrWhiteSpace(session.Body)
+                ? string.Format(Strings.ContentWithBodyTemplate, session.OwnerId, session.Body)
+                : Strings.EmbedStartContent;
 
         var builder = new DiscordMessageBuilder()
             .WithContent(content)
@@ -589,33 +625,29 @@ public class BoService : IBoManager, IDeadlineOwner
                 {
                     new DiscordButtonComponent(
                         ButtonStyle.Primary,
-                        $"bo_join:{sessionId}",
+                        $"bo_join:{session.SessionId}",
                         Strings.ButtonJoinLabel
                     ),
                     new DiscordButtonComponent(
                         ButtonStyle.Secondary,
-                        $"bo_cancel:{sessionId}",
+                        $"bo_cancel:{session.SessionId}",
                         Strings.ButtonCancelParticipationLabel
                     ),
                     new DiscordButtonComponent(
                         ButtonStyle.Danger,
-                        $"bo_close:{sessionId}",
+                        $"bo_close:{session.SessionId}",
                         Strings.ButtonCloseLabel
                     ),
                 }
             )
             .AddEmbed(embedBuilder);
 
-        var message = await ctx.Channel.SendMessageAsync(builder);
-
+        var message = await channel.SendMessageAsync(builder);
         session.MessageId = message.Id;
-
-        _sessions[sessionId] = session;
+        _sessions[session.SessionId] = session;
 
         if (_repo != null)
-        {
             await _repo.CreateSessionAsync(session);
-        }
     }
 
     /// <summary>

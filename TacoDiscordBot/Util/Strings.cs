@@ -118,6 +118,7 @@ public static class Strings
     public const string ButtonJoinLabel = "参加";
     public const string ButtonCancelParticipationLabel = "参加取消";
     public const string ButtonCloseLabel = "募集終了";
+    public const string ButtonRecreateLabel = "この募集をもう一度作成";
     public const string ContentMinimalTemplate = "@here\n<@{0}>さんが何か募集しているようです"; // {0}=ownerId
     public const string ContentWithBodyTemplate = "@here\n<@{0}>さんが{1}の募集を開始しました！"; // {0}=ownerId, {1}=body
 
