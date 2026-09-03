@@ -61,4 +61,10 @@ public class AiTalkRepositoryTests
             && sql.Contains("VALUES(123, 456)")
             && sql.Contains("ON CONFLICT (guild_id)"))), Times.Once);
     }
+
+    [Fact]
+    public void nullのBaseRepositoryを拒否する()
+    {
+        Assert.Throws<ArgumentNullException>(() => new AiTalkRepository(null));
+    }
 }

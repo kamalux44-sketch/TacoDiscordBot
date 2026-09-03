@@ -34,6 +34,15 @@ public class DeadlineCommandsTests
         Assert.Equal("deadline_hour:123", components[1].CustomId);
         Assert.Equal("deadline_min:123", components[2].CustomId);
         Assert.Equal("deadline_confirm:123", components[3].CustomId);
+        Assert.All(
+            ((DiscordSelectComponent)components[0]).Options,
+            option => Assert.Matches("^(0[1-9]|1[0-2])/[0-3][0-9]$", option.Label));
+        Assert.All(
+            ((DiscordSelectComponent)components[1]).Options,
+            option => Assert.Matches("^[0-2][0-9]$", option.Value));
+        Assert.All(
+            ((DiscordSelectComponent)components[2]).Options,
+            option => Assert.Matches("^[0-5][0-9]$", option.Value));
         response.Verify(x => x.RespondWithComponentsAsync(
             "**締め切り日時を選択してください**\n",
             It.IsAny<IReadOnlyList<DiscordComponent>>()), Times.Once);

@@ -55,4 +55,14 @@ public class AiChannelServiceTests
         Assert.False(service.IsConfigured);
         Assert.False(service.IsTargetChannel(10, 20));
     }
+
+    [Fact]
+    public async Task 未設定のギルドを削除しても例外にならない()
+    {
+        var service = new AiChannelService();
+
+        await service.RemoveChannelAsync(999);
+
+        Assert.False(service.IsConfigured);
+    }
 }

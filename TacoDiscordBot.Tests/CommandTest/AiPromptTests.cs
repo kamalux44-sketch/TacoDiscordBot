@@ -20,4 +20,23 @@ public class AiPromptTests
             result
         );
     }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void 空の入力でも共通システムプロンプトを保持する(string message)
+    {
+        var result = AiPrompt.Build(message);
+
+        Assert.EndsWith("\n\n" + message, result);
+    }
+
+    [Fact]
+    public void null入力はnullを文字列化せずプロンプトを構成する()
+    {
+        var result = AiPrompt.Build(null);
+
+        Assert.EndsWith("\n\n", result);
+        Assert.DoesNotContain("null", result);
+    }
 }

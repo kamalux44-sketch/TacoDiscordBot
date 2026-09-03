@@ -67,6 +67,29 @@ public class BoCommandsTests
             ""), Times.Once);
     }
 
+    [Fact]
+    public async Task 締め切り前後の空白は除去して募集を作成する()
+    {
+        var response = CreateResponseMock();
+        var manager = new Mock<IBoManager>();
+
+        await new BoCommands().BoAsync(
+            response.Object,
+            null,
+            deadline: " 2026-08-13 01:30 ",
+            manager: manager.Object
+        );
+
+        manager.Verify(x => x.CreateSessionAsync(
+            null,
+            "",
+            0,
+            "",
+            It.Is<DateTime?>(value => value == new DateTime(2026, 8, 13, 1, 30, 0)),
+            ""), Times.Once);
+        response.Verify(x => x.EditResponseAsync(Strings.BoDeadlineInvalid), Times.Never);
+    }
+
     [Theory]
     [InlineData("2026/08/13 01:30")]
     [InlineData("2026-13-01 01:30")]
@@ -102,6 +125,26 @@ public class BoCommandsTests
 
         response.Verify(x => x.RespondAsync("募集サービスは未設定です。", true), Times.Once);
         response.Verify(x => x.DeferResponseAsync(), Times.Never);
+    }
+
+    [Fact]
+    public async Task 募集作成に失敗した場合は例外を呼び出し元へ返す()
+    {
+        var response = CreateResponseMock();
+        var manager = new Mock<IBoManager>();
+        manager.Setup(x => x.CreateSessionAsync(
+                It.IsAny<DSharpPlus.SlashCommands.InteractionContext>(),
+                It.IsAny<string>(),
+                It.IsAny<int>(),
+                It.IsAny<string>(),
+                It.IsAny<DateTime?>(),
+                It.IsAny<string>()))
+            .ThrowsAsync(new InvalidOperationException("DB error"));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            new BoCommands().BoAsync(response.Object, null, manager: manager.Object));
+
+        response.Verify(x => x.EditResponseAsync(Strings.BoCreatedConfirmation), Times.Never);
     }
 
     private static Mock<IInteractionResponseContext> CreateResponseMock()

@@ -51,6 +51,63 @@ public class AIServiceTests
     }
 
     [Fact]
+    public async Task レート制限応答ではHttpRequestExceptionを発生させる()
+    {
+        var previousKey = Environment.GetEnvironmentVariable("GEMINI_API_KEY");
+        var previousEndpoint = Environment.GetEnvironmentVariable("GEMINI_API_ENDPOINT");
+
+        try
+        {
+            Environment.SetEnvironmentVariable("GEMINI_API_KEY", "test-key");
+            Environment.SetEnvironmentVariable("GEMINI_API_ENDPOINT", "https://example.test/gemini");
+
+            var service = new AIService(
+                null,
+                null,
+                new HttpClient(new StubHttpMessageHandler((HttpStatusCode)429, "rate limited"))
+            );
+
+            var exception = await Assert.ThrowsAsync<HttpRequestException>(() =>
+                service.SendToGeminiAsync("hello"));
+
+            Assert.Contains("429", exception.Message);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("GEMINI_API_KEY", previousKey);
+            Environment.SetEnvironmentVariable("GEMINI_API_ENDPOINT", previousEndpoint);
+        }
+    }
+
+    [Fact]
+    public async Task 応答本文が存在しない場合は空文字列を返す()
+    {
+        var previousKey = Environment.GetEnvironmentVariable("GEMINI_API_KEY");
+        var previousEndpoint = Environment.GetEnvironmentVariable("GEMINI_API_ENDPOINT");
+
+        try
+        {
+            Environment.SetEnvironmentVariable("GEMINI_API_KEY", "test-key");
+            Environment.SetEnvironmentVariable("GEMINI_API_ENDPOINT", "https://example.test/gemini");
+
+            var service = new AIService(
+                null,
+                null,
+                new HttpClient(new StubHttpMessageHandler(HttpStatusCode.OK, "{}"))
+            );
+
+            var result = await service.SendToGeminiAsync("hello");
+
+            Assert.Null(result);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("GEMINI_API_KEY", previousKey);
+            Environment.SetEnvironmentVariable("GEMINI_API_ENDPOINT", previousEndpoint);
+        }
+    }
+
+    [Fact]
     public async Task APIキー未設定ではInvalidOperationExceptionを発生させる()
     {
         var previousKey = Environment.GetEnvironmentVariable("GEMINI_API_KEY");

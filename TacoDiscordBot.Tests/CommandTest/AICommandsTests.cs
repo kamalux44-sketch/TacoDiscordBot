@@ -47,6 +47,23 @@ public class AICommandsTests
     }
 
     [Fact]
+    public async Task ギルド内ではギルド別の会話履歴APIを呼び出す()
+    {
+        var context = CreateContextMock();
+        var ai = new Mock<IAiService>();
+        ai.Setup(x => x.SendToGeminiAsync(123, It.Is<string>(p => p.EndsWith("\n\n質問"))))
+            .ReturnsAsync("ギルド回答");
+
+        await new AICommands().AiAsync(context.Object, "質問", ai.Object, 123);
+
+        ai.Verify(x => x.SendToGeminiAsync(
+            123,
+            It.Is<string>(p => p.EndsWith("\n\n質問"))), Times.Once);
+        ai.Verify(x => x.SendToGeminiAsync(It.IsAny<string>()), Times.Never);
+        context.Verify(x => x.EditResponseAsync("ギルド回答"), Times.Once);
+    }
+
+    [Fact]
     public async Task AI応答が空の場合は代替メッセージを返す()
     {
         var context = CreateContextMock();
@@ -56,6 +73,20 @@ public class AICommandsTests
         await new AICommands().AiAsync(context.Object, "質問", ai.Object);
 
         context.Verify(x => x.EditResponseAsync("(応答が空でした)"), Times.Once);
+    }
+
+    [Fact]
+    public async Task 空のメッセージでもAIサービスへプロンプトを送信する()
+    {
+        var context = CreateContextMock();
+        var ai = new Mock<IAiService>();
+        ai.Setup(x => x.SendToGeminiAsync(It.Is<string>(p => p.EndsWith("\n\n"))))
+            .ReturnsAsync("回答");
+
+        await new AICommands().AiAsync(context.Object, "", ai.Object);
+
+        ai.Verify(x => x.SendToGeminiAsync(It.Is<string>(p => p.EndsWith("\n\n"))), Times.Once);
+        context.Verify(x => x.EditResponseAsync("回答"), Times.Once);
     }
 
     [Theory]

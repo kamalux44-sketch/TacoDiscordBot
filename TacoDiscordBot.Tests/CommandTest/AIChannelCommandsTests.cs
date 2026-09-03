@@ -3,6 +3,7 @@ using System.Threading.Tasks;
 using Moq;
 using TacoDiscordBot.Commands;
 using TacoDiscordBot.Contexts;
+using TacoDiscordBot.Services;
 using TacoDiscordBot.Services.Interface;
 using TacoDiscordBot.Util;
 using Xunit;
@@ -110,6 +111,17 @@ public class AIChannelCommandsTests
         response.Verify(x => x.RespondAsync(
             "このチャンネルを AI 会話チャンネルとして設定しました。 (#)",
             true), Times.Once);
+    }
+
+    [Fact]
+    public async Task チャンネル解除後は対象チャンネルではなくなる()
+    {
+        var service = new AiChannelService();
+
+        await service.SetChannelAsync(10, 20);
+        await service.RemoveChannelAsync(10);
+
+        Assert.False(service.IsTargetChannel(10, 20));
     }
 
     // 応答コンテキストのモックを作成します。

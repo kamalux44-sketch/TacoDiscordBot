@@ -123,6 +123,26 @@ public class VcRankingCommandsTests
             ));
     }
 
+    [Fact]
+    public async Task 空白の期間指定もサービスへそのまま渡す()
+    {
+        var response = CreateResponseMock();
+        var service = new Mock<IVcRankingService>();
+        service.Setup(x => x.BuildRankingEmbedAsync(10, " ", null, null))
+            .ReturnsAsync(new DiscordEmbedBuilder().WithTitle("VCランキング"));
+
+        await new VcRankingCommands().VcRankAsync(
+            response.Object,
+            10,
+            null,
+            null,
+            " ",
+            service.Object
+        );
+
+        service.Verify(x => x.BuildRankingEmbedAsync(10, " ", null, null), Times.Once);
+    }
+
     private static Mock<IInteractionResponseContext> CreateResponseMock()
     {
         var response = new Mock<IInteractionResponseContext>();
