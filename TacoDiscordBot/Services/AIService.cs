@@ -257,7 +257,7 @@ public class AIService : IAiService
         using var doc = JsonDocument.Parse(body);
 
         return new GeminiResponse(
-            ExtractResponseText(doc.RootElement) ?? body,
+            ExtractResponseText(doc.RootElement),
             ExtractInteractionId(doc.RootElement)
         );
     }
@@ -284,6 +284,9 @@ public class AIService : IAiService
             return text;
 
         if (TryExtractOutputText(root, out text))
+            return text;
+
+        if (TryExtractStepsText(root, out text))
             return text;
 
         return null;
@@ -375,6 +378,41 @@ public class AIService : IAiService
 
         text = builder.ToString();
         return true;
+    }
+
+    private static bool TryExtractStepsText(JsonElement root, out string text)
+    {
+        text = null;
+
+        if (!root.TryGetProperty("steps", out var steps)
+            || steps.ValueKind != JsonValueKind.Array)
+            return false;
+
+        foreach (var step in steps.EnumerateArray())
+        {
+            if (!step.TryGetProperty("type", out var type)
+                || type.ValueKind != JsonValueKind.String
+                || type.GetString() != "model_output"
+                || !step.TryGetProperty("content", out var content)
+                || content.ValueKind != JsonValueKind.Array)
+                continue;
+
+            var builder = new StringBuilder();
+            foreach (var item in content.EnumerateArray())
+            {
+                if (item.ValueKind == JsonValueKind.Object
+                    && item.TryGetProperty("text", out var itemText)
+                    && itemText.ValueKind == JsonValueKind.String)
+                {
+                    builder.Append(itemText.GetString());
+                }
+            }
+
+            text = builder.ToString();
+            return !string.IsNullOrWhiteSpace(text);
+        }
+
+        return false;
     }
 
     private sealed record GeminiResponse(string Text, string InteractionId);
