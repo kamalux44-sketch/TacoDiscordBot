@@ -69,20 +69,20 @@ public class VcLogService : IVcLogger
     {
         try
         {
-            var host = Environment.GetEnvironmentVariable("PGHOST");
+            var host = Environment.GetEnvironmentVariable(Strings.EnvPgHost);
 
             if (string.IsNullOrWhiteSpace(host))
                 return null;
 
-            var port = Environment.GetEnvironmentVariable("PGPORT") ?? Strings.DefaultDBPPort;
+            var port = Environment.GetEnvironmentVariable(Strings.EnvPgPort) ?? Strings.DefaultDBPPort;
 
-            var db = Environment.GetEnvironmentVariable("PGDATABASE") ?? Strings.DefaultDBName;
+            var db = Environment.GetEnvironmentVariable(Strings.EnvPgDatabase) ?? Strings.DefaultDBName;
 
-            var user = Environment.GetEnvironmentVariable("PGUSER");
+            var user = Environment.GetEnvironmentVariable(Strings.EnvPgUser);
 
-            var pass = Environment.GetEnvironmentVariable("PGPASSWORD");
+            var pass = Environment.GetEnvironmentVariable(Strings.EnvPgPassword);
 
-            var ssl = Environment.GetEnvironmentVariable("PGSSLMODE");
+            var ssl = Environment.GetEnvironmentVariable(Strings.EnvPgSslMode);
 
             var parts = new List<string> { $"Host={host}", $"Port={port}", $"Database={db}" };
 
@@ -118,20 +118,20 @@ public class VcLogService : IVcLogger
     {
         try
         {
-            var host = Environment.GetEnvironmentVariable("PGHOST");
+            var host = Environment.GetEnvironmentVariable(Strings.EnvPgHost);
 
             if (string.IsNullOrWhiteSpace(host))
                 return null;
 
-            var port = Environment.GetEnvironmentVariable("PGPORT") ?? Strings.DefaultDBPPort;
+            var port = Environment.GetEnvironmentVariable(Strings.EnvPgPort) ?? Strings.DefaultDBPPort;
 
-            var db = Environment.GetEnvironmentVariable("PGDATABASE") ?? Strings.DefaultDBName;
+            var db = Environment.GetEnvironmentVariable(Strings.EnvPgDatabase) ?? Strings.DefaultDBName;
 
-            var user = Environment.GetEnvironmentVariable("PGUSER");
+            var user = Environment.GetEnvironmentVariable(Strings.EnvPgUser);
 
-            var pass = Environment.GetEnvironmentVariable("PGPASSWORD");
+            var pass = Environment.GetEnvironmentVariable(Strings.EnvPgPassword);
 
-            var ssl = Environment.GetEnvironmentVariable("PGSSLMODE");
+            var ssl = Environment.GetEnvironmentVariable(Strings.EnvPgSslMode);
 
             var parts = new List<string> { $"Host={host}", $"Port={port}", $"Database={db}" };
 

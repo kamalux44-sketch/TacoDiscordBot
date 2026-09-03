@@ -11,6 +11,12 @@ namespace TacoDiscordBot.Tests.CommandTest;
 
 public class VcLogCommandsTests
 {
+    // ギルド外からの実行が拒否されることを検証します。
+    // VC ログ設定が有効になることを検証します。
+    // VC ログ設定が解除されることを検証します。
+    // 未設定サービス時の応答を検証します。
+    // ログ設定処理の例外が伝播することを検証します。
+
     [Fact]
     public async Task ギルド外では設定処理を行わず非公開メッセージを返す()
     {

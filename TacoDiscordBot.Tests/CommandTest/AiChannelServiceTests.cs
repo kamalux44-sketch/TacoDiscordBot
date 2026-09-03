@@ -6,6 +6,10 @@ namespace TacoDiscordBot.Tests.CommandTest;
 
 public class AiChannelServiceTests
 {
+    // 初期状態で対象チャンネルが未設定であることを検証します。
+    // 設定後に対象判定が有効になることを検証します。
+    // 同一ギルドの設定更新を検証します。
+    // 設定解除後に対象判定が無効になることを検証します。
     [Fact]
     public void 初期状態ではAIチャンネルが未設定である()
     {

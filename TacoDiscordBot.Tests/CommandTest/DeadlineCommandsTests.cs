@@ -12,6 +12,10 @@ namespace TacoDiscordBot.Tests.CommandTest;
 
 public class DeadlineCommandsTests
 {
+    // 締切選択用コンポーネントが正しく構成されることを検証します。
+    // ユーザー ID が無効な場合の扱いを検証します。
+    // 応答処理の例外が伝播することを検証します。
+
     [Fact]
     public async Task 正常な場合は日付時刻選択UIを返す()
     {

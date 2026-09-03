@@ -12,6 +12,12 @@ namespace TacoDiscordBot.Tests.CommandTest;
 
 public class VcRankingCommandsTests
 {
+    // 指定期間のランキング表示を検証します。
+    // 期間未指定時の既定動作を検証します。
+    // ギルド外からの実行が拒否されることを検証します。
+    // ランキングサービス未設定時の応答を検証します。
+    // ランキング取得時の例外が伝播することを検証します。
+
     [Fact]
     public async Task 正常な期間指定ではランキングを取得してEmbedを返す()
     {

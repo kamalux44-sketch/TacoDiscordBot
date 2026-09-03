@@ -9,6 +9,11 @@ namespace TacoDiscordBot.Tests.CommandTest;
 
 public class RepositoryTests
 {
+    // VC ログ関連 SQL の構成を検証します。
+    // VC ランキング関連 SQL の構成を検証します。
+    // 募集関連 SQL の構成を検証します。
+    // 接続文字列未設定時の扱いを検証します。
+
     [Fact]
     public async Task VCログテーブル作成SQLを実行する()
     {

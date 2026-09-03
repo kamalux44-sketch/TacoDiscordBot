@@ -8,6 +8,10 @@ namespace TacoDiscordBot.Tests.CommandTest;
 
 public class AiTalkRepositoryTests
 {
+    // AI 会話テーブルの作成処理を検証します。
+    // 対象チャンネル削除用 SQL の構成を検証します。
+    // 対象チャンネル登録・更新用 SQL の構成を検証します。
+
     [Fact]
     public async Task テーブル作成SQLを実行する()
     {

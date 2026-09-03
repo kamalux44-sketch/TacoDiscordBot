@@ -5,6 +5,7 @@ namespace TacoDiscordBot.Tests;
 
 public class AiPromptTests
 {
+    // ユーザー入力へ共通システムプロンプトが付加されることを検証します。
     [Fact]
     public void 通常メッセージに共通システムプロンプトを付加する()
     {

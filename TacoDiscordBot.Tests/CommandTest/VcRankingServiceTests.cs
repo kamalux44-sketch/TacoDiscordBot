@@ -6,6 +6,8 @@ namespace TacoDiscordBot.Tests.CommandTest;
 
 public class VcRankingServiceTests
 {
+    // DB 未設定時でもランキング Embed を生成できることを検証します。
+    // 音声状態更新を安全に終了できることを検証します。
     [Fact]
     public async Task DB未設定の場合はエラー内容を含むランキングEmbedを返す()
     {

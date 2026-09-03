@@ -11,6 +11,7 @@ namespace TacoDiscordBot.Tests.CommandTest;
 
 public class AIChannelCommandsTests
 {
+    // ギルド外からの設定要求が拒否されることを検証します。
     [Fact]
     public async Task ギルド外では設定処理を行わず非公開メッセージを返す()
     {
@@ -29,6 +30,7 @@ public class AIChannelCommandsTests
         service.Verify(x => x.SetChannelAsync(It.IsAny<ulong>(), It.IsAny<ulong>()), Times.Never);
     }
 
+    // サービス未設定時にエラー応答が返ることを検証します。
     [Fact]
     public async Task サービス未設定の場合は非公開エラーを返す()
     {
@@ -47,6 +49,7 @@ public class AIChannelCommandsTests
             false), Times.Once);
     }
 
+    // 正常なチャンネル設定と完了応答を検証します。
     [Fact]
     public async Task 正常な場合は現在のチャンネルを設定して完了メッセージを返す()
     {
@@ -67,6 +70,7 @@ public class AIChannelCommandsTests
             true), Times.Once);
     }
 
+    // 設定処理の例外が呼び出し元へ伝播することを検証します。
     [Fact]
     public async Task チャンネル設定に失敗した場合は例外を呼び出し元へ返す()
     {
@@ -87,6 +91,7 @@ public class AIChannelCommandsTests
         response.Verify(x => x.RespondAsync(It.IsAny<string>(), It.IsAny<bool>()), Times.Never);
     }
 
+    // チャンネル名が空でも設定処理が継続されることを検証します。
     [Fact]
     public async Task チャンネル名が空でも設定処理を実行する()
     {
@@ -107,6 +112,7 @@ public class AIChannelCommandsTests
             true), Times.Once);
     }
 
+    // 応答コンテキストのモックを作成します。
     private static Mock<IInteractionResponseContext> CreateResponseMock()
     {
         var response = new Mock<IInteractionResponseContext>();

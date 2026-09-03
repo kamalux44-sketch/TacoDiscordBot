@@ -183,46 +183,46 @@ public sealed class VcRankingService : IVcRankingService
 
         if (repo == null)
         {
-            embed.WithTitle("VCランキング").WithDescription(Strings.VcRankingDbNotSet);
+            embed.WithTitle(Strings.VcRankingTitle).WithDescription(Strings.VcRankingDbNotSet);
 
             return embed;
         }
 
         DateTime? since = null;
-        string periodLabel = "全期間";
+        string periodLabel = Strings.RankingPeriodAllLabel;
         var now = DateTime.UtcNow;
 
-        switch ((period ?? "day").ToLowerInvariant())
+        switch ((period ?? Strings.RankingPeriodDay).ToLowerInvariant())
         {
-            case "day":
+            case Strings.RankingPeriodDay:
                 since = now.AddDays(-1);
-                periodLabel = "過去 1 日";
+                periodLabel = Strings.RankingPeriodDayLabel;
                 break;
 
-            case "week":
+            case Strings.RankingPeriodWeek:
                 since = now.AddDays(-7);
-                periodLabel = "過去 1 週間";
+                periodLabel = Strings.RankingPeriodWeekLabel;
                 break;
 
-            case "month":
+            case Strings.RankingPeriodMonth:
                 since = now.AddMonths(-1);
-                periodLabel = "過去 1 か月";
+                periodLabel = Strings.RankingPeriodMonthLabel;
                 break;
 
-            case "all":
+            case Strings.RankingPeriodAll:
                 since = null;
-                periodLabel = "全期間";
+                periodLabel = Strings.RankingPeriodAllLabel;
                 break;
 
             default:
-                embed.WithTitle("VCランキング").WithDescription(Strings.VcRankingInvalidPeriod);
+                embed.WithTitle(Strings.VcRankingTitle).WithDescription(Strings.VcRankingInvalidPeriod);
 
                 return embed;
         }
 
         var ranks = await repo.GetRankingAsync(guildId, since);
 
-        embed.WithTitle($"📣VC 滞在時間ランキング ({periodLabel})");
+        embed.WithTitle(string.Format(Strings.VcRankingEmbedTitleFormat, periodLabel));
 
         if (ranks == null || ranks.Count == 0)
         {
@@ -238,7 +238,7 @@ public sealed class VcRankingService : IVcRankingService
 
         sb.AppendLine(Strings.VcRankingSeparator);
 
-        sb.AppendLine($"{periodLabel}のVC滞在時間ランキングです！");
+        sb.AppendLine(string.Format(Strings.VcRankingDescriptionFormat, periodLabel));
 
         sb.AppendLine();
 
@@ -318,7 +318,7 @@ public sealed class VcRankingService : IVcRankingService
 
             var um = (userTotal % 3600) / 60;
 
-            sb.AppendLine("👤 あなた");
+            sb.AppendLine(Strings.VcRankingCurrentUser);
 
             sb.AppendLine($"{userRankIndex}位　{uh}時間{um:D2}分");
         }
@@ -336,20 +336,20 @@ public sealed class VcRankingService : IVcRankingService
     {
         try
         {
-            var host = Environment.GetEnvironmentVariable("PGHOST");
+            var host = Environment.GetEnvironmentVariable(Strings.EnvPgHost);
 
             if (string.IsNullOrWhiteSpace(host))
                 return null;
 
-            var port = Environment.GetEnvironmentVariable("PGPORT") ?? Strings.DefaultDBPPort;
+            var port = Environment.GetEnvironmentVariable(Strings.EnvPgPort) ?? Strings.DefaultDBPPort;
 
-            var db = Environment.GetEnvironmentVariable("PGDATABASE") ?? Strings.DefaultDBName;
+            var db = Environment.GetEnvironmentVariable(Strings.EnvPgDatabase) ?? Strings.DefaultDBName;
 
-            var user = Environment.GetEnvironmentVariable("PGUSER");
+            var user = Environment.GetEnvironmentVariable(Strings.EnvPgUser);
 
-            var pass = Environment.GetEnvironmentVariable("PGPASSWORD");
+            var pass = Environment.GetEnvironmentVariable(Strings.EnvPgPassword);
 
-            var ssl = Environment.GetEnvironmentVariable("PGSSLMODE");
+            var ssl = Environment.GetEnvironmentVariable(Strings.EnvPgSslMode);
 
             var parts = new List<string> { $"Host={host}", $"Port={port}", $"Database={db}" };
 

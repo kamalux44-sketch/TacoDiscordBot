@@ -10,6 +10,9 @@ namespace TacoDiscordBot.Tests.CommandTest;
 
 public class AIServiceTests
 {
+    // Gemini の候補および出力形式から本文を取得できることを検証します。
+    // API キー未設定時に適切な例外となることを検証します。
+    // Forbidden 応答を認証エラーとして扱うことを検証します。
     [Fact]
     public async Task candidates形式の応答本文を取得できる()
     {
@@ -129,6 +132,7 @@ public class AIServiceTests
         }
     }
 
+    // HTTP 呼び出しを固定応答へ差し替えるテスト用ハンドラーです。
     private sealed class StubHttpMessageHandler : HttpMessageHandler
     {
         private readonly HttpStatusCode _statusCode;

@@ -5,6 +5,7 @@ namespace TacoDiscordBot;
 
 public static class Program
 {
+    // Bot のエントリーポイントとしてホストを起動します。
     public static async Task Main()
     {
         try

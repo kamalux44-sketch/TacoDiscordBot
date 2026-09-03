@@ -14,69 +14,83 @@ namespace TacoDiscordBot.Commands;
 public class AICommands : ApplicationCommandModule
 {
     [SlashCommand("ai", "AI にメッセージを送信し応答を受け取ります。")]
+    // Slash Command の入力をサービス呼び出しへ渡します。
     public async Task Ai(
         InteractionContext ctx,
         [Option("message", "AI に送信するメッセージ")] string message
     )
     {
-        await AiAsync(new InteractionResponseContext(ctx), message, BotHost.AiService);
+        // テスト可能なコンテキストへ変換して AI 応答処理を実行します。
+        await AiAsync(
+            new InteractionResponseContext(ctx),
+            message,
+            BotHost.AiService,
+            ctx.Guild?.Id ?? 0UL
+        );
     }
 
     public async Task AiAsync(
         IInteractionResponseContext context,
         string message,
-        IAiService aiService
+        IAiService aiService,
+        ulong guildId = 0UL
     )
     {
+        // AI サービスの状態を確認し、未設定の場合はエラーを返します。
         if (aiService == null)
         {
             await context.RespondAsync(
-                "AI サービスは未設定です。管理者が GEMINI_API_KEY を設定しているか確認してください。",
+                Strings.AiServiceNotSet,
                 true
             );
 
             return;
         }
 
+        // 応答を遅延させてから AI への問い合わせを開始します。
         await context.DeferResponseAsync();
 
         var combined = AiPrompt.Build(message);
 
         string reply;
 
+        // ギルド単位の会話履歴を考慮して AI の応答を取得します。
         try
         {
-            reply = await aiService.SendToGeminiAsync(combined);
+            reply = guildId == 0UL
+                ? await aiService.SendToGeminiAsync(combined)
+                : await aiService.SendToGeminiAsync(guildId, combined);
         }
         catch (InvalidOperationException ex)
         {
             Logger.Error(ex, "AICommands.Ai: InvalidOperationException");
 
             await context.EditResponseAsync(
-                "Gemini API キーが設定されていません。環境変数 GEMINI_API_KEY を設定してください。"
+                Strings.GeminiApiKeyNotSet
             );
 
             return;
         }
         catch (UnauthorizedAccessException)
         {
-                await context.EditResponseAsync("Gemini API キーが無効または権限がありません。");
+                await context.EditResponseAsync(Strings.GeminiApiKeyInvalid);
 
             return;
         }
         catch (HttpRequestException ex)
         {
             var content = ex.Message.Contains("429")
-                ? "Gemini API がレート制限されました。しばらくしてから再度お試しください。"
-                : $"Gemini API エラー: {ex.Message}";
+                ? Strings.GeminiRateLimited
+                : $"{Strings.GeminiApiErrorPrefix}{ex.Message}";
 
             await context.EditResponseAsync(content);
 
             return;
         }
 
+        // 空の応答をユーザー向けの既定メッセージへ置き換えます。
         if (string.IsNullOrWhiteSpace(reply))
-            reply = "(応答が空でした)";
+            reply = Strings.AiEmptyResponse;
 
         await context.EditResponseAsync(reply);
     }

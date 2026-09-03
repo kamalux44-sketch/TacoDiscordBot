@@ -1,7 +1,9 @@
 using System;
+using System.Collections.Concurrent;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using DSharpPlus;
 using DSharpPlus.Entities;
@@ -16,6 +18,8 @@ public class AIService : IAiService
 {
     private readonly IAiChannelService _channelService;
     private readonly HttpClient _http;
+    private readonly ConcurrentDictionary<ulong, string> _latestInteractionIds = new();
+    private readonly ConcurrentDictionary<ulong, SemaphoreSlim> _guildLocks = new();
 
     public AIService(
         DiscordClient client,
@@ -72,13 +76,13 @@ public class AIService : IAiService
 
         try
         {
-            reply = await SendToGeminiAsync(AiPrompt.Build(input));
+            reply = await SendToGeminiAsync(guildId, AiPrompt.Build(input));
         }
         catch (InvalidOperationException ex)
         {
             Logger.Error(ex, "AIService: API キー未設定");
             await msg.Channel.SendMessageAsync(
-                "Gemini API キーが設定されていません。環境変数 GEMINI_API_KEY を設定してください。"
+                Strings.GeminiApiKeyNotSet
             );
 
             return;
@@ -86,7 +90,7 @@ public class AIService : IAiService
         catch (UnauthorizedAccessException ex)
         {
             Logger.Error(ex, "AIService: Gemini API の認証に失敗");
-            await msg.Channel.SendMessageAsync("Gemini API キーが無効または権限がありません。");
+            await msg.Channel.SendMessageAsync(Strings.GeminiApiKeyInvalid);
 
             return;
         }
@@ -96,12 +100,12 @@ public class AIService : IAiService
             if (ex.Message.Contains("429"))
             {
                 await msg.Channel.SendMessageAsync(
-                    "Gemini API がレート制限されました。しばらくしてから再度お試しください。"
+                    Strings.GeminiRateLimited
                 );
             }
             else
             {
-                await msg.Channel.SendMessageAsync($"Gemini API エラー: {ex.Message}");
+                await msg.Channel.SendMessageAsync($"{Strings.GeminiApiErrorPrefix}{ex.Message}");
             }
 
             return;
@@ -110,7 +114,7 @@ public class AIService : IAiService
         if (string.IsNullOrWhiteSpace(reply))
         {
             await msg.Channel.SendMessageAsync(
-                "AI 応答を取得できませんでした。後でもう一度試してください。"
+                Strings.AiResponseUnavailable
             );
 
             return;
@@ -121,8 +125,63 @@ public class AIService : IAiService
 
     public async Task<string> SendToGeminiAsync(string prompt)
     {
+        var response = await SendToGeminiCoreAsync(prompt, null);
+        return response.Text;
+    }
+
+    public async Task<string> SendToGeminiAsync(ulong guildId, string prompt)
+    {
+        var guildLock = _guildLocks.GetOrAdd(guildId, _ => new SemaphoreSlim(1, 1));
+        await guildLock.WaitAsync();
+
+        try
+        {
+            _latestInteractionIds.TryGetValue(guildId, out var previousInteractionId);
+
+            try
+            {
+                return await SendAndStoreInteractionAsync(
+                    guildId,
+                    prompt,
+                    previousInteractionId
+                );
+            }
+            catch (PreviousInteractionExpiredException)
+            {
+                // 期限切れの履歴を削除し、新しい会話として一度だけ再試行します。
+                _latestInteractionIds.TryRemove(guildId, out _);
+                return await SendAndStoreInteractionAsync(guildId, prompt, null);
+            }
+        }
+        finally
+        {
+            guildLock.Release();
+        }
+    }
+
+    private async Task<string> SendAndStoreInteractionAsync(
+        ulong guildId,
+        string prompt,
+        string previousInteractionId
+    )
+    {
+        var response = await SendToGeminiCoreAsync(prompt, previousInteractionId);
+
+        if (!string.IsNullOrWhiteSpace(response.InteractionId))
+        {
+            _latestInteractionIds[guildId] = response.InteractionId;
+        }
+
+        return response.Text;
+    }
+
+    private async Task<GeminiResponse> SendToGeminiCoreAsync(
+        string prompt,
+        string previousInteractionId
+    )
+    {
         // 環境変数から API 設定を取得し、Gemini の応答本文を抽出します。
-        var key = Environment.GetEnvironmentVariable("GEMINI_API_KEY");
+        var key = Environment.GetEnvironmentVariable(Strings.EnvGeminiApiKey);
 
         Logger.Info(
             "SendToGeminiAsync: GEMINI_API_KEY present={ApiKeyPresent} length={ApiKeyLength}",
@@ -137,25 +196,30 @@ public class AIService : IAiService
             );
         }
 
-        var model = Environment.GetEnvironmentVariable("GEMINI_MODEL") ?? "gemini-3.1-flash-lite";
+        var model = Environment.GetEnvironmentVariable(Strings.EnvGeminiModel) ?? Strings.DefaultGeminiModel;
 
-        var endpoint = Environment.GetEnvironmentVariable("GEMINI_API_ENDPOINT");
+        var endpoint = Environment.GetEnvironmentVariable(Strings.EnvGeminiApiEndpoint);
 
         if (string.IsNullOrWhiteSpace(endpoint))
         {
             endpoint =
                 $"https://generativelanguage.googleapis.com/"
-                + $"v1beta/models/{model}:generateContent"
+                + "v1beta/interactions"
                 + $"?key={Uri.EscapeDataString(key)}";
         }
 
-        var reqObj = new
+        var requestProperties = new Dictionary<string, object>
         {
-            contents = new[] { new { parts = new[] { new { text = prompt } } } },
-            generationConfig = new { temperature = 0.7, maxOutputTokens = 1000 },
+            ["model"] = model,
+            ["input"] = prompt,
         };
 
-        var json = JsonSerializer.Serialize(reqObj);
+        if (!string.IsNullOrWhiteSpace(previousInteractionId))
+        {
+            requestProperties["previous_interaction_id"] = previousInteractionId;
+        }
+
+        var json = JsonSerializer.Serialize(requestProperties);
 
         using var request = new HttpRequestMessage(HttpMethod.Post, endpoint);
 
@@ -166,6 +230,14 @@ public class AIService : IAiService
 
         if (!resp.IsSuccessStatusCode)
         {
+            if (!string.IsNullOrWhiteSpace(previousInteractionId)
+                && (resp.StatusCode == System.Net.HttpStatusCode.BadRequest
+                    || resp.StatusCode == System.Net.HttpStatusCode.NotFound
+                    || resp.StatusCode == System.Net.HttpStatusCode.Gone))
+            {
+                throw new PreviousInteractionExpiredException();
+            }
+
             if ((int)resp.StatusCode == 429)
             {
                 throw new HttpRequestException("Rate limited by Gemini API (429)");
@@ -183,7 +255,26 @@ public class AIService : IAiService
 
         using var doc = JsonDocument.Parse(body);
 
-        return ExtractResponseText(doc.RootElement) ?? body;
+        return new GeminiResponse(
+            ExtractResponseText(doc.RootElement) ?? body,
+            ExtractInteractionId(doc.RootElement)
+        );
+    }
+
+    private static string ExtractInteractionId(JsonElement root)
+    {
+        if (root.TryGetProperty("interaction", out var interaction)
+            && interaction.ValueKind == JsonValueKind.Object
+            && interaction.TryGetProperty("id", out var nestedId)
+            && nestedId.ValueKind == JsonValueKind.String)
+        {
+            return nestedId.GetString();
+        }
+
+        if (root.TryGetProperty("id", out var id) && id.ValueKind == JsonValueKind.String)
+            return id.GetString();
+
+        return null;
     }
 
     private static string ExtractResponseText(JsonElement root)
@@ -247,7 +338,17 @@ public class AIService : IAiService
         if (!root.TryGetProperty("output", out var output)
             || output.ValueKind != JsonValueKind.Array
             || output.GetArrayLength() == 0
-            || !output[0].TryGetProperty("content", out var content))
+        )
+            return false;
+
+        if (output[0].TryGetProperty("text", out var outputText)
+            && outputText.ValueKind == JsonValueKind.String)
+        {
+            text = outputText.GetString();
+            return true;
+        }
+
+        if (!output[0].TryGetProperty("content", out var content))
             return false;
 
         if (content.ValueKind == JsonValueKind.String)
@@ -265,9 +366,17 @@ public class AIService : IAiService
         {
             if (item.ValueKind == JsonValueKind.String)
                 builder.Append(item.GetString());
+            else if (item.ValueKind == JsonValueKind.Object
+                && item.TryGetProperty("text", out var itemText)
+                && itemText.ValueKind == JsonValueKind.String)
+                builder.Append(itemText.GetString());
         }
 
         text = builder.ToString();
         return true;
     }
+
+    private sealed record GeminiResponse(string Text, string InteractionId);
+
+    private sealed class PreviousInteractionExpiredException : HttpRequestException { }
 }

@@ -11,6 +11,13 @@ namespace TacoDiscordBot.Tests.CommandTest;
 
 public class AICommandsTests
 {
+    // AI サービス未設定時のエラー応答を検証します。
+    // AI 応答成功時のメッセージ更新を検証します。
+    // 空の AI 応答が既定メッセージへ置換されることを検証します。
+    // 認証エラー時のユーザー向け応答を検証します。
+    // レート制限時のユーザー向け応答を検証します。
+    // その他の HTTP エラー時の応答を検証します。
+
     [Fact]
     public async Task サービス未設定の場合は非公開のエラーを返す()
     {

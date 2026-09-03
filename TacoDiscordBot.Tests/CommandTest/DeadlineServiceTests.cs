@@ -9,6 +9,8 @@ namespace TacoDiscordBot.Tests.CommandTest;
 
 public class DeadlineServiceTests
 {
+    // 締切所有者が未設定の場合に安全に終了することを検証します。
+    // インタラクションが null の場合に安全に終了することを検証します。
     [Fact]
     public void 所有者がnullの場合は例外を発生させる()
     {

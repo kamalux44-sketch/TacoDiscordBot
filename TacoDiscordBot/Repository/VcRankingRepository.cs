@@ -208,7 +208,7 @@ WHERE id = @id;";
         Logger.Info(
             "VcRankingRepository: ランキング取得 guild={GuildId} since={Since}",
             guildId,
-            sinceUtc?.ToString("o") ?? "all"
+            sinceUtc?.ToString("o") ?? Strings.RankingPeriodAll
         );
 
         await _base.UseConnectionAsync(async conn =>

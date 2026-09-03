@@ -6,6 +6,11 @@ namespace TacoDiscordBot.Tests.CommandTest;
 
 public class VcLoggerTests
 {
+    // レガシー設定の初期状態を検証します。
+    // ログ出力先の設定を検証します。
+    // 設定状態の切替を検証します。
+    // 非同期の設定・削除処理を検証します。
+
     [Fact]
     public void 初期状態ではレガシーVCログが未設定である()
     {

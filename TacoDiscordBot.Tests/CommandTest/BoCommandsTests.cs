@@ -11,6 +11,11 @@ namespace TacoDiscordBot.Tests.CommandTest;
 
 public class BoCommandsTests
 {
+    // 正常な募集が作成されることを検証します。
+    // 締切未指定の募集作成を検証します。
+    // 不正な締切入力が拒否されることを検証します。
+    // 募集サービス未設定時の応答を検証します。
+
     [Fact]
     public async Task 正常な入力の場合は募集を作成して完了メッセージを返す()
     {

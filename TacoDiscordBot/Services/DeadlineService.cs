@@ -84,16 +84,16 @@ public class DeadlineService
         {
             switch (action)
             {
-                case "deadline_date":
+                case Strings.DeadlineDateComponent:
                     return await HandleDateAsync(e);
 
-                case "deadline_hour":
+                case Strings.DeadlineHourComponent:
                     return await HandleHourAsync(e);
 
-                case "deadline_min":
+                case Strings.DeadlineMinuteComponent:
                     return await HandleMinuteAsync(e);
 
-                case "deadline_confirm":
+                case Strings.DeadlineConfirmComponent:
                     return await HandleConfirmAsync(e);
 
                 default:

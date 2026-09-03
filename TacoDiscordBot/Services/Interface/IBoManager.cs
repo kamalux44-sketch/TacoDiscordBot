@@ -8,11 +8,13 @@ namespace TacoDiscordBot.Services.Interface;
 
 public interface IBoManager
 {
+    // 募集に関するコンポーネント操作を処理します。
     Task HandleComponentInteraction(
         DiscordClient client,
         ComponentInteractionCreateEventArgs e
     );
 
+    // 新しい募集セッションを作成します。
     Task CreateSessionAsync(
         InteractionContext context,
         string body,

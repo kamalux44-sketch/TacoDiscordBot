@@ -42,7 +42,7 @@ public class AIChannelCommands : ApplicationCommandModule
         if (service == null)
         {
             await response.RespondAsync(
-                "AI サービスは未設定です。管理者が DB と GEMINI_API_KEY を設定しているか確認してください。"
+                Strings.AiChannelServiceNotSet
             );
 
             return;

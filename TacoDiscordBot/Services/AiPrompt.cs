@@ -9,6 +9,7 @@ public static class AiPrompt
 
     public static string Build(string message)
     {
+        // 共通のシステム指示とユーザー入力を AI 用のプロンプトにまとめます。
         return SystemPrompt + "\n\n" + message;
     }
 }

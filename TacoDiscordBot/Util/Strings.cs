@@ -11,6 +11,17 @@ public static class Strings
     // --- 全般 ---
     public const string EnvTokenMissing =
         "Environment variable DISCORD_TOKEN is not set. Set it to your bot token.";
+    public const string EnvDiscordToken = "DISCORD_TOKEN";
+    public const string EnvGeminiApiKey = "GEMINI_API_KEY";
+    public const string EnvGeminiApiEndpoint = "GEMINI_API_ENDPOINT";
+    public const string EnvGeminiModel = "GEMINI_MODEL";
+    public const string EnvPgHost = "PGHOST";
+    public const string EnvPgPort = "PGPORT";
+    public const string EnvPgDatabase = "PGDATABASE";
+    public const string EnvPgUser = "PGUSER";
+    public const string EnvPgPassword = "PGPASSWORD";
+    public const string EnvPgSslMode = "PGSSLMODE";
+    public const string DefaultGeminiModel = "gemini-3.1-flash-lite";
 
     // デフォルトの接続情報は、環境変数が設定されていない場合に使用されます。
     public const string DefaultDBName = "postgres";
@@ -39,11 +50,44 @@ public static class Strings
         "順位データがありません。注意: サーバー内でVCログが有効になっているか確認してください。";
     public const string VcRankingHeader = "👑 VCランキング";
     public const string VcRankingSeparator = "━━━━━━━━━━━━━━━━━━";
+    public const string VcRankingTitle = "VCランキング";
+    public const string VcRankingEmbedTitleFormat = "📣VC 滞在時間ランキング ({0})";
+    public const string VcRankingDescriptionFormat = "{0}のVC滞在時間ランキングです！";
+    public const string VcRankingCurrentUser = "👤 あなた";
+    public const string VcRankingServiceNotSet = "VCランキングサービスは未設定です。";
+    public const string VcLogServiceNotSet = "VCログサービスは未設定です。";
+    public const string RankingPeriodDay = "day";
+    public const string RankingPeriodWeek = "week";
+    public const string RankingPeriodMonth = "month";
+    public const string RankingPeriodAll = "all";
+    public const string RankingPeriodAllLabel = "全期間";
+    public const string RankingPeriodDayLabel = "過去 1 日";
+    public const string RankingPeriodWeekLabel = "過去 1 週間";
+    public const string RankingPeriodMonthLabel = "過去 1 か月";
+    public const string DeadlineDateComponent = "deadline_date";
+    public const string DeadlineHourComponent = "deadline_hour";
+    public const string DeadlineMinuteComponent = "deadline_min";
+    public const string DeadlineConfirmComponent = "deadline_confirm";
 
     // BO（募集）用メッセージ
     public const string BoDeadlineInvalid =
         "締め切りの日時が正しくありません。\n以下の形式で入力してください：\n`2026-08-13 01:30`";
     public const string BoCreatedConfirmation = "募集を作成しました。";
+
+    // AI 用メッセージ
+    public const string AiServiceNotSet =
+        "AI サービスは未設定です。管理者が GEMINI_API_KEY を設定しているか確認してください。";
+    public const string AiChannelServiceNotSet =
+        "AI サービスは未設定です。管理者が DB と GEMINI_API_KEY を設定しているか確認してください。";
+    public const string GeminiApiKeyNotSet =
+        "Gemini API キーが設定されていません。環境変数 GEMINI_API_KEY を設定してください。";
+    public const string GeminiApiKeyInvalid = "Gemini API キーが無効または権限がありません。";
+    public const string GeminiRateLimited =
+        "Gemini API がレート制限されました。しばらくしてから再度お試しください。";
+    public const string GeminiApiErrorPrefix = "Gemini API エラー: ";
+    public const string AiEmptyResponse = "(応答が空でした)";
+    public const string AiResponseUnavailable =
+        "AI 応答を取得できませんでした。後でもう一度試してください。";
 
     // --- BO（募集） ---
     public const string EmbedTitle = "募集";
