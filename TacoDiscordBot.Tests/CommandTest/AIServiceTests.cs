@@ -51,6 +51,39 @@ public class AIServiceTests
     }
 
     [Fact]
+    public async Task サーバーエラーではレスポンス本文を例外メッセージに含めない()
+    {
+        var previousKey = Environment.GetEnvironmentVariable("GEMINI_API_KEY");
+        var previousEndpoint = Environment.GetEnvironmentVariable("GEMINI_API_ENDPOINT");
+
+        try
+        {
+            Environment.SetEnvironmentVariable("GEMINI_API_KEY", "test-key");
+            Environment.SetEnvironmentVariable("GEMINI_API_ENDPOINT", "https://example.test/gemini");
+
+            var service = new AIService(
+                null,
+                null,
+                new HttpClient(new StubHttpMessageHandler(
+                    HttpStatusCode.InternalServerError,
+                    "{\"error\":{\"message\":\"internal details\"}}"
+                ))
+            );
+
+            var exception = await Assert.ThrowsAsync<HttpRequestException>(() =>
+                service.SendToGeminiAsync("hello"));
+
+            Assert.Equal(HttpStatusCode.InternalServerError, exception.StatusCode);
+            Assert.DoesNotContain("internal details", exception.Message);
+        }
+        finally
+        {
+            Environment.SetEnvironmentVariable("GEMINI_API_KEY", previousKey);
+            Environment.SetEnvironmentVariable("GEMINI_API_ENDPOINT", previousEndpoint);
+        }
+    }
+
+    [Fact]
     public async Task レート制限応答ではHttpRequestExceptionを発生させる()
     {
         var previousKey = Environment.GetEnvironmentVariable("GEMINI_API_KEY");

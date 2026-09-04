@@ -353,4 +353,98 @@ GROUP BY
 
         return list;
     }
+
+    public async Task<BoSession> LoadActiveSessionAsync(string sessionId)
+    {
+        // 指定された募集を DB から読み込み、再起動後の操作に備えます。
+        var sql =
+            @"
+SELECT
+    s.session_id,
+    s.message_id,
+    s.channel_id,
+    s.body,
+    s.at,
+    s.rank,
+    s.deadline_raw,
+    s.deadline_utc,
+    s.description,
+    s.owner_id,
+    s.is_closed,
+    s.created_at,
+    COALESCE(
+        array_agg(bp.user_id ORDER BY bp.id)
+        FILTER (WHERE bp.user_id IS NOT NULL),
+        ARRAY[]::bigint[]
+    ) AS participants
+FROM bo_sessions s
+LEFT JOIN bo_participants bp
+    ON bp.session_id = s.session_id
+WHERE s.session_id = @sid
+  AND s.is_closed = false
+GROUP BY
+    s.session_id,
+    s.message_id,
+    s.channel_id,
+    s.body,
+    s.at,
+    s.rank,
+    s.deadline_raw,
+    s.deadline_utc,
+    s.description,
+    s.owner_id,
+    s.is_closed,
+    s.created_at;";
+
+        BoSession session = null;
+
+        await _base.UseConnectionAsync(async conn =>
+        {
+            dynamic cmd = conn.CreateCommand();
+            cmd.CommandText = sql;
+            cmd.Parameters.AddWithValue("@sid", sessionId);
+
+            dynamic reader = await cmd.ExecuteReaderAsync();
+
+            if (!await reader.ReadAsync())
+            {
+                await reader.DisposeAsync();
+                return;
+            }
+
+            session = new BoSession
+            {
+                SessionId = reader.GetString(0),
+                MessageId = (ulong)reader.GetInt64(1),
+                ChannelId = (ulong)reader.GetInt64(2),
+                Body = reader.IsDBNull(3) ? string.Empty : reader.GetString(3),
+                At = reader.GetInt32(4),
+                Rank = reader.IsDBNull(5) ? string.Empty : reader.GetString(5),
+                DeadlineRaw = reader.IsDBNull(6) ? string.Empty : reader.GetString(6),
+                Deadline = reader.IsDBNull(7) ? null : reader.GetDateTime(7),
+                Description = reader.IsDBNull(8) ? string.Empty : reader.GetString(8),
+                OwnerId = (ulong)reader.GetInt64(9),
+                IsClosed = reader.GetBoolean(10),
+                CreatedAt = reader.GetDateTime(11),
+                Participants = new List<ulong>(),
+            };
+
+            if (!reader.IsDBNull(12))
+            {
+                var participants = reader.GetValue(12);
+
+                if (participants is long[] participantIds)
+                {
+                    foreach (var userId in participantIds)
+                    {
+                        session.Participants.Add((ulong)userId);
+                    }
+                }
+            }
+
+            await reader.DisposeAsync();
+        });
+
+        return session;
+    }
 }

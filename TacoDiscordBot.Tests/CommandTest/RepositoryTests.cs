@@ -76,6 +76,31 @@ public class RepositoryTests
     }
 
     [Fact]
+    public async Task 募集テーブル作成SQLを実行する()
+    {
+        var baseRepository = CreateBaseRepository();
+        var repository = new BoRepository(baseRepository.Object);
+
+        await repository.EnsureTablesExistAsync();
+
+        baseRepository.Verify(x => x.ExecuteNonQueryAsync(It.Is<string>(sql =>
+            sql.Contains("CREATE TABLE IF NOT EXISTS bo_sessions")
+            && sql.Contains("CREATE TABLE IF NOT EXISTS bo_participants"))), Times.Once);
+    }
+
+    [Fact]
+    public async Task DBに存在しない有効な募集はnullを返す()
+    {
+        var baseRepository = CreateBaseRepository();
+        var repository = new BoRepository(baseRepository.Object);
+
+        var result = await repository.LoadActiveSessionAsync("session-1");
+
+        Assert.Null(result);
+        baseRepository.Verify(x => x.UseConnectionAsync(It.IsAny<Func<dynamic, Task>>()), Times.Once);
+    }
+
+    [Fact]
     public void BaseRepositoryのnull接続文字列を拒否する()
     {
         Assert.Throws<ArgumentNullException>(() => new BaseRepository(null));

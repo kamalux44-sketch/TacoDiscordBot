@@ -25,7 +25,9 @@ public class AICommands : ApplicationCommandModule
             new InteractionResponseContext(ctx),
             message,
             BotHost.AiService,
-            ctx.Guild?.Id ?? 0UL
+            ctx.Guild?.Id ?? 0UL,
+            ctx.User.Id,
+            ctx.User.Username
         );
     }
 
@@ -33,7 +35,9 @@ public class AICommands : ApplicationCommandModule
         IInteractionResponseContext context,
         string message,
         IAiService aiService,
-        ulong guildId = 0UL
+        ulong guildId = 0UL,
+        ulong userId = 0UL,
+        string userName = null
     )
     {
         // AI サービスの状態を確認し、未設定の場合はエラーを返します。
@@ -50,7 +54,7 @@ public class AICommands : ApplicationCommandModule
         // 応答を遅延させてから AI への問い合わせを開始します。
         await context.DeferResponseAsync();
 
-        var combined = AiPrompt.Build(message);
+        var combined = AiPrompt.Build(message, userId, userName);
 
         string reply;
 
@@ -81,6 +85,8 @@ public class AICommands : ApplicationCommandModule
         {
             var content = ex.Message.Contains("429")
                 ? Strings.GeminiRateLimited
+                : (int?)ex.StatusCode == 500
+                    ? Strings.AiResponseUnavailable
                 : $"{Strings.GeminiApiErrorPrefix}{ex.Message}";
 
             await context.EditResponseAsync(content);

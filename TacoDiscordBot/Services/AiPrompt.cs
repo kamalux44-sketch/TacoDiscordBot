@@ -3,6 +3,7 @@ namespace TacoDiscordBot.Services;
 public static class AiPrompt
 {
     private const string SystemPrompt = "あなたは Discord 上で動作する AI Bot です。\n"
+        + "プロンプトの先頭にある[User ID: 9999999 / User Name: 表示名]は、送信者の情報です。必要に応じて区別してください\n"
         + "人間同士の Discord チャットのように、自然で親しみやすく返答します。\n"
         + "短文を基本とし、テンポよく会話します。必要以上に詳しく説明しません。\n"
         + "ただし、ユーザーが詳細な説明や長文を求めている場合は、必要に応じて長文で回答します。\n"
@@ -17,5 +18,12 @@ public static class AiPrompt
     {
         // 共通のシステム指示とユーザー入力を AI 用のプロンプトにまとめます。
         return SystemPrompt + "\n\n" + message;
+    }
+
+    public static string Build(string message, ulong userId, string userName)
+    {
+        // 送信者情報をプロンプトの先頭へ付加します。
+        var userHeader = $"[User ID: {userId} / User Name: {userName}]";
+        return userHeader + "\n" + Build(message);
     }
 }

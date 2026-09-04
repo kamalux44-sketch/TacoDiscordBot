@@ -77,7 +77,10 @@ public class AIService : IAiService
 
         try
         {
-            reply = await SendToGeminiAsync(guildId, AiPrompt.Build(input));
+            reply = await SendToGeminiAsync(
+                guildId,
+                AiPrompt.Build(input, msg.Author.Id, msg.Author.Username)
+            );
         }
         catch (InvalidOperationException ex)
         {
@@ -103,6 +106,10 @@ public class AIService : IAiService
                 await msg.Channel.SendMessageAsync(
                     Strings.GeminiRateLimited
                 );
+            }
+            else if ((int?)ex.StatusCode == 500)
+            {
+                await msg.Channel.SendMessageAsync(Strings.AiResponseUnavailable);
             }
             else
             {
@@ -251,7 +258,11 @@ public class AIService : IAiService
                 );
             }
 
-            throw new HttpRequestException($"Gemini API returned {(int)resp.StatusCode}: {body}");
+            throw new HttpRequestException(
+                $"Gemini API returned {(int)resp.StatusCode}",
+                null,
+                resp.StatusCode
+            );
         }
 
         using var doc = JsonDocument.Parse(body);

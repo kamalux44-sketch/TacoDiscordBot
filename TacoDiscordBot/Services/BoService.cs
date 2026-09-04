@@ -257,7 +257,20 @@ public class BoService : IBoManager, IDeadlineOwner
         if (!TryParseBoInteraction(id, out var action, out var sessionId))
             return;
 
-        if (!_sessions.TryGetValue(sessionId, out var session))
+        _sessions.TryGetValue(sessionId, out var session);
+
+        if (session == null && _repo != null)
+        {
+            // 再起動などでメモリにない募集を DB から復元します。
+            session = await _repo.LoadActiveSessionAsync(sessionId);
+
+            if (session != null)
+            {
+                _sessions[session.SessionId] = session;
+            }
+        }
+
+        if (session == null)
         {
             await CreateResponseAsync(e, "募集が見つかりませんでした。");
 

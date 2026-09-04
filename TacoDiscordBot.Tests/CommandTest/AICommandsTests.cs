@@ -5,6 +5,7 @@ using Moq;
 using TacoDiscordBot.Commands;
 using TacoDiscordBot.Contexts;
 using TacoDiscordBot.Services.Interface;
+using TacoDiscordBot.Util;
 using Xunit;
 
 namespace TacoDiscordBot.Tests.CommandTest;
@@ -132,6 +133,23 @@ public class AICommandsTests
         await new AICommands().AiAsync(context.Object, "質問", ai.Object);
 
         context.Verify(x => x.EditResponseAsync("Gemini API エラー: server error"), Times.Once);
+    }
+
+    [Fact]
+    public async Task Geminiが500を返した場合はJSONではなくシステムメッセージを返す()
+    {
+        var context = CreateContextMock();
+        var ai = new Mock<IAiService>();
+        ai.Setup(x => x.SendToGeminiAsync(It.IsAny<string>()))
+            .ThrowsAsync(new HttpRequestException(
+                "Gemini API returned 500",
+                null,
+                System.Net.HttpStatusCode.InternalServerError
+            ));
+
+        await new AICommands().AiAsync(context.Object, "質問", ai.Object);
+
+        context.Verify(x => x.EditResponseAsync(Strings.AiResponseUnavailable), Times.Once);
     }
 
     private static Mock<IInteractionResponseContext> CreateContextMock()
