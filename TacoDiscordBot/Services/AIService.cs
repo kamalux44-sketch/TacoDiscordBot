@@ -77,9 +77,18 @@ public class AIService : IAiService
 
         try
         {
+            // サーバー内で設定された表示名を取得し、取得できない場合はユーザー名を使用します。
+            var userName = msg.Author.Username;
+            var guildMember = await e.Guild.GetMemberAsync(msg.Author.Id);
+
+            if (!string.IsNullOrWhiteSpace(guildMember?.DisplayName))
+            {
+                userName = guildMember.DisplayName;
+            }
+
             reply = await SendToGeminiAsync(
                 guildId,
-                AiPrompt.Build(input, msg.Author.Id, msg.Author.Username)
+                AiPrompt.Build(input, msg.Author.Id, userName)
             );
         }
         catch (InvalidOperationException ex)
