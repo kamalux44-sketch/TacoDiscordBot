@@ -136,10 +136,13 @@ public sealed class BirthdayService
 
     private static string CreateMessage(BirthdayRecord record, int currentYear)
     {
-        var ageMessage = record.Year.HasValue ? $"{currentYear - record.Year.Value}歳の" : string.Empty;
+        var ageMessage = record.Year.HasValue ? $"（{currentYear - record.Year.Value}歳）" : string.Empty;
+        var congratulations = Strings.congratulations[
+            Random.Shared.Next(Strings.congratulations.Length)
+        ].Replace("@ユーザー", $"<@{record.UserId}>{ageMessage}", StringComparison.Ordinal);
         var additionalMessage = Strings.birthdayMessages[Random.Shared.Next(Strings.birthdayMessages.Length)];
 
-        return $"<@{record.UserId}> {ageMessage}誕生日おめでとう！{additionalMessage}";
+        return $"{congratulations}\n{additionalMessage}";
     }
 
     private static TimeSpan GetDelayUntilNextDay(DateTime japanNow)
