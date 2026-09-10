@@ -6,7 +6,7 @@ using DSharpPlus.SlashCommands;
 
 namespace TacoDiscordBot.Services.Interface;
 
-public interface IBoManager
+public interface IBoService
 {
     // 募集に関するコンポーネント操作を処理します。
     Task HandleComponentInteraction(

@@ -41,7 +41,7 @@ public class BoCommands : ApplicationCommandModule
         string rank = "",
         string deadline = "",
         string description = "",
-        IBoManager manager = null
+        IBoService manager = null
     )
     {
         manager ??= BotHost.BoManager;

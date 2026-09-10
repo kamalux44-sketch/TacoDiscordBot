@@ -14,7 +14,7 @@ using TacoDiscordBot.Util;
 
 namespace TacoDiscordBot.Services;
 
-public class BoService : IBoManager, IDeadlineOwner
+public class BoService : IBoService, IDeadlineService
 {
     // 募集の作成、参加、取消、終了を管理します。
     // メモリ上でセッションを管理し、永続化はオプションで BoRepository を通じて行います。

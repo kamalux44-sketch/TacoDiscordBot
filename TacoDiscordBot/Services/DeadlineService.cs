@@ -13,7 +13,7 @@ namespace TacoDiscordBot.Services;
 
 public class DeadlineService
 {
-    private readonly IDeadlineOwner _owner;
+    private readonly IDeadlineService _owner;
     private readonly ConcurrentDictionary<ulong, DeadlineSelection> _selections = new();
 
     private sealed class DeadlineSelection
@@ -25,7 +25,7 @@ public class DeadlineService
         public int Minute { get; set; }
     }
 
-    public DeadlineService(IDeadlineOwner owner)
+    public DeadlineService(IDeadlineService owner)
     {
         _owner = owner ?? throw new ArgumentNullException(nameof(owner));
 

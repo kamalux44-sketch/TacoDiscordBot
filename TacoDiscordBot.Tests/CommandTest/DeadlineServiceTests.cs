@@ -24,7 +24,7 @@ public class DeadlineServiceTests
     [Fact]
     public async Task nullのインタラクションは対象外として扱う()
     {
-        var owner = new Mock<IDeadlineOwner>();
+        var owner = new Mock<IDeadlineService>();
         var service = new DeadlineService(owner.Object);
 
         var result = await service.HandleInteractionAsync(null);
@@ -37,7 +37,7 @@ public class DeadlineServiceTests
     [Fact]
     public async Task 締切操作の形式が不正な場合は対象として処理する()
     {
-        var owner = new Mock<IDeadlineOwner>();
+        var owner = new Mock<IDeadlineService>();
         var service = new DeadlineService(owner.Object);
 
         var result = await service.HandleInteractionAsync(CreateInteraction("deadline_invalid", 123));
@@ -50,7 +50,7 @@ public class DeadlineServiceTests
     [Fact]
     public async Task 締切操作を別ユーザーが実行した場合は拒否する()
     {
-        var owner = new Mock<IDeadlineOwner>();
+        var owner = new Mock<IDeadlineService>();
         var service = new DeadlineService(owner.Object);
 
         var result = await service.HandleInteractionAsync(CreateInteraction("deadline_date:123", 456));
@@ -63,7 +63,7 @@ public class DeadlineServiceTests
     [Fact]
     public async Task 未対応の締切操作は対象外として扱う()
     {
-        var owner = new Mock<IDeadlineOwner>();
+        var owner = new Mock<IDeadlineService>();
         var service = new DeadlineService(owner.Object);
 
         var result = await service.HandleInteractionAsync(CreateInteraction("deadline_unknown:123", 123));

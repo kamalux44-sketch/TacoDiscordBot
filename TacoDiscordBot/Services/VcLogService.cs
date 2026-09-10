@@ -12,7 +12,7 @@ using TacoDiscordBot.Util;
 
 namespace TacoDiscordBot.Services;
 
-public class VcLogService : IVcLogger
+public class VcLogService : IVcLogService
 {
     // ギルドごとのターゲットは DB に保存されます。
     // 利用できない場合はレガシーな単一チャンネル環境変数を使用します。

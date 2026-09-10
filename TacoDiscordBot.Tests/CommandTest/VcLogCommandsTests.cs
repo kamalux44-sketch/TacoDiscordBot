@@ -21,7 +21,7 @@ public class VcLogCommandsTests
     public async Task ギルド外では設定処理を行わず非公開メッセージを返す()
     {
         var response = CreateResponseMock();
-        var logger = new Mock<IVcLogger>();
+        var logger = new Mock<IVcLogService>();
 
         await new VcLogCommands().VcLogAsync(response.Object, 0, 123, logger.Object);
 
@@ -34,7 +34,7 @@ public class VcLogCommandsTests
     public async Task 未設定のギルドでは現在のチャンネルを設定して有効化メッセージを返す()
     {
         var response = CreateResponseMock();
-        var logger = new Mock<IVcLogger>();
+        var logger = new Mock<IVcLogService>();
         logger.Setup(x => x.IsConfiguredForGuild(10)).Returns(false);
 
         await new VcLogCommands().VcLogAsync(response.Object, 10, 123, logger.Object);
@@ -48,7 +48,7 @@ public class VcLogCommandsTests
     public async Task 設定済みのギルドでは設定を削除して無効化メッセージを返す()
     {
         var response = CreateResponseMock();
-        var logger = new Mock<IVcLogger>();
+        var logger = new Mock<IVcLogService>();
         logger.Setup(x => x.IsConfiguredForGuild(10)).Returns(true);
 
         await new VcLogCommands().VcLogAsync(response.Object, 10, 123, logger.Object);
@@ -73,7 +73,7 @@ public class VcLogCommandsTests
     public async Task チャンネル設定に失敗した場合は例外を呼び出し元へ返す()
     {
         var response = CreateResponseMock();
-        var logger = new Mock<IVcLogger>();
+        var logger = new Mock<IVcLogService>();
         logger.Setup(x => x.IsConfiguredForGuild(10)).Returns(false);
         logger.Setup(x => x.SetChannelAsync(10, 123))
             .ThrowsAsync(new InvalidOperationException("DB error"));

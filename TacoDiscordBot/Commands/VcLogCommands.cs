@@ -26,7 +26,7 @@ public class VcLogCommands : ApplicationCommandModule
         IInteractionResponseContext response,
         ulong guildId,
         ulong channelId,
-        IVcLogger logger
+        IVcLogService logger
     )
     {
         // ギルド専用コマンドであることを確認します。

@@ -4,7 +4,7 @@ using DSharpPlus.EventArgs;
 
 namespace TacoDiscordBot.Services.Interface;
 
-public interface IVcLogger
+public interface IVcLogService
 {
     // ギルドに VC ログが設定されているか判定します。
     bool IsConfiguredForGuild(ulong guildId);

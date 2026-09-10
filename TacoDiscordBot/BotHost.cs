@@ -10,15 +10,17 @@ public static class BotHost
 {
     public static DiscordClient Client { get; private set; }
 
-    public static IVcLogger VcLogger { get; private set; }
+    public static IVcLogService VcLogger { get; private set; }
 
     public static IVcRankingService VcRankingService { get; private set; }
 
-    public static IBoManager BoManager { get; private set; }
+    public static IBoService BoManager { get; private set; }
 
     public static IAiChannelService AiChannelService { get; private set; }
 
     public static IAiService AiService { get; private set; }
+
+    public static Services.BirthdayService BirthdayService { get; private set; }
 
     public static async Task RunAsync()
     {
@@ -72,6 +74,7 @@ public static class BotHost
             Repository.VcRankingRepository vrankRepo = null;
             Repository.BoRepository boRepo = null;
             Repository.AiTalkRepository aiRepo = null;
+            Repository.BirthdayRepository birthdayRepo = null;
 
             var host = Environment.GetEnvironmentVariable(Strings.EnvPgHost);
 
@@ -128,6 +131,8 @@ public static class BotHost
 
                         boRepo = new Repository.BoRepository(baseRepo);
 
+                        birthdayRepo = new Repository.BirthdayRepository(baseRepo);
+
                         // すべてのリポジトリについて
                         // テーブルの存在確認と作成を行う
                         try
@@ -144,6 +149,8 @@ public static class BotHost
                             aiRepo = new Repository.AiTalkRepository(baseRepo);
 
                             aiRepo.EnsureTableExistsAsync().GetAwaiter().GetResult();
+
+                            birthdayRepo.EnsureTablesExistAsync().GetAwaiter().GetResult();
 
                             Logger.Info("BotHost: DB テーブル確認・作成完了");
                         }
@@ -193,6 +200,14 @@ public static class BotHost
 
             Logger.Info("BotHost: AIService 作成完了");
 
+            BirthdayService = birthdayRepo == null
+                ? null
+                : new Services.BirthdayService(Client, birthdayRepo);
+
+            BirthdayService?.StartDailyPosting();
+
+            Logger.Info("BotHost: BirthdayService 作成完了");
+
             // VC ログ
             Client.VoiceStateUpdated += VcLogger.HandleVoiceStateUpdated;
 
@@ -236,6 +251,10 @@ public static class BotHost
             slash.RegisterCommands<Commands.DeadlineCommands>();
 
             Logger.Info("BotHost: DeadlineCommands 登録完了");
+
+            slash.RegisterCommands<Commands.BirthdayCommands>();
+
+            Logger.Info("BotHost: BirthdayCommands 登録完了");
 
             Logger.Info("BotHost: Discord へ接続開始");
 

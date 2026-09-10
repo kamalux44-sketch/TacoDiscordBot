@@ -20,7 +20,7 @@ public class BoCommandsTests
     public async Task 正常な入力の場合は募集を作成して完了メッセージを返す()
     {
         var response = CreateResponseMock();
-        var manager = new Mock<IBoManager>();
+        var manager = new Mock<IBoService>();
 
         await new BoCommands().BoAsync(
             response.Object,
@@ -50,7 +50,7 @@ public class BoCommandsTests
     public async Task 締め切りが空の場合は締め切りなしで募集を作成する()
     {
         var response = CreateResponseMock();
-        var manager = new Mock<IBoManager>();
+        var manager = new Mock<IBoService>();
 
         await new BoCommands().BoAsync(
             response.Object,
@@ -71,7 +71,7 @@ public class BoCommandsTests
     public async Task 締め切り前後の空白は除去して募集を作成する()
     {
         var response = CreateResponseMock();
-        var manager = new Mock<IBoManager>();
+        var manager = new Mock<IBoService>();
 
         await new BoCommands().BoAsync(
             response.Object,
@@ -97,7 +97,7 @@ public class BoCommandsTests
     public async Task 締め切り形式が不正な場合は募集を作成しない(string deadline)
     {
         var response = CreateResponseMock();
-        var manager = new Mock<IBoManager>();
+        var manager = new Mock<IBoService>();
 
         await new BoCommands().BoAsync(
             response.Object,
@@ -131,7 +131,7 @@ public class BoCommandsTests
     public async Task 募集作成に失敗した場合は例外を呼び出し元へ返す()
     {
         var response = CreateResponseMock();
-        var manager = new Mock<IBoManager>();
+        var manager = new Mock<IBoService>();
         manager.Setup(x => x.CreateSessionAsync(
                 It.IsAny<DSharpPlus.SlashCommands.InteractionContext>(),
                 It.IsAny<string>(),
