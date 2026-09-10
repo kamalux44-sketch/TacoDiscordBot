@@ -25,6 +25,15 @@ public sealed class InteractionResponseContext : IInteractionResponseContext
         );
     }
 
+    public async Task RespondAsync(DiscordEmbed embed, bool ephemeral = false)
+    {
+        // Embedを使った公開範囲指定付きの初回応答を作成します。
+        await _context.CreateResponseAsync(
+            InteractionResponseType.ChannelMessageWithSource,
+            new DiscordInteractionResponseBuilder().AddEmbed(embed).AsEphemeral(ephemeral)
+        );
+    }
+
     public async Task DeferResponseAsync()
     {
         // Discord に遅延応答を通知します。

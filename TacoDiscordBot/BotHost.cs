@@ -22,6 +22,8 @@ public static class BotHost
 
     public static Services.BirthdayService BirthdayService { get; private set; }
 
+    public static Services.SlotService SlotService { get; private set; }
+
     public static async Task RunAsync()
     {
         try
@@ -75,6 +77,7 @@ public static class BotHost
             Repository.BoRepository boRepo = null;
             Repository.AiTalkRepository aiRepo = null;
             Repository.BirthdayRepository birthdayRepo = null;
+            Repository.SlotRepository slotRepo = null;
 
             var host = Environment.GetEnvironmentVariable(Strings.EnvPgHost);
 
@@ -132,6 +135,7 @@ public static class BotHost
                         boRepo = new Repository.BoRepository(baseRepo);
 
                         birthdayRepo = new Repository.BirthdayRepository(baseRepo);
+                        slotRepo = new Repository.SlotRepository(baseRepo);
 
                         // すべてのリポジトリについて
                         // テーブルの存在確認と作成を行う
@@ -151,6 +155,8 @@ public static class BotHost
                             aiRepo.EnsureTableExistsAsync().GetAwaiter().GetResult();
 
                             birthdayRepo.EnsureTablesExistAsync().GetAwaiter().GetResult();
+
+                            slotRepo.EnsureTablesExistAsync().GetAwaiter().GetResult();
 
                             Logger.Info("BotHost: DB テーブル確認・作成完了");
                         }
@@ -208,6 +214,10 @@ public static class BotHost
 
             Logger.Info("BotHost: BirthdayService 作成完了");
 
+            SlotService = slotRepo == null ? null : new Services.SlotService(slotRepo);
+
+            Logger.Info("BotHost: SlotService 作成完了");
+
             // VC ログ
             Client.VoiceStateUpdated += VcLogger.HandleVoiceStateUpdated;
 
@@ -255,6 +265,10 @@ public static class BotHost
             slash.RegisterCommands<Commands.BirthdayCommands>();
 
             Logger.Info("BotHost: BirthdayCommands 登録完了");
+
+            slash.RegisterCommands<Commands.SlotCommands>();
+
+            Logger.Info("BotHost: SlotCommands 登録完了");
 
             Logger.Info("BotHost: Discord へ接続開始");
 

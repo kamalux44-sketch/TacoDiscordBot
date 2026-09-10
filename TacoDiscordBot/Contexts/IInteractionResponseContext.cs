@@ -9,6 +9,9 @@ public interface IInteractionResponseContext
     // 通常のメッセージ応答を作成します。
     Task RespondAsync(string content, bool ephemeral = false);
 
+    // Embed を使った初回応答を作成します。
+    Task RespondAsync(DiscordEmbed embed, bool ephemeral = false);
+
     // 応答を遅延させ、後続処理の時間を確保します。
     Task DeferResponseAsync();
 
