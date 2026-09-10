@@ -24,21 +24,30 @@ public sealed class BirthdayService
 
     public async Task<string?> RegisterAsync(ulong userId, int? year, int month, int day)
     {
+        Logger.Info("BirthdayService: 誕生日登録開始 user={UserId} year={Year} month={Month} day={Day}",
+            userId, year, month, day);
+
         var validationError = Validate(year, month, day);
         if (validationError != null)
+        {
+            Logger.Info("BirthdayService: 誕生日登録の入力検証失敗 user={UserId} reason={Reason}", userId, validationError);
             return validationError;
+        }
 
         await _repository.UpsertAsync(userId, year, month, day);
+        Logger.Info("BirthdayService: 誕生日登録完了 user={UserId}", userId);
         return null;
     }
 
     public Task SetChannelAsync(ulong guildId, ulong channelId)
     {
+        Logger.Info("BirthdayService: 投稿先設定開始 guild={GuildId} channel={ChannelId}", guildId, channelId);
         return _repository.SetChannelAsync(guildId, channelId);
     }
 
     public void StartDailyPosting()
     {
+        Logger.Info("BirthdayService: 日次投稿処理を開始します");
         _ = Task.Run(RunDailyPostingAsync);
     }
 
@@ -69,8 +78,11 @@ public sealed class BirthdayService
             try
             {
                 var now = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, _japanTimeZone);
+                Logger.Info("BirthdayService: 日次投稿処理実行 date={Date}", now.ToString("yyyy-MM-dd"));
                 await PostBirthdaysAsync(now);
-                await Task.Delay(GetDelayUntilNextDay(now));
+                var delay = GetDelayUntilNextDay(now);
+                Logger.Info("BirthdayService: 次回実行まで待機 duration={Duration}", delay);
+                await Task.Delay(delay);
             }
             catch (Exception ex)
             {
@@ -84,27 +96,38 @@ public sealed class BirthdayService
     {
         var records = await _repository.GetByMonthAndDayAsync(japanNow.Month, japanNow.Day);
         var channelIds = await _repository.GetChannelIdsAsync();
+        Logger.Info("BirthdayService: 投稿対象取得 date={Date} users={UserCount} channels={ChannelCount}",
+            japanNow.ToString("yyyy-MM-dd"), records.Count, channelIds.Count);
 
         foreach (var channelId in channelIds)
         {
             var channel = await _client.GetChannelAsync(channelId);
             if (!channel.GuildId.HasValue)
+            {
+                Logger.Info("BirthdayService: ギルドに属さないチャンネルをスキップ channel={ChannelId}", channelId);
                 continue;
+            }
 
             foreach (var record in records)
             {
                 if (!await _repository.TryRecordPostAsync(channel.GuildId.Value, record.UserId, japanNow.Year))
+                {
+                    Logger.Info("BirthdayService: 投稿済みのためスキップ guild={GuildId} user={UserId} year={Year}",
+                        channel.GuildId.Value, record.UserId, japanNow.Year);
                     continue;
+                }
 
                 var message = CreateMessage(record, japanNow.Year);
                 try
                 {
                     await channel.SendMessageAsync(message);
+                    Logger.Info("BirthdayService: 誕生日メッセージ送信完了 guild={GuildId} channel={ChannelId} user={UserId}",
+                        channel.GuildId.Value, channelId, record.UserId);
                 }
-                catch
+                catch (Exception ex)
                 {
                     await _repository.RemovePostAsync(channel.GuildId.Value, record.UserId, japanNow.Year);
-                    Logger.Error(new InvalidOperationException("誕生日メッセージの送信に失敗しました。"),
+                    Logger.Error(ex,
                         "BirthdayService: 投稿失敗 channel={ChannelId} user={UserId}", channelId, record.UserId);
                 }
             }

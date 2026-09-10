@@ -17,6 +17,7 @@ public sealed class BirthdayRepository
 
     public async Task EnsureTablesExistAsync()
     {
+        Logger.Info("BirthdayRepository: テーブル確認・作成開始");
         const string sql = """
             CREATE TABLE IF NOT EXISTS birthdays (
                 user_id BIGINT PRIMARY KEY,
@@ -40,10 +41,13 @@ public sealed class BirthdayRepository
             """;
 
         await _base.ExecuteNonQueryAsync(sql);
+        Logger.Info("BirthdayRepository: テーブル確認・作成完了");
     }
 
     public async Task UpsertAsync(ulong userId, int? year, int month, int day)
     {
+        Logger.Info("BirthdayRepository: 誕生日を登録または更新 user={UserId} year={Year} month={Month} day={Day}",
+            userId, year, month, day);
         var yearSql = year.HasValue ? year.Value.ToString() : "NULL";
         var sql = $"""
             INSERT INTO birthdays(user_id, year, month, day)
@@ -55,10 +59,12 @@ public sealed class BirthdayRepository
             """;
 
         await _base.ExecuteNonQueryAsync(sql);
+        Logger.Info("BirthdayRepository: 誕生日の登録または更新完了 user={UserId}", userId);
     }
 
     public async Task SetChannelAsync(ulong guildId, ulong channelId)
     {
+        Logger.Info("BirthdayRepository: 投稿先を登録または更新 guild={GuildId} channel={ChannelId}", guildId, channelId);
         var sql = $"""
             INSERT INTO birthday_channels(guild_id, channel_id)
             VALUES ({(long)guildId}, {(long)channelId})
@@ -66,6 +72,7 @@ public sealed class BirthdayRepository
             """;
 
         await _base.ExecuteNonQueryAsync(sql);
+        Logger.Info("BirthdayRepository: 投稿先の登録または更新完了 guild={GuildId}", guildId);
     }
 
     public async Task<IReadOnlyList<ulong>> GetChannelIdsAsync()
@@ -87,6 +94,7 @@ public sealed class BirthdayRepository
             await reader.DisposeAsync();
         });
 
+        Logger.Info("BirthdayRepository: 投稿先取得完了 count={Count}", channelIds.Count);
         return channelIds;
     }
 
@@ -116,6 +124,8 @@ public sealed class BirthdayRepository
             await reader.DisposeAsync();
         });
 
+        Logger.Info("BirthdayRepository: 誕生日対象取得完了 month={Month} day={Day} count={Count}",
+            month, day, records.Count);
         return records;
     }
 
@@ -135,6 +145,8 @@ public sealed class BirthdayRepository
             inserted = await command.ExecuteNonQueryAsync() > 0;
         });
 
+        Logger.Info("BirthdayRepository: 投稿済み記録結果 guild={GuildId} user={UserId} year={Year} inserted={Inserted}",
+            guildId, userId, birthdayYear, inserted);
         return inserted;
     }
 
@@ -148,5 +160,7 @@ public sealed class BirthdayRepository
             """;
 
         await _base.ExecuteNonQueryAsync(sql);
+        Logger.Info("BirthdayRepository: 投稿済み記録を削除 guild={GuildId} user={UserId} year={Year}",
+            guildId, userId, birthdayYear);
     }
 }

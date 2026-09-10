@@ -4,6 +4,7 @@ using DSharpPlus.Entities;
 using DSharpPlus.SlashCommands;
 using TacoDiscordBot.Contexts;
 using TacoDiscordBot.Services;
+using TacoDiscordBot.Util;
 
 namespace TacoDiscordBot.Commands;
 
@@ -18,6 +19,16 @@ public sealed class BirthdayCommands : ApplicationCommandModule
         [Option("year", "誕生年（任意）")] long? year = null
     )
     {
+        Logger.Info(
+            "Birthday command invoked guild={GuildId} user={InvokerId} target={TargetUserId} year={Year} month={Month} day={Day}",
+            ctx.Guild?.Id,
+            ctx.User.Id,
+            user?.Id ?? ctx.User.Id,
+            year,
+            month,
+            day
+        );
+
         if (ctx.Guild == null)
         {
             await new InteractionResponseContext(ctx).RespondAsync(Strings.CommandGuildOnly, true);
@@ -35,6 +46,11 @@ public sealed class BirthdayCommands : ApplicationCommandModule
         int? targetYear = year.HasValue ? checked((int)year.Value) : null;
         var error = await service.RegisterAsync(targetUserId, targetYear, checked((int)month), checked((int)day));
 
+        if (error != null)
+            Logger.Info("Birthday registration rejected user={UserId} reason={Reason}", targetUserId, error);
+        else
+            Logger.Info("Birthday registration completed user={UserId}", targetUserId);
+
         await new InteractionResponseContext(ctx).RespondAsync(
             error ?? $"<@{targetUserId}> の誕生日を登録しました。",
             true
@@ -44,6 +60,13 @@ public sealed class BirthdayCommands : ApplicationCommandModule
     [SlashCommand("birthdaychannel", "誕生日メッセージの投稿先をこのチャンネルに設定します")]
     public async Task BirthdayChannel(InteractionContext ctx)
     {
+        Logger.Info(
+            "Birthday channel command invoked guild={GuildId} channel={ChannelId} user={UserId}",
+            ctx.Guild?.Id,
+            ctx.Channel.Id,
+            ctx.User.Id
+        );
+
         if (ctx.Guild == null)
         {
             await new InteractionResponseContext(ctx).RespondAsync(Strings.CommandGuildOnly, true);
@@ -58,6 +81,7 @@ public sealed class BirthdayCommands : ApplicationCommandModule
         }
 
         await service.SetChannelAsync(ctx.Guild.Id, ctx.Channel.Id);
+        Logger.Info("Birthday channel setting completed guild={GuildId} channel={ChannelId}", ctx.Guild.Id, ctx.Channel.Id);
         await new InteractionResponseContext(ctx).RespondAsync(
             "誕生日メッセージの投稿先をこのチャンネルに設定しました。",
             true
