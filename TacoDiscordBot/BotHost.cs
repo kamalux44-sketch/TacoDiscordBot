@@ -28,6 +28,8 @@ public static class BotHost
 
     public static Services.BlackjackService BlackjackService { get; private set; }
 
+    public static Services.DoubleUpService DoubleUpService { get; private set; }
+
     public static Services.VcExchangeService VcExchangeService { get; private set; }
 
     public static async Task RunAsync()
@@ -236,6 +238,10 @@ public static class BotHost
                 ? null
                 : new Services.BlackjackService(CoinService);
 
+            DoubleUpService = CoinService == null
+                ? null
+                : new Services.DoubleUpService(CoinService);
+
             SlotService = slotRepo == null || CoinService == null
                 ? null
                 : new Services.SlotService(slotRepo, CoinService);
@@ -258,6 +264,8 @@ public static class BotHost
             Client.ComponentInteractionCreated += BoManager.HandleComponentInteraction;
 
             Client.ComponentInteractionCreated += Commands.BlackjackCommands.HandleComponentInteractionAsync;
+
+            Client.ComponentInteractionCreated += Commands.DoubleUpCommands.HandleComponentInteractionAsync;
 
             Client.ComponentInteractionCreated += Commands.CoinCommands.HandleExchangeComponentInteractionAsync;
 
@@ -303,6 +311,8 @@ public static class BotHost
             Logger.Info("BotHost: SlotCommands 登録完了");
 
             slash.RegisterCommands<Commands.BlackjackCommands>();
+
+            slash.RegisterCommands<Commands.DoubleUpCommands>();
 
             slash.RegisterCommands<Commands.CoinCommands>();
 
