@@ -222,6 +222,14 @@ public static class BotHost
 
             Logger.Info("BotHost: BirthdayService 作成完了");
 
+            CoinService = userDataRepo == null
+                ? null
+                : new Services.CoinService(userDataRepo);
+
+            BlackjackService = CoinService == null
+                ? null
+                : new Services.BlackjackService(CoinService);
+
             SlotService = slotRepo == null || CoinService == null
                 ? null
                 : new Services.SlotService(slotRepo, CoinService);
