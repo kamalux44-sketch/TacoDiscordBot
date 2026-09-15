@@ -12,28 +12,29 @@ namespace TacoDiscordBot.Services;
 public sealed class BlackjackService
 {
     private readonly ICoinService _coinService;
-    private readonly ConcurrentDictionary<ulong, BlackjackGame> _games = new();
+    private readonly ConcurrentDictionary<string, BlackjackGame> _games = new();
 
     public BlackjackService(ICoinService coinService)
     {
         _coinService = coinService ?? throw new ArgumentNullException(nameof(coinService));
     }
 
-    public async Task<BlackjackResult> StartAsync(ulong userId, long bet)
+    public async Task<BlackjackResult> StartAsync(ulong guildId, ulong userId, long bet)
     {
         ValidateBet(bet);
-        if (_games.ContainsKey(userId))
+        var gameKey = CreateGameKey(guildId, userId);
+        if (_games.ContainsKey(gameKey))
             throw new InvalidOperationException("⚠️ 現在ブラックジャックをプレイ中です。\n先に現在のゲームを終了してください。");
 
-        await _coinService.RemoveCoinsAsync(userId, bet);
+        await _coinService.RemoveCoinsAsync(guildId, userId, bet);
         var deck = CreateShuffledDeck();
         var playerCards = new[] { deck.Dequeue(), deck.Dequeue() };
         var dealerCards = new[] { deck.Dequeue(), deck.Dequeue() };
-        var game = new BlackjackGame(userId, bet, playerCards, dealerCards, deck);
+        var game = new BlackjackGame(guildId, userId, bet, playerCards, dealerCards, deck);
 
-        if (!_games.TryAdd(userId, game))
+        if (!_games.TryAdd(gameKey, game))
         {
-            await _coinService.AddCoinsAsync(userId, bet);
+            await _coinService.AddCoinsAsync(guildId, userId, bet);
             throw new InvalidOperationException("⚠️ 現在ブラックジャックをプレイ中です。");
         }
 
@@ -43,9 +44,9 @@ public sealed class BlackjackService
         return CreateResult(game, false, "あなたのターンです。", 0);
     }
 
-    public async Task<BlackjackResult> HitAsync(ulong userId)
+    public async Task<BlackjackResult> HitAsync(ulong guildId, ulong userId)
     {
-        if (!_games.TryGetValue(userId, out var game))
+        if (!_games.TryGetValue(CreateGameKey(guildId, userId), out var game))
             throw new InvalidOperationException("このブラックジャックゲームは終了しています。");
 
         lock (game)
@@ -62,9 +63,9 @@ public sealed class BlackjackService
         return CreateResult(game, false, "もう一度カードを引くか、STANDしてください。", 0);
     }
 
-    public async Task<BlackjackResult> StandAsync(ulong userId)
+    public async Task<BlackjackResult> StandAsync(ulong guildId, ulong userId)
     {
-        if (!_games.TryGetValue(userId, out var game))
+        if (!_games.TryGetValue(CreateGameKey(guildId, userId), out var game))
             throw new InvalidOperationException("このブラックジャックゲームは終了しています。");
 
         lock (game)
@@ -85,8 +86,6 @@ public sealed class BlackjackService
         return await FinishAsync(game, outcome);
     }
 
-    public bool IsOwner(ulong userId, ulong gameOwnerId) => userId == gameOwnerId && _games.ContainsKey(gameOwnerId);
-
     public static int CalculateTotal(IReadOnlyList<BlackjackCard> cards)
     {
         var total = cards.Sum(card => card.BaseValue);
@@ -105,7 +104,7 @@ public sealed class BlackjackService
             game.IsFinished = true;
         }
 
-        _games.TryRemove(game.UserId, out _);
+        _games.TryRemove(CreateGameKey(game.GuildId, game.UserId), out _);
         var payout = outcome switch
         {
             BlackjackOutcome.Blackjack => game.Bet * 3 / 2,
@@ -114,7 +113,7 @@ public sealed class BlackjackService
             _ => 0
         };
         if (payout > 0)
-            await _coinService.AddCoinsAsync(game.UserId, payout);
+            await _coinService.AddCoinsAsync(game.GuildId, game.UserId, payout);
 
         var message = outcome switch
         {
@@ -125,6 +124,8 @@ public sealed class BlackjackService
         };
         return CreateResult(game, true, message, payout);
     }
+
+    private static string CreateGameKey(ulong guildId, ulong userId) => $"{guildId}:{userId}";
 
     private static BlackjackResult CreateResult(BlackjackGame game, bool finished, string message, long payout)
     {

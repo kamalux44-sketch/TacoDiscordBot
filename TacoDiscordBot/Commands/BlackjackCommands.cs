@@ -16,6 +16,12 @@ public sealed class BlackjackCommands : ApplicationCommandModule
         [Option("bet", "1以上、所持コイン以内のベット額")] long bet
     )
     {
+        if (ctx.Guild == null)
+        {
+            await RespondErrorAsync(ctx, "このコマンドはサーバー内で実行してください。");
+            return;
+        }
+
         var service = BotHost.BlackjackService;
         if (service == null)
         {
@@ -28,10 +34,10 @@ public sealed class BlackjackCommands : ApplicationCommandModule
 
         try
         {
-            var result = await service.StartAsync(ctx.User.Id, bet);
+            var result = await service.StartAsync(ctx.Guild.Id, ctx.User.Id, bet);
             await ctx.CreateResponseAsync(
                 InteractionResponseType.ChannelMessageWithSource,
-                CreateBuilder(result, ctx.User.Id)
+                CreateBuilder(result, ctx.Guild.Id, ctx.User.Id)
             );
         }
         catch (ArgumentOutOfRangeException ex)
@@ -54,7 +60,7 @@ public sealed class BlackjackCommands : ApplicationCommandModule
             return;
 
         var parts = customId.Split(':');
-        if (parts.Length != 3 || !ulong.TryParse(parts[2], out var ownerId))
+        if (parts.Length != 4 || !ulong.TryParse(parts[2], out var guildId) || !ulong.TryParse(parts[3], out var ownerId))
             return;
 
         if (e.Interaction.User.Id != ownerId)
@@ -76,8 +82,8 @@ public sealed class BlackjackCommands : ApplicationCommandModule
         {
             var result = parts[1] switch
             {
-                "hit" => await service.HitAsync(ownerId),
-                "stand" => await service.StandAsync(ownerId),
+                "hit" => await service.HitAsync(guildId, ownerId),
+                "stand" => await service.StandAsync(guildId, ownerId),
                 _ => null
             };
             if (result == null)
@@ -85,7 +91,7 @@ public sealed class BlackjackCommands : ApplicationCommandModule
 
             await e.Interaction.CreateResponseAsync(
                 InteractionResponseType.UpdateMessage,
-                CreateBuilder(result, ownerId)
+                CreateBuilder(result, guildId, ownerId)
             );
         }
         catch (InvalidOperationException ex)
@@ -97,7 +103,7 @@ public sealed class BlackjackCommands : ApplicationCommandModule
         }
     }
 
-    private static DiscordInteractionResponseBuilder CreateBuilder(BlackjackResult result, ulong userId)
+    private static DiscordInteractionResponseBuilder CreateBuilder(BlackjackResult result, ulong guildId, ulong userId)
     {
         var builder = new DiscordInteractionResponseBuilder().AddEmbed(result.Embed);
         if (!result.IsFinished)
@@ -105,8 +111,8 @@ public sealed class BlackjackCommands : ApplicationCommandModule
             builder.AddComponents(
                 new DiscordComponent[]
                 {
-                    new DiscordButtonComponent(ButtonStyle.Primary, $"blackjack:hit:{userId}", "HIT"),
-                    new DiscordButtonComponent(ButtonStyle.Success, $"blackjack:stand:{userId}", "STAND")
+                    new DiscordButtonComponent(ButtonStyle.Primary, $"blackjack:hit:{guildId}:{userId}", "HIT"),
+                    new DiscordButtonComponent(ButtonStyle.Success, $"blackjack:stand:{guildId}:{userId}", "STAND")
                 }
             );
         }

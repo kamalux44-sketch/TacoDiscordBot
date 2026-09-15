@@ -3,12 +3,74 @@ using System.Linq;
 using System.Threading.Tasks;
 using DSharpPlus;
 using DSharpPlus.Entities;
+using DSharpPlus.EventArgs;
 using DSharpPlus.SlashCommands;
+using TacoDiscordBot.Models;
+using TacoDiscordBot.Services;
 
 namespace TacoDiscordBot.Commands;
 
 public sealed class CoinCommands : ApplicationCommandModule
 {
+    [SlashCommand("exchange", "VC滞在時間をコインに換金します")]
+    public async Task Exchange(InteractionContext ctx)
+    {
+        if (ctx.Guild == null || BotHost.VcExchangeService == null)
+        {
+            await RespondAsync(ctx, "このコマンドはDB接続済みのサーバー内で利用できます。", true);
+            return;
+        }
+
+        var preview = await BotHost.VcExchangeService.GetPreviewAsync(ctx.Guild.Id, ctx.User.Id);
+        var builder = new DiscordInteractionResponseBuilder().AddEmbed(CreateExchangeEmbed(preview));
+        if (preview.CanExchange)
+        {
+            builder.AddComponents(new DiscordComponent[]
+            {
+                new DiscordButtonComponent(ButtonStyle.Success, $"exchange:confirm:{ctx.Guild.Id}:{ctx.User.Id}", "💰 換金"),
+                new DiscordButtonComponent(ButtonStyle.Secondary, $"exchange:cancel:{ctx.Guild.Id}:{ctx.User.Id}", "❌ キャンセル")
+            });
+        }
+
+        await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, builder);
+    }
+
+    public static async Task HandleExchangeInteractionAsync(DiscordClient client, ComponentInteractionCreateEventArgs e)
+    {
+        var parts = e.Interaction.Data.CustomId?.Split(':');
+        if (parts == null || parts.Length != 4 || parts[0] != "exchange"
+            || !ulong.TryParse(parts[2], out var guildId)
+            || !ulong.TryParse(parts[3], out var userId))
+            return;
+
+        if (e.Interaction.User.Id != userId)
+        {
+            await e.Interaction.CreateResponseAsync(
+                InteractionResponseType.ChannelMessageWithSource,
+                new DiscordInteractionResponseBuilder()
+                    .WithContent("⚠️ この換金を操作できるのは実行者だけです。")
+                    .AsEphemeral(true));
+            return;
+        }
+
+        if (parts[1] == "cancel")
+        {
+            await e.Interaction.CreateResponseAsync(
+                InteractionResponseType.UpdateMessage,
+                new DiscordInteractionResponseBuilder().WithContent("換金をキャンセルしました。"));
+            return;
+        }
+
+        if (parts[1] != "confirm" || BotHost.VcExchangeService == null)
+            return;
+
+        var result = await BotHost.VcExchangeService.ExchangeAsync(guildId, userId);
+        var response = result == null
+            ? new DiscordInteractionResponseBuilder().WithContent("⚠️ 現在換金できる時間がありません。")
+            : new DiscordInteractionResponseBuilder().AddEmbed(CreateExchangeCompletedEmbed(result));
+        await e.Interaction.CreateResponseAsync(InteractionResponseType.UpdateMessage, response);
+    }
+
     [SlashCommand("status", "自分のコインとVC滞在時間を表示します")]
     public async Task Status(InteractionContext ctx)
     {
@@ -18,9 +80,8 @@ public sealed class CoinCommands : ApplicationCommandModule
             return;
         }
 
-        // status実行時にユーザーデータを作成し、初期コインを確定させます。
-        var balance = await BotHost.CoinService.GetBalanceAsync(ctx.User.Id);
-        var users = await BotHost.CoinService.GetRankingAsync();
+        var balance = await BotHost.CoinService.GetBalanceAsync(ctx.Guild.Id, ctx.User.Id);
+        var users = await BotHost.CoinService.GetRankingAsync(ctx.Guild.Id);
         var members = ctx.Guild.Members.Values.Where(member => !member.IsBot).Select(member => member.Id).ToHashSet();
         var ranking = users.Where(user => members.Contains(user.UserId)).ToList();
         var rank = ranking.FindIndex(user => user.UserId == ctx.User.Id) + 1;
@@ -45,7 +106,7 @@ public sealed class CoinCommands : ApplicationCommandModule
         }
 
         var members = ctx.Guild.Members.Values.Where(member => !member.IsBot).Select(member => member.Id).ToHashSet();
-        var ranking = (await BotHost.CoinService.GetRankingAsync())
+        var ranking = (await BotHost.CoinService.GetRankingAsync(ctx.Guild.Id))
             .Where(user => members.Contains(user.UserId))
             .Take(10)
             .ToList();
@@ -56,6 +117,36 @@ public sealed class CoinCommands : ApplicationCommandModule
         await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder().AddEmbed(embed));
     }
 
+    private static DiscordEmbed CreateExchangeEmbed(VcExchangePreview preview)
+    {
+        var description = $"VC滞在時間：\n{FormatDuration(preview.TotalSeconds)}\n\n"
+            + $"換金済み時間：\n{FormatDuration(preview.ExchangedSeconds)}\n\n"
+            + $"換金可能時間：\n{FormatDuration(preview.AvailableSeconds)}\n\n"
+            + $"換金レート：\n{VcExchangeSettings.ExchangeUnitMinutes}分 = {VcExchangeSettings.ExchangeCoinsPerUnit}コイン\n\n";
+        if (!preview.CanExchange)
+        {
+            var remainingMinutes = preview.AvailableSeconds / 60;
+            var minutesUntilExchange = VcExchangeSettings.ExchangeUnitMinutes - (remainingMinutes % VcExchangeSettings.ExchangeUnitMinutes);
+            description += "⚠️ 現在換金できる時間がありません。\n\n"
+                + $"あと{minutesUntilExchange}分VCに滞在すると{VcExchangeSettings.ExchangeCoinsPerUnit}コインに換金できます。";
+        }
+        else
+        {
+            description += $"換金対象：\n{FormatDuration(preview.ExchangeableSeconds)}\n\n"
+                + $"獲得コイン：\n{preview.Coins:N0}コイン\n\n"
+                + $"{FormatDuration(preview.ExchangeableSeconds)}を{preview.Coins:N0}コインに換金しますか？";
+        }
+
+        return new DiscordEmbedBuilder().WithTitle("💰 VC滞在時間 換金").WithDescription(description).WithColor(DiscordColor.Gold).Build();
+    }
+
+    private static DiscordEmbed CreateExchangeCompletedEmbed(VcExchangeResult result)
+        => new DiscordEmbedBuilder()
+            .WithTitle("💰 VC滞在時間 換金完了")
+            .WithDescription($"{FormatDuration(result.Preview.ExchangeableSeconds)}を{result.Preview.Coins:N0}コインに換金しました。\n\n現在のコイン：{result.NewBalance:N0}コイン")
+            .WithColor(DiscordColor.Green)
+            .Build();
+
     private static string FormatDuration(long seconds)
     {
         var span = TimeSpan.FromSeconds(Math.Max(0, seconds));
@@ -63,5 +154,7 @@ public sealed class CoinCommands : ApplicationCommandModule
     }
 
     private static Task RespondAsync(InteractionContext ctx, string message, bool ephemeral)
-        => ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder().WithContent(message).AsEphemeral(ephemeral));
+        => ctx.CreateResponseAsync(
+            InteractionResponseType.ChannelMessageWithSource,
+            new DiscordInteractionResponseBuilder().WithContent(message).AsEphemeral(ephemeral));
 }

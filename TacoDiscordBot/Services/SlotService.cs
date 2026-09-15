@@ -39,6 +39,7 @@ public sealed class SlotService
 
     // 1回分の抽選、当たり判定、統計更新、結果Embedの作成をまとめて実行します。
     public async Task<SlotSpinResult> SpinAsync(
+        ulong guildId,
         ulong userId,
         long bet,
         Func<IReadOnlyList<string>, Task>? onReelRevealed = null
@@ -50,13 +51,13 @@ public sealed class SlotService
         if (bet <= 0)
             throw new ArgumentOutOfRangeException(nameof(bet), "ベットは1以上で指定してください。");
 
-        await _coinService.RemoveCoinsAsync(userId, bet);
+        await _coinService.RemoveCoinsAsync(guildId, userId, bet);
         var symbols = DrawSymbols();
         var rank = DetermineRank(symbols);
         var statistics = await _repository.RecordSpinAsync(rank != SlotWinRank.Loss);
         var payout = bet * GetPayoutMultiplier(rank);
         if (payout > 0)
-            await _coinService.AddCoinsAsync(userId, payout);
+            await _coinService.AddCoinsAsync(guildId, userId, payout);
 
         // 各リールの確定結果を順番に通知し、呼び出し側で表示を更新します。
         if (onReelRevealed != null)

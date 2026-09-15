@@ -16,33 +16,33 @@ public sealed class CoinService : ICoinService
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
     }
 
-    public async Task<long> GetBalanceAsync(ulong userId)
-        => (await _repository.GetOrCreateAsync(userId)).Coins;
+    public async Task<long> GetBalanceAsync(ulong guildId, ulong userId)
+        => (await _repository.GetOrCreateAsync(guildId, userId)).Coins;
 
-    public async Task<long> AddCoinsAsync(ulong userId, long amount)
+    public async Task<long> AddCoinsAsync(ulong guildId, ulong userId, long amount)
     {
         if (amount <= 0)
             throw new ArgumentOutOfRangeException(nameof(amount));
-        return await _repository.AddCoinsAsync(userId, amount);
+        return await _repository.AddCoinsAsync(guildId, userId, amount);
     }
 
-    public async Task<long> RemoveCoinsAsync(ulong userId, long amount)
+    public async Task<long> RemoveCoinsAsync(ulong guildId, ulong userId, long amount)
     {
         if (amount <= 0)
             throw new ArgumentOutOfRangeException(nameof(amount));
-        var balance = await _repository.TryRemoveCoinsAsync(userId, amount);
+        var balance = await _repository.TryRemoveCoinsAsync(guildId, userId, amount);
         if (!balance.HasValue)
             throw new InvalidOperationException("コインが不足しています。");
         return balance.Value;
     }
 
-    public async Task<bool> CanAffordAsync(ulong userId, long amount)
+    public async Task<bool> CanAffordAsync(ulong guildId, ulong userId, long amount)
     {
         if (amount <= 0)
             return false;
-        return await GetBalanceAsync(userId) >= amount;
+        return await GetBalanceAsync(guildId, userId) >= amount;
     }
 
-    public async Task<IReadOnlyList<UserData>> GetRankingAsync()
-        => await _repository.GetAllAsync();
+    public async Task<IReadOnlyList<UserData>> GetRankingAsync(ulong guildId)
+        => await _repository.GetAllAsync(guildId);
 }

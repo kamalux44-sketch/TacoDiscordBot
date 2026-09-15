@@ -17,6 +17,12 @@ public sealed class SlotCommands : ApplicationCommandModule
         [Option("bet", "1以上、所持コイン以内のベット額")] long bet
     )
     {
+        if (ctx.Guild == null)
+        {
+            await new InteractionResponseContext(ctx).RespondAsync("このコマンドはサーバー内で実行してください。", true);
+            return;
+        }
+
         // 抽選結果をEmbed形式で公開します。
         var service = BotHost.SlotService;
         if (service == null)
@@ -30,7 +36,7 @@ public sealed class SlotCommands : ApplicationCommandModule
         SlotSpinResult result;
         try
         {
-            result = await service.SpinAsync(ctx.User.Id, bet, async revealedSymbols =>
+            result = await service.SpinAsync(ctx.Guild.Id, ctx.User.Id, bet, async revealedSymbols =>
             {
                 await Task.Delay(700);
                 await response.EditResponseAsync(CreateReelMessage(revealedSymbols));
