@@ -107,7 +107,7 @@ public sealed class BlackjackService
         _games.TryRemove(CreateGameKey(game.GuildId, game.UserId), out _);
         var payout = outcome switch
         {
-            BlackjackOutcome.Blackjack => game.Bet * 3 / 2,
+            BlackjackOutcome.Blackjack => game.Bet * 3,
             BlackjackOutcome.Win => game.Bet * 2,
             BlackjackOutcome.Push => game.Bet,
             _ => 0
@@ -117,7 +117,7 @@ public sealed class BlackjackService
 
         var message = outcome switch
         {
-            BlackjackOutcome.Blackjack => "🎉 BLACKJACK! 1.5倍払い戻し",
+            BlackjackOutcome.Blackjack => "🎉 BLACKJACK! 3倍払い戻し",
             BlackjackOutcome.Win => "🎉 勝利！",
             BlackjackOutcome.Push => "🤝 PUSH（引き分け）",
             _ => CalculateTotal(game.PlayerCards) > 21 ? "💥 BUST!" : "😢 負け"
