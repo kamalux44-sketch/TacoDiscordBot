@@ -77,20 +77,38 @@ public sealed class VcExchangeRepository
         if (ensureBalance)
             await EnsureExchangeBalanceAsync(connection, transaction, guildId, userId);
 
-        await using var command = new NpgsqlCommand($"""
-            SELECT
-                COALESCE((
-                    SELECT SUM(duration_seconds)
-                    FROM vc_sessions
-                    WHERE guild_id = @guild_id
-                      AND user_id = @user_id
-                      AND duration_seconds IS NOT NULL
-                ), 0),
-                exchanged_seconds
-            FROM vc_exchange_balances
-            WHERE guild_id = @guild_id AND user_id = @user_id
-            {(forUpdate ? "FOR UPDATE" : string.Empty)};
-            """, connection, transaction);
+        var sql = forUpdate
+            ? """
+                SELECT
+                    COALESCE((
+                        SELECT SUM(duration_seconds)
+                        FROM vc_sessions
+                        WHERE guild_id = @guild_id
+                          AND user_id = @user_id
+                          AND duration_seconds IS NOT NULL
+                    ), 0),
+                    COALESCE(exchanged_seconds, 0)
+                FROM vc_exchange_balances
+                WHERE guild_id = @guild_id AND user_id = @user_id
+                FOR UPDATE;
+                """
+            : """
+                SELECT
+                    COALESCE((
+                        SELECT SUM(duration_seconds)
+                        FROM vc_sessions
+                        WHERE guild_id = @guild_id
+                          AND user_id = @user_id
+                          AND duration_seconds IS NOT NULL
+                    ), 0),
+                    COALESCE((
+                        SELECT exchanged_seconds
+                        FROM vc_exchange_balances
+                        WHERE guild_id = @guild_id AND user_id = @user_id
+                    ), 0);
+                """;
+
+        await using var command = new NpgsqlCommand(sql, connection, transaction);
         command.Parameters.AddWithValue("guild_id", (long)guildId);
         command.Parameters.AddWithValue("user_id", (long)userId);
 
