@@ -37,13 +37,13 @@ public sealed class SlotServiceTests
         var symbols = new[] { "🍒", "🍒", "🍒" };
 
         Assert.Equal(SlotWinRank.Win, SlotService.DetermineRank(symbols));
-        Assert.Equal(1_000, SlotService.CalculatePayout(100, symbols, SlotWinRank.Win));
+        Assert.Equal(800, SlotService.CalculatePayout(100, symbols, SlotWinRank.Win));
     }
 
     [Fact]
     public void リーチ配当は小数点以下を切り捨てる()
     {
-        var symbols = new[] { "🍒", "🍒", "🍋" };
+        var symbols = new[] { "🍇", "🍇", "🍋" };
 
         Assert.Equal(50, SlotService.CalculatePayout(101, symbols, SlotWinRank.Reach));
     }

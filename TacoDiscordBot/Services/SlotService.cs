@@ -18,14 +18,14 @@ public sealed class SlotService
     private const int TotalProbability = 100;
     private static readonly SlotSymbolConfiguration[] SymbolConfigurations =
     [
-        new("🍒", 0.30m, 10m, 0.5m),
-        new("🍋", 0.22m, 18m, 0.5m),
-        new("🍇", 0.15m, 28m, 1m),
-        new("🍉", 0.11m, 42m, 1m),
-        new("🍈", 0.09m, 64m, 1.5m),
-        new(UltraRare, 0.06m, 100m, 2m),
-        new(BigWin, 0.05m, 300m, 3m),
-        new(MegaJackpot, 0.02m, 900m, 5m)
+        new("🍒", 0.24m, 8m, 0m),
+        new("🍋", 0.22m, 12m, 0m),
+        new("🍇", 0.15m, 20m, 0.5m),
+        new("🍉", 0.11m, 35m, 1m),
+        new("🍈", 0.09m, 55m, 1.5m),
+        new(UltraRare, 0.09m, 160m, 4m),
+        new(BigWin, 0.06m, 500m, 6m),
+        new(MegaJackpot, 0.04m, 1000m, 10m)
     ];
     private static readonly string[] Symbols = SymbolConfigurations.Select(item => item.Symbol).ToArray();
     private readonly SlotRepository _repository;
