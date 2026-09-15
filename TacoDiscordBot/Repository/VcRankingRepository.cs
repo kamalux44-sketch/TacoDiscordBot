@@ -198,6 +198,22 @@ WHERE id = @id;";
         return id != -1;
     }
 
+    public async Task ResetOpenSessionsAtStartupAsync(DateTime startupUtc)
+    {
+        // Bot 停止中の時間を加算しないよう、未終了セッションを起動時点から再開します。
+        await _base.UseConnectionAsync(async conn =>
+        {
+            dynamic command = conn.CreateCommand();
+            command.CommandText = """
+                UPDATE vc_sessions
+                SET joined_at = @startup
+                WHERE left_at IS NULL;
+                """;
+            command.Parameters.AddWithValue("@startup", startupUtc);
+            await command.ExecuteNonQueryAsync();
+        });
+    }
+
     public async Task<List<(ulong userId, long totalSeconds)>> GetRankingAsync(
         ulong guildId,
         DateTime? sinceUtc

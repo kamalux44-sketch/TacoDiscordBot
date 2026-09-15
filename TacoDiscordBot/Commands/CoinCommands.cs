@@ -5,14 +5,13 @@ using DSharpPlus;
 using DSharpPlus.Entities;
 using DSharpPlus.EventArgs;
 using DSharpPlus.SlashCommands;
-using TacoDiscordBot.Models;
 using TacoDiscordBot.Services;
 
 namespace TacoDiscordBot.Commands;
 
 public sealed class CoinCommands : ApplicationCommandModule
 {
-    [SlashCommand("exchange", "VC滞在時間をコインに換金します")]
+    [SlashCommand("exchange", "VC滞在時間をコインへ換金します")]
     public async Task Exchange(InteractionContext ctx)
     {
         if (ctx.Guild == null || BotHost.VcExchangeService == null)
@@ -21,18 +20,94 @@ public sealed class CoinCommands : ApplicationCommandModule
             return;
         }
 
-        var preview = await BotHost.VcExchangeService.GetPreviewAsync(ctx.Guild.Id, ctx.User.Id);
-        var builder = new DiscordInteractionResponseBuilder().AddEmbed(CreateExchangeEmbed(preview));
-        if (preview.CanExchange)
+        try
         {
-            builder.AddComponents(new DiscordComponent[]
+            var summary = await BotHost.VcExchangeService.GetSummaryAsync(ctx.Guild.Id, ctx.User.Id);
+            var exchangeableMinutes = VcExchangeService.GetExchangeableMinutes(summary);
+            var coins = VcExchangeService.GetExchangeCoins(summary);
+            if (exchangeableMinutes == 0)
             {
-                new DiscordButtonComponent(ButtonStyle.Success, $"exchange:confirm:{ctx.Guild.Id}:{ctx.User.Id}", "💰 換金"),
-                new DiscordButtonComponent(ButtonStyle.Secondary, $"exchange:cancel:{ctx.Guild.Id}:{ctx.User.Id}", "❌ キャンセル")
-            });
+                var shortage = VcExchangeCalculator.ExchangeUnitMinutes - summary.UnexchangedSeconds / 60 % VcExchangeCalculator.ExchangeUnitMinutes;
+                await RespondAsync(
+                    ctx,
+                    summary.UnexchangedSeconds == 0
+                        ? "❌ 現在、換金できるVC滞在時間がありません。"
+                        : $"❌ 換金できる時間がありません。\n\nあと{shortage}分VCに滞在すると25コインに換金できます。",
+                    true
+                );
+                return;
+            }
+
+            await ctx.CreateResponseAsync(
+                InteractionResponseType.ChannelMessageWithSource,
+                CreateExchangeBuilder(ctx.Guild.Id, ctx.User.Id, summary, exchangeableMinutes, coins)
+            );
+        }
+        catch
+        {
+            await RespondAsync(ctx, "❌ VC滞在時間の取得中にエラーが発生しました。", true);
+        }
+    }
+
+    public static async Task HandleExchangeComponentInteractionAsync(
+        DiscordClient client,
+        ComponentInteractionCreateEventArgs e
+    )
+    {
+        var customId = e.Interaction.Data.CustomId;
+        if (string.IsNullOrWhiteSpace(customId) || !customId.StartsWith("exchange:", StringComparison.Ordinal))
+            return;
+
+        var parts = customId.Split(':');
+        if (parts.Length != 4 || !ulong.TryParse(parts[2], out var guildId) || !ulong.TryParse(parts[3], out var userId))
+            return;
+
+        if (e.Interaction.User.Id != userId)
+        {
+            await e.Interaction.CreateResponseAsync(
+                InteractionResponseType.ChannelMessageWithSource,
+                new DiscordInteractionResponseBuilder().WithContent("⚠️ この換金画面を操作できるのは実行者だけです。").AsEphemeral(true)
+            );
+            return;
         }
 
-        await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, builder);
+        if (parts[1] == "cancel")
+        {
+            await e.Interaction.CreateResponseAsync(
+                InteractionResponseType.UpdateMessage,
+                new DiscordInteractionResponseBuilder().WithContent("❌ 換金をキャンセルしました。")
+            );
+            return;
+        }
+
+        if (parts[1] != "confirm" || BotHost.VcExchangeService == null)
+            return;
+
+        try
+        {
+            var result = await BotHost.VcExchangeService.ExchangeAsync(guildId, userId);
+            var message = result.Success
+                ? $"✅ 換金完了！\n\n{result.ExchangeMinutes}分のVC滞在時間を換金しました。\n\n💰 +{result.Coins:N0}コイン\n\n残りの未換金時間：\n{result.RemainingMinutes}分"
+                : "❌ このVC滞在時間はすでに換金済みです。";
+
+            await e.Interaction.CreateResponseAsync(
+                InteractionResponseType.UpdateMessage,
+                new DiscordInteractionResponseBuilder().WithContent(message).AddComponents(
+                    new DiscordComponent[]
+                    {
+                        new DiscordButtonComponent(ButtonStyle.Success, customId, "💰 換金", true),
+                        new DiscordButtonComponent(ButtonStyle.Secondary, $"exchange:cancel:{guildId}:{userId}", "キャンセル", true)
+                    }
+                )
+            );
+        }
+        catch
+        {
+            await e.Interaction.CreateResponseAsync(
+                InteractionResponseType.ChannelMessageWithSource,
+                new DiscordInteractionResponseBuilder().WithContent("❌ VC滞在時間の換金中にエラーが発生しました。\n\nコインと滞在時間は変更されていません。").AsEphemeral(true)
+            );
+        }
     }
 
     [SlashCommand("pay", "ユーザーにコインを送信します")]
@@ -81,55 +156,6 @@ public sealed class CoinCommands : ApplicationCommandModule
             false);
     }
 
-    public static async Task HandleExchangeInteractionAsync(DiscordClient client, ComponentInteractionCreateEventArgs e)
-    {
-        var parts = e.Interaction.Data.CustomId?.Split(':');
-        if (parts == null || parts.Length != 4 || parts[0] != "exchange"
-            || !ulong.TryParse(parts[2], out var guildId)
-            || !ulong.TryParse(parts[3], out var userId))
-            return;
-
-        if (e.Interaction.User.Id != userId)
-        {
-            await e.Interaction.CreateResponseAsync(
-                InteractionResponseType.ChannelMessageWithSource,
-                new DiscordInteractionResponseBuilder()
-                    .WithContent("⚠️ この換金を操作できるのは実行者だけです。")
-                    .AsEphemeral(true));
-            return;
-        }
-
-        if (parts[1] == "cancel")
-        {
-            await e.Interaction.CreateResponseAsync(
-                InteractionResponseType.UpdateMessage,
-                new DiscordInteractionResponseBuilder().WithContent("換金をキャンセルしました。"));
-            return;
-        }
-
-        if (parts[1] != "confirm" || BotHost.VcExchangeService == null)
-            return;
-
-        // DB処理前にACKし、Discordの3秒制限を回避します。
-        await e.Interaction.CreateResponseAsync(InteractionResponseType.DeferredMessageUpdate);
-        try
-        {
-            var result = await BotHost.VcExchangeService.ExchangeAsync(guildId, userId);
-            var response = result == null
-                ? new DiscordWebhookBuilder().WithContent("⚠️ 現在換金できる時間がありません。")
-                : new DiscordWebhookBuilder().AddEmbed(CreateExchangeCompletedEmbed(result));
-            await e.Interaction.EditOriginalResponseAsync(response);
-        }
-        catch (Exception ex)
-        {
-            await e.Interaction.CreateFollowupMessageAsync(
-                new DiscordFollowupMessageBuilder()
-                    .WithContent("換金処理中にエラーが発生しました。時間をおいて再度お試しください。")
-                    .AsEphemeral(true));
-            Console.Error.WriteLine($"[CoinCommands] VC換金エラー: {ex}");
-        }
-    }
-
     [SlashCommand("status", "自分のコインとVC滞在時間を表示します")]
     public async Task Status(InteractionContext ctx)
     {
@@ -147,9 +173,14 @@ public sealed class CoinCommands : ApplicationCommandModule
         var seconds = BotHost.VcRankingService == null
             ? 0
             : await BotHost.VcRankingService.GetUserTotalSecondsAsync(ctx.Guild.Id, ctx.User.Id);
+        var exchangeSummary = BotHost.VcExchangeService == null
+            ? new TacoDiscordBot.Models.VcExchangeSummary(seconds, 0)
+            : await BotHost.VcExchangeService.GetSummaryAsync(ctx.Guild.Id, ctx.User.Id);
+        var exchangeableMinutes = VcExchangeService.GetExchangeableMinutes(exchangeSummary);
+        var unexchangedRemainder = exchangeSummary.UnexchangedSeconds / 60 % VcExchangeCalculator.ExchangeUnitMinutes;
         var embed = new DiscordEmbedBuilder()
             .WithTitle("📊 STATUS")
-            .WithDescription($"👤 ユーザー名\n{ctx.User.Username}\n\n💰 所有コイン\n{balance:N0}\n\n🎧 VC滞在時間\n{FormatDuration(seconds)}\n\n🏆 サーバーランキング\n{(rank > 0 ? $"{rank}位" : "圏外")}")
+            .WithDescription($"👤 ユーザー名\n{ctx.User.Username}\n\n💰 所有コイン\n{balance:N0}\n\n🎧 VC滞在時間\n{FormatDuration(seconds)}\n\n💰 換金済み時間\n{FormatDuration(exchangeSummary.ExchangedSeconds)}\n\n🔄 換金可能時間\n{exchangeableMinutes}分\n\n未換金端数\n{unexchangedRemainder}分\n\n🏆 サーバーランキング\n{(rank > 0 ? $"{rank}位" : "圏外")}")
             .WithColor(DiscordColor.Blurple)
             .Build();
         await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder().AddEmbed(embed));
@@ -176,40 +207,38 @@ public sealed class CoinCommands : ApplicationCommandModule
         await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder().AddEmbed(embed));
     }
 
-    private static DiscordEmbed CreateExchangeEmbed(VcExchangePreview preview)
-    {
-        var description = $"VC滞在時間：\n{FormatDuration(preview.TotalSeconds)}\n\n"
-            + $"換金済み時間：\n{FormatDuration(preview.ExchangedSeconds)}\n\n"
-            + $"換金可能時間：\n{FormatDuration(preview.AvailableSeconds)}\n\n"
-            + $"換金レート：\n{VcExchangeSettings.ExchangeUnitMinutes}分 = {VcExchangeSettings.ExchangeCoinsPerUnit}コイン\n\n";
-        if (!preview.CanExchange)
-        {
-            var remainingMinutes = preview.AvailableSeconds / 60;
-            var minutesUntilExchange = VcExchangeSettings.ExchangeUnitMinutes - (remainingMinutes % VcExchangeSettings.ExchangeUnitMinutes);
-            description += "⚠️ 現在換金できる時間がありません。\n\n"
-                + $"あと{minutesUntilExchange}分VCに滞在すると{VcExchangeSettings.ExchangeCoinsPerUnit}コインに換金できます。";
-        }
-        else
-        {
-            description += $"換金対象：\n{FormatDuration(preview.ExchangeableSeconds)}\n\n"
-                + $"獲得コイン：\n{preview.Coins:N0}コイン\n\n"
-                + $"{FormatDuration(preview.ExchangeableSeconds)}を{preview.Coins:N0}コインに換金しますか？";
-        }
-
-        return new DiscordEmbedBuilder().WithTitle("💰 VC滞在時間 換金").WithDescription(description).WithColor(DiscordColor.Gold).Build();
-    }
-
-    private static DiscordEmbed CreateExchangeCompletedEmbed(VcExchangeResult result)
-        => new DiscordEmbedBuilder()
-            .WithTitle("💰 VC滞在時間 換金完了")
-            .WithDescription($"{FormatDuration(result.Preview.ExchangeableSeconds)}を{result.Preview.Coins:N0}コインに換金しました。\n\n現在のコイン：{result.NewBalance:N0}コイン")
-            .WithColor(DiscordColor.Green)
-            .Build();
-
     private static string FormatDuration(long seconds)
     {
         var span = TimeSpan.FromSeconds(Math.Max(0, seconds));
         return $"{(long)span.TotalHours}時間 {span.Minutes}分";
+    }
+
+    private static DiscordInteractionResponseBuilder CreateExchangeBuilder(
+        ulong guildId,
+        ulong userId,
+        TacoDiscordBot.Models.VcExchangeSummary summary,
+        long exchangeableMinutes,
+        long coins
+    )
+    {
+        var description = $"💰 VC滞在時間の換金\n\n" +
+            $"VC滞在時間：\n{FormatDuration(summary.TotalSeconds)}\n\n" +
+            $"換金済み時間：\n{FormatDuration(summary.ExchangedSeconds)}\n\n" +
+            $"換金可能時間：\n{exchangeableMinutes}分\n\n" +
+            $"換金レート：\n6分 = 25コイン\n\n" +
+            $"今回換金：\n{exchangeableMinutes}分\n\n" +
+            $"獲得コイン：\n{coins:N0}コイン\n\n" +
+            $"{coins:N0}コインに換金しますか？";
+
+        return new DiscordInteractionResponseBuilder()
+            .WithContent(description)
+            .AddComponents(
+                new DiscordComponent[]
+                {
+                    new DiscordButtonComponent(ButtonStyle.Success, $"exchange:confirm:{guildId}:{userId}", "💰 換金"),
+                    new DiscordButtonComponent(ButtonStyle.Secondary, $"exchange:cancel:{guildId}:{userId}", "キャンセル")
+                }
+            );
     }
 
     private static Task RespondAsync(InteractionContext ctx, string message, bool ephemeral)

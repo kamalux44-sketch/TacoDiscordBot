@@ -1,3 +1,8 @@
 namespace TacoDiscordBot.Models;
 
-public sealed record VcExchangeResult(VcExchangePreview Preview, long NewBalance);
+public sealed record VcExchangeResult(
+    bool Success,
+    long ExchangeMinutes,
+    long Coins,
+    long RemainingMinutes
+);

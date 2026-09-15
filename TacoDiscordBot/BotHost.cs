@@ -86,7 +86,6 @@ public static class BotHost
             Repository.SlotRepository slotRepo = null;
             Repository.UserDataRepository userDataRepo = null;
             Repository.VcExchangeRepository vcExchangeRepo = null;
-
             var host = Environment.GetEnvironmentVariable(Strings.EnvPgHost);
 
             if (!string.IsNullOrWhiteSpace(host))
@@ -146,7 +145,6 @@ public static class BotHost
                         slotRepo = new Repository.SlotRepository(baseRepo);
                         userDataRepo = new Repository.UserDataRepository(baseRepo);
                         vcExchangeRepo = new Repository.VcExchangeRepository(baseRepo);
-
                         // すべてのリポジトリについて
                         // テーブルの存在確認と作成を行う
                         try
@@ -156,6 +154,8 @@ public static class BotHost
                             vclogRepo.EnsureTableExistsAsync().GetAwaiter().GetResult();
 
                             vrankRepo.EnsureTableExistsAsync().GetAwaiter().GetResult();
+
+                            vrankRepo.ResetOpenSessionsAtStartupAsync(DateTime.UtcNow).GetAwaiter().GetResult();
 
                             boRepo.EnsureTablesExistAsync().GetAwaiter().GetResult();
 
@@ -170,7 +170,7 @@ public static class BotHost
 
                             userDataRepo.EnsureTablesExistAsync().GetAwaiter().GetResult();
 
-                            vcExchangeRepo.EnsureTableExistsAsync().GetAwaiter().GetResult();
+                            vcExchangeRepo.EnsureTablesExistAsync().GetAwaiter().GetResult();
 
                             Logger.Info("BotHost: DB テーブル確認・作成完了");
                         }
@@ -236,13 +236,13 @@ public static class BotHost
                 ? null
                 : new Services.BlackjackService(CoinService);
 
-            VcExchangeService = vcExchangeRepo == null
-                ? null
-                : new Services.VcExchangeService(vcExchangeRepo);
-
             SlotService = slotRepo == null || CoinService == null
                 ? null
                 : new Services.SlotService(slotRepo, CoinService);
+
+            VcExchangeService = vcExchangeRepo == null
+                ? null
+                : new Services.VcExchangeService(vcExchangeRepo);
 
             Logger.Info("BotHost: SlotService 作成完了");
 
@@ -259,7 +259,7 @@ public static class BotHost
 
             Client.ComponentInteractionCreated += Commands.BlackjackCommands.HandleComponentInteractionAsync;
 
-            Client.ComponentInteractionCreated += Commands.CoinCommands.HandleExchangeInteractionAsync;
+            Client.ComponentInteractionCreated += Commands.CoinCommands.HandleExchangeComponentInteractionAsync;
 
             // AI メッセージ
             Client.MessageCreated += AiService.HandleMessageCreated;

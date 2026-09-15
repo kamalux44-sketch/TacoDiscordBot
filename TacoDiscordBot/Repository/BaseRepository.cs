@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Threading.Tasks;
+using Npgsql;
 
 namespace TacoDiscordBot.Repository
 {
@@ -11,6 +12,31 @@ namespace TacoDiscordBot.Repository
         public BaseRepository(string connString)
         {
             _connString = connString ?? throw new ArgumentNullException(nameof(connString));
+        }
+
+        /// <summary>
+        /// 型付きの PostgreSQL 接続とトランザクションを提供します。
+        /// 新規の DB 処理では dynamic を使わず、このメソッドを利用します。
+        /// </summary>
+        public virtual async Task<T> UseNpgsqlTransactionAsync<T>(
+            Func<NpgsqlConnection, NpgsqlTransaction, Task<T>> func
+        )
+        {
+            await using var connection = new NpgsqlConnection(_connString);
+            await connection.OpenAsync();
+            await using var transaction = await connection.BeginTransactionAsync();
+
+            try
+            {
+                var result = await func(connection, transaction);
+                await transaction.CommitAsync();
+                return result;
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
         }
 
         private static Type GetConnectionType()

@@ -1,5 +1,3 @@
-using System;
-using System.Threading.Tasks;
 using TacoDiscordBot.Models;
 using TacoDiscordBot.Repository;
 
@@ -14,9 +12,21 @@ public sealed class VcExchangeService
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
     }
 
-    public Task<VcExchangePreview> GetPreviewAsync(ulong guildId, ulong userId)
-        => _repository.GetPreviewAsync(guildId, userId);
+    public Task<VcExchangeSummary> GetSummaryAsync(ulong guildId, ulong userId)
+        => _repository.GetSummaryAsync(guildId, userId);
 
-    public Task<VcExchangeResult?> ExchangeAsync(ulong guildId, ulong userId)
+    public Task<VcExchangeResult> ExchangeAsync(ulong guildId, ulong userId)
         => _repository.ExchangeAsync(guildId, userId);
+
+    public static long GetExchangeableMinutes(VcExchangeSummary summary)
+    {
+        ArgumentNullException.ThrowIfNull(summary);
+        return VcExchangeCalculator.GetExchangeableMinutes(summary.UnexchangedSeconds / 60);
+    }
+
+    public static long GetExchangeCoins(VcExchangeSummary summary)
+    {
+        var exchangeableMinutes = GetExchangeableMinutes(summary);
+        return VcExchangeCalculator.GetCoins(exchangeableMinutes);
+    }
 }
