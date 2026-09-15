@@ -24,6 +24,10 @@ public static class BotHost
 
     public static Services.SlotService SlotService { get; private set; }
 
+    public static Services.CoinService CoinService { get; private set; }
+
+    public static Services.BlackjackService BlackjackService { get; private set; }
+
     public static async Task RunAsync()
     {
         try
@@ -78,6 +82,7 @@ public static class BotHost
             Repository.AiTalkRepository aiRepo = null;
             Repository.BirthdayRepository birthdayRepo = null;
             Repository.SlotRepository slotRepo = null;
+            Repository.UserDataRepository userDataRepo = null;
 
             var host = Environment.GetEnvironmentVariable(Strings.EnvPgHost);
 
@@ -136,6 +141,7 @@ public static class BotHost
 
                         birthdayRepo = new Repository.BirthdayRepository(baseRepo);
                         slotRepo = new Repository.SlotRepository(baseRepo);
+                        userDataRepo = new Repository.UserDataRepository(baseRepo);
 
                         // すべてのリポジトリについて
                         // テーブルの存在確認と作成を行う
@@ -157,6 +163,8 @@ public static class BotHost
                             birthdayRepo.EnsureTablesExistAsync().GetAwaiter().GetResult();
 
                             slotRepo.EnsureTablesExistAsync().GetAwaiter().GetResult();
+
+                            userDataRepo.EnsureTablesExistAsync().GetAwaiter().GetResult();
 
                             Logger.Info("BotHost: DB テーブル確認・作成完了");
                         }
@@ -214,7 +222,9 @@ public static class BotHost
 
             Logger.Info("BotHost: BirthdayService 作成完了");
 
-            SlotService = slotRepo == null ? null : new Services.SlotService(slotRepo);
+            SlotService = slotRepo == null || CoinService == null
+                ? null
+                : new Services.SlotService(slotRepo, CoinService);
 
             Logger.Info("BotHost: SlotService 作成完了");
 
@@ -228,6 +238,8 @@ public static class BotHost
 
             // BO コンポーネント
             Client.ComponentInteractionCreated += BoManager.HandleComponentInteraction;
+
+            Client.ComponentInteractionCreated += Commands.BlackjackCommands.HandleComponentInteractionAsync;
 
             // AI メッセージ
             Client.MessageCreated += AiService.HandleMessageCreated;
@@ -269,6 +281,10 @@ public static class BotHost
             slash.RegisterCommands<Commands.SlotCommands>();
 
             Logger.Info("BotHost: SlotCommands 登録完了");
+
+            slash.RegisterCommands<Commands.BlackjackCommands>();
+
+            slash.RegisterCommands<Commands.CoinCommands>();
 
             Logger.Info("BotHost: Discord へ接続開始");
 

@@ -17,4 +17,6 @@ public interface IVcRankingService
         DiscordGuild guild,
         DiscordUser requestingUser
     );
+
+    Task<long> GetUserTotalSecondsAsync(ulong guildId, ulong userId);
 }

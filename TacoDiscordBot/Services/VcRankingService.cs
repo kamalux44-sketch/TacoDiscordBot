@@ -28,6 +28,18 @@ public sealed class VcRankingService : IVcRankingService
         _repo = CreateRankingFromEnvOrNull();
     }
 
+    public async Task<long> GetUserTotalSecondsAsync(ulong guildId, ulong userId)
+    {
+        if (_repo == null)
+            return 0;
+
+        var total = await _repo.GetUserTotalSecondsAsync(guildId, userId);
+        var key = $"{guildId}:{userId}";
+        if (_openSessions.TryGetValue(key, out var session))
+            total += Math.Max(0, (long)(DateTime.UtcNow - session.joinedAtUtc).TotalSeconds);
+        return total;
+    }
+
     /// <summary>
     /// 音声状態更新を受けてランキング用の永続化を行います。
     /// メッセージ送信は行いません。

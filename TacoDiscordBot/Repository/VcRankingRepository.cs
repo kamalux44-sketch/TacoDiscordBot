@@ -268,4 +268,22 @@ LIMIT 50;";
 
         return list;
     }
+
+    public async Task<long> GetUserTotalSecondsAsync(ulong guildId, ulong userId)
+    {
+        long total = 0;
+        await _base.UseConnectionAsync(async conn =>
+        {
+            dynamic cmd = conn.CreateCommand();
+            cmd.CommandText = """
+                SELECT COALESCE(SUM(duration_seconds), 0)
+                FROM vc_sessions
+                WHERE guild_id = @g AND user_id = @u AND duration_seconds IS NOT NULL;
+                """;
+            cmd.Parameters.AddWithValue("@g", (long)guildId);
+            cmd.Parameters.AddWithValue("@u", (long)userId);
+            total = (long)(await cmd.ExecuteScalarAsync());
+        });
+        return total;
+    }
 }

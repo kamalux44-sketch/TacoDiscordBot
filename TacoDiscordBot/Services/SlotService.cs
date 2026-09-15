@@ -6,6 +6,7 @@ using DSharpPlus;
 using DSharpPlus.Entities;
 using TacoDiscordBot.Models;
 using TacoDiscordBot.Repository;
+using TacoDiscordBot.Services.Interface;
 
 namespace TacoDiscordBot.Services;
 
@@ -28,20 +29,34 @@ public sealed class SlotService
     ];
     private static readonly string[] Symbols = SymbolWeights.Select(item => item.Symbol).ToArray();
     private readonly SlotRepository _repository;
+    private readonly ICoinService _coinService;
 
-    public SlotService(SlotRepository repository)
+    public SlotService(SlotRepository repository, ICoinService coinService = null)
     {
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
+        _coinService = coinService;
     }
 
     // 1回分の抽選、当たり判定、統計更新、結果Embedの作成をまとめて実行します。
     public async Task<SlotSpinResult> SpinAsync(
+        ulong userId,
+        long bet,
         Func<IReadOnlyList<string>, Task>? onReelRevealed = null
     )
     {
+        if (_coinService == null)
+            throw new InvalidOperationException("コインサービスは未設定です。");
+
+        if (bet <= 0)
+            throw new ArgumentOutOfRangeException(nameof(bet), "ベットは1以上で指定してください。");
+
+        await _coinService.RemoveCoinsAsync(userId, bet);
         var symbols = DrawSymbols();
         var rank = DetermineRank(symbols);
         var statistics = await _repository.RecordSpinAsync(rank != SlotWinRank.Loss);
+        var payout = bet * GetPayoutMultiplier(rank);
+        if (payout > 0)
+            await _coinService.AddCoinsAsync(userId, payout);
 
         // 各リールの確定結果を順番に通知し、呼び出し側で表示を更新します。
         if (onReelRevealed != null)
@@ -54,10 +69,20 @@ public sealed class SlotService
             }
         }
 
-        var embed = CreateEmbed(symbols, rank, statistics);
+        var embed = CreateEmbed(symbols, rank, statistics, bet, payout);
 
-        return new SlotSpinResult(embed, rank != SlotWinRank.Loss, statistics);
+        return new SlotSpinResult(embed, rank != SlotWinRank.Loss, statistics, bet, payout);
     }
+
+    public static int GetPayoutMultiplier(SlotWinRank rank)
+        => rank switch
+        {
+            SlotWinRank.MegaJackpot => 50,
+            SlotWinRank.UltraRare => 10,
+            SlotWinRank.BigWin => 15,
+            SlotWinRank.Win => 2,
+            _ => 0
+        };
 
     // 永続化されているスロット統計を取得します。
     public Task<SlotStatistics> GetStatisticsAsync() => _repository.GetStatisticsAsync();
@@ -102,7 +127,9 @@ public sealed class SlotService
     private static DiscordEmbed CreateEmbed(
         IReadOnlyList<string> symbols,
         SlotWinRank rank,
-        SlotStatistics statistics
+        SlotStatistics statistics,
+        long bet,
+        long payout
     )
     {
         // 当たり時はランク別の色・演出とスロット統計をEmbedへまとめます。
@@ -111,7 +138,7 @@ public sealed class SlotService
         {
             return new DiscordEmbedBuilder()
                 .WithTitle("🎰 スロット")
-                .WithDescription($"{result}\n\n😢 残念！もう一度挑戦してみよう！")
+                .WithDescription($"{result}\n\n😢 残念！もう一度挑戦してみよう！\nベット: {bet:N0} / 払い戻し: 0")
                 .WithColor(DiscordColor.Blurple)
                 .Build();
         }
@@ -132,7 +159,7 @@ public sealed class SlotService
         };
         var embed = new DiscordEmbedBuilder()
             .WithTitle(title)
-            .WithDescription($"**{result}**\n\n{celebration}")
+            .WithDescription($"**{result}**\n\n{celebration}\nベット: {bet:N0} / 払い戻し: {payout:N0}")
             .WithColor(rank switch
             {
                 SlotWinRank.MegaJackpot => DiscordColor.Yellow,
@@ -160,4 +187,10 @@ public enum SlotWinRank
     MegaJackpot
 }
 
-public sealed record SlotSpinResult(DiscordEmbed Embed, bool IsHit, SlotStatistics Statistics);
+public sealed record SlotSpinResult(
+    DiscordEmbed Embed,
+    bool IsHit,
+    SlotStatistics Statistics,
+    long Bet,
+    long Payout
+);

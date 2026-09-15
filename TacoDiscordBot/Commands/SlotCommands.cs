@@ -1,16 +1,21 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using DSharpPlus.SlashCommands;
 using TacoDiscordBot.Contexts;
 using TacoDiscordBot.Models;
+using TacoDiscordBot.Services;
 
 namespace TacoDiscordBot.Commands;
 
 public sealed class SlotCommands : ApplicationCommandModule
 {
     [SlashCommand("slot", "スロットを回します")]
-    public async Task Slot(InteractionContext ctx)
+    public async Task Slot(
+        InteractionContext ctx,
+        [Option("bet", "1以上、所持コイン以内のベット額")] long bet
+    )
     {
         // 抽選結果をEmbed形式で公開します。
         var service = BotHost.SlotService;
@@ -22,11 +27,25 @@ public sealed class SlotCommands : ApplicationCommandModule
 
         var response = new InteractionResponseContext(ctx);
         await response.DeferResponseAsync();
-        var result = await service.SpinAsync(async revealedSymbols =>
+        SlotSpinResult result;
+        try
         {
-            await Task.Delay(700);
-            await response.EditResponseAsync(CreateReelMessage(revealedSymbols));
-        });
+            result = await service.SpinAsync(ctx.User.Id, bet, async revealedSymbols =>
+            {
+                await Task.Delay(700);
+                await response.EditResponseAsync(CreateReelMessage(revealedSymbols));
+            });
+        }
+        catch (ArgumentOutOfRangeException)
+        {
+            await response.EditResponseAsync("ベットは1以上で指定してください。");
+            return;
+        }
+        catch (InvalidOperationException ex)
+        {
+            await response.EditResponseAsync(ex.Message);
+            return;
+        }
         await response.EditResponseAsync(result.Embed);
     }
 
