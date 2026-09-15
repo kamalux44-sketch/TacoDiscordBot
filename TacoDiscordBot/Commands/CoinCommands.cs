@@ -87,7 +87,7 @@ public sealed class CoinCommands : ApplicationCommandModule
         {
             var result = await BotHost.VcExchangeService.ExchangeAsync(guildId, userId);
             var message = result.Success
-                ? $"✅ 換金完了！\n\n{result.ExchangeMinutes}分のVC滞在時間を換金しました。\n\n💰 +{result.Coins:N0}コイン\n\n残りの未換金時間：\n{result.RemainingMinutes}分"
+                ? $"✅ 換金完了！\n\n{FormatMinutes(result.ExchangeMinutes)}のVC滞在時間を換金しました。\n\n💰 +{result.Coins:N0}コイン\n\n残りの未換金時間：\n{FormatMinutes(result.RemainingMinutes)}"
                 : "❌ このVC滞在時間はすでに換金済みです。";
 
             await e.Interaction.CreateResponseAsync(
@@ -177,10 +177,9 @@ public sealed class CoinCommands : ApplicationCommandModule
             ? new TacoDiscordBot.Models.VcExchangeSummary(seconds, 0)
             : await BotHost.VcExchangeService.GetSummaryAsync(ctx.Guild.Id, ctx.User.Id);
         var exchangeableMinutes = VcExchangeService.GetExchangeableMinutes(exchangeSummary);
-        var unexchangedRemainder = exchangeSummary.UnexchangedSeconds / 60 % VcExchangeCalculator.ExchangeUnitMinutes;
         var embed = new DiscordEmbedBuilder()
             .WithTitle("📊 STATUS")
-            .WithDescription($"👤 ユーザー名\n{ctx.User.Username}\n\n💰 所有コイン\n{balance:N0}\n\n🎧 VC滞在時間\n{FormatDuration(seconds)}\n\n💰 換金済み時間\n{FormatDuration(exchangeSummary.ExchangedSeconds)}\n\n🔄 換金可能時間\n{exchangeableMinutes}分\n\n未換金端数\n{unexchangedRemainder}分\n\n🏆 サーバーランキング\n{(rank > 0 ? $"{rank}位" : "圏外")}")
+            .WithDescription($"👤 ユーザー名\n{ctx.User.Username}\n\n💰 所有コイン\n{balance:N0}\n\n🎧 VC滞在時間\n{FormatDuration(seconds)}\n\n💰 換金済み時間\n{FormatDuration(exchangeSummary.ExchangedSeconds)}\n\n🔄 換金可能時間\n{FormatMinutes(exchangeableMinutes)}\n\n🏆 サーバーランキング\n{(rank > 0 ? $"{rank}位" : "圏外")}")
             .WithColor(DiscordColor.Blurple)
             .Build();
         await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder().AddEmbed(embed));
@@ -213,6 +212,9 @@ public sealed class CoinCommands : ApplicationCommandModule
         return $"{(long)span.TotalHours}時間 {span.Minutes}分";
     }
 
+    private static string FormatMinutes(long minutes)
+        => FormatDuration(Math.Max(0, minutes) * 60);
+
     private static DiscordInteractionResponseBuilder CreateExchangeBuilder(
         ulong guildId,
         ulong userId,
@@ -224,9 +226,9 @@ public sealed class CoinCommands : ApplicationCommandModule
         var description = $"💰 VC滞在時間の換金\n\n" +
             $"VC滞在時間：\n{FormatDuration(summary.TotalSeconds)}\n\n" +
             $"換金済み時間：\n{FormatDuration(summary.ExchangedSeconds)}\n\n" +
-            $"換金可能時間：\n{exchangeableMinutes}分\n\n" +
+            $"換金可能時間：\n{FormatMinutes(exchangeableMinutes)}\n\n" +
             $"換金レート：\n6分 = 25コイン\n\n" +
-            $"今回換金：\n{exchangeableMinutes}分\n\n" +
+            $"今回換金：\n{FormatMinutes(exchangeableMinutes)}\n\n" +
             $"獲得コイン：\n{coins:N0}コイン\n\n" +
             $"{coins:N0}コインに換金しますか？";
 
