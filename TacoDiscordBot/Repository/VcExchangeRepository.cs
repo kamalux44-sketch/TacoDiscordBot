@@ -41,23 +41,24 @@ public sealed class VcExchangeRepository
         VcExchangeResult result = null;
         await _base.UseConnectionAsync(async connection =>
         {
-            dynamic transaction = await connection.BeginTransactionAsync();
+            object dbConnection = connection;
+            object transaction = await connection.BeginTransactionAsync();
             try
             {
-                await ExecuteAsync(connection, transaction, """
+                await ExecuteAsync(dbConnection, transaction, """
                     INSERT INTO vc_exchange_accounts(guild_id, user_id)
                     VALUES (@guild_id, @user_id)
                     ON CONFLICT (guild_id, user_id) DO NOTHING;
                     """, guildId, userId);
 
-                var totalSeconds = await ExecuteLongAsync(connection, transaction, """
+                var totalSeconds = await ExecuteLongAsync(dbConnection, transaction, """
                     SELECT COALESCE(SUM(duration_seconds), 0)
                     FROM vc_sessions
                     WHERE guild_id = @guild_id
                       AND user_id = @user_id
                       AND duration_seconds IS NOT NULL;
                     """, guildId, userId);
-                var exchangedSeconds = await ExecuteLongAsync(connection, transaction, """
+                var exchangedSeconds = await ExecuteLongAsync(dbConnection, transaction, """
                     SELECT exchanged_seconds
                     FROM vc_exchange_accounts
                     WHERE guild_id = @guild_id AND user_id = @user_id
@@ -66,57 +67,70 @@ public sealed class VcExchangeRepository
                 var preview = CreatePreview(guildId, userId, totalSeconds, exchangedSeconds);
                 if (!preview.CanExchange)
                 {
-                    await transaction.RollbackAsync();
+                    await ((dynamic)transaction).RollbackAsync();
                     return;
                 }
 
-                await ExecuteAsync(connection, transaction, """
+                (string Name, object Value) exchangeableSecondsParameter =
+                    ("@exchangeable_seconds", preview.ExchangeableSeconds);
+                await ExecuteAsync(dbConnection, transaction, """
                     UPDATE vc_exchange_accounts
                     SET exchanged_seconds = exchanged_seconds + @exchangeable_seconds
                     WHERE guild_id = @guild_id AND user_id = @user_id;
-                    """, guildId, userId, ("@exchangeable_seconds", preview.ExchangeableSeconds));
+                    """, guildId, userId, exchangeableSecondsParameter);
 
-                await ExecuteAsync(connection, transaction, """
+                (string Name, object Value) initialCoinsParameter =
+                    ("@initial_coins", UserDataRepository.InitialCoins);
+                await ExecuteAsync(dbConnection, transaction, """
                     INSERT INTO user_data(guild_id, user_id, coins)
                     VALUES (@guild_id, @user_id, @initial_coins)
                     ON CONFLICT (guild_id, user_id) DO NOTHING;
-                    """, guildId, userId, ("@initial_coins", UserDataRepository.InitialCoins));
-                var newBalance = await ExecuteLongAsync(connection, transaction, """
+                    """, guildId, userId, initialCoinsParameter);
+                (string Name, object Value) coinsParameter = ("@coins", preview.Coins);
+                var newBalance = await ExecuteLongAsync(dbConnection, transaction, """
                     UPDATE user_data
                     SET coins = coins + @coins, updated_at = now()
                     WHERE guild_id = @guild_id AND user_id = @user_id
                     RETURNING coins;
-                    """, guildId, userId, ("@coins", preview.Coins));
-                await transaction.CommitAsync();
+                    """, guildId, userId, coinsParameter);
+                await ((dynamic)transaction).CommitAsync();
                 result = new VcExchangeResult(preview, newBalance);
                 Logger.Info("VcExchangeRepository: VC換金 user={UserId} guild={GuildId} seconds={Seconds} coins={Coins}", userId, guildId, preview.ExchangeableSeconds, preview.Coins);
             }
             catch
             {
-                await transaction.RollbackAsync();
+                await ((dynamic)transaction).RollbackAsync();
                 throw;
             }
             finally
             {
-                await transaction.DisposeAsync();
+                await ((dynamic)transaction).DisposeAsync();
             }
         });
         return result;
     }
 
     private async Task<long> GetTotalSecondsAsync(ulong guildId, ulong userId)
-        => await _base.UseConnectionAsync(async connection => await ExecuteLongAsync(connection, null, """
-            SELECT COALESCE(SUM(duration_seconds), 0)
-            FROM vc_sessions
-            WHERE guild_id = @guild_id AND user_id = @user_id AND duration_seconds IS NOT NULL;
-            """, guildId, userId));
+        => await _base.UseConnectionAsync(async connection =>
+        {
+            object dbConnection = connection;
+            return await ExecuteLongAsync(dbConnection, null, """
+                SELECT COALESCE(SUM(duration_seconds), 0)
+                FROM vc_sessions
+                WHERE guild_id = @guild_id AND user_id = @user_id AND duration_seconds IS NOT NULL;
+                """, guildId, userId);
+        });
 
     private async Task<long> GetExchangedSecondsAsync(ulong guildId, ulong userId)
-        => await _base.UseConnectionAsync(async connection => await ExecuteLongAsync(connection, null, """
-            SELECT COALESCE(exchanged_seconds, 0)
-            FROM vc_exchange_accounts
-            WHERE guild_id = @guild_id AND user_id = @user_id;
-            """, guildId, userId));
+        => await _base.UseConnectionAsync(async connection =>
+        {
+            object dbConnection = connection;
+            return await ExecuteLongAsync(dbConnection, null, """
+                SELECT COALESCE(exchanged_seconds, 0)
+                FROM vc_exchange_accounts
+                WHERE guild_id = @guild_id AND user_id = @user_id;
+                """, guildId, userId);
+        });
 
     private static VcExchangePreview CreatePreview(ulong guildId, ulong userId, long totalSeconds, long exchangedSeconds)
     {
@@ -134,9 +148,9 @@ public sealed class VcExchangeRepository
         );
     }
 
-    private static async Task ExecuteAsync(dynamic connection, dynamic transaction, string sql, ulong firstId, ulong secondId, (string Name, object Value)? extra = null)
+    private static async Task ExecuteAsync(object connection, object transaction, string sql, ulong firstId, ulong secondId, (string Name, object Value)? extra = null)
     {
-        dynamic command = connection.CreateCommand();
+        dynamic command = ((dynamic)connection).CreateCommand();
         command.CommandText = sql;
         command.Transaction = transaction;
         command.Parameters.AddWithValue("@guild_id", (long)firstId);
@@ -146,9 +160,9 @@ public sealed class VcExchangeRepository
         await command.ExecuteNonQueryAsync();
     }
 
-    private static async Task<long> ExecuteLongAsync(dynamic connection, dynamic transaction, string sql, ulong firstId, ulong secondId)
+    private static async Task<long> ExecuteLongAsync(object connection, object transaction, string sql, ulong firstId, ulong secondId)
     {
-        dynamic command = connection.CreateCommand();
+        dynamic command = ((dynamic)connection).CreateCommand();
         command.CommandText = sql;
         command.Transaction = transaction;
         command.Parameters.AddWithValue("@guild_id", (long)firstId);
@@ -156,9 +170,9 @@ public sealed class VcExchangeRepository
         return Convert.ToInt64(await command.ExecuteScalarAsync() ?? 0L);
     }
 
-    private static async Task<long> ExecuteLongAsync(dynamic connection, dynamic transaction, string sql, ulong guildId, ulong userId, (string Name, object Value) extra)
+    private static async Task<long> ExecuteLongAsync(object connection, object transaction, string sql, ulong guildId, ulong userId, (string Name, object Value) extra)
     {
-        dynamic command = connection.CreateCommand();
+        dynamic command = ((dynamic)connection).CreateCommand();
         command.CommandText = sql;
         command.Transaction = transaction;
         command.Parameters.AddWithValue("@guild_id", (long)guildId);
