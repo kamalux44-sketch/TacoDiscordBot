@@ -14,11 +14,19 @@ public sealed class SlotService
     private const string MegaJackpot = "7️⃣";
     private const string UltraRare = "💎";
     private const string BigWin = "🔔";
-    private const double MegaJackpotProbability = 1d / 300d;
-    private const double UltraRareProbability = 1d / 200d;
-    private const double BigWinProbability = 1d / 100d;
-    private static readonly string[] RegularSymbols = ["🍒", "🍋", "🍇", "🍉", "🍈"];
-    private static readonly string[] Symbols = ["🍒", "🍋", "🍇", "🍉", "🍈", "💎", "🔔", "7️⃣"];
+    private const int TotalProbability = 100;
+    private static readonly (string Symbol, int Weight)[] SymbolWeights =
+    [
+        ("🍒", 20),
+        ("🍋", 18),
+        ("🍇", 15),
+        ("🍉", 13),
+        ("🍈", 12),
+        (UltraRare, 9),
+        (BigWin, 8),
+        (MegaJackpot, 5)
+    ];
+    private static readonly string[] Symbols = SymbolWeights.Select(item => item.Symbol).ToArray();
     private readonly SlotRepository _repository;
 
     public SlotService(SlotRepository repository)
@@ -27,11 +35,25 @@ public sealed class SlotService
     }
 
     // 1回分の抽選、当たり判定、統計更新、結果Embedの作成をまとめて実行します。
-    public async Task<SlotSpinResult> SpinAsync()
+    public async Task<SlotSpinResult> SpinAsync(
+        Func<IReadOnlyList<string>, Task>? onReelRevealed = null
+    )
     {
         var symbols = DrawSymbols();
         var rank = DetermineRank(symbols);
         var statistics = await _repository.RecordSpinAsync(rank != SlotWinRank.Loss);
+
+        // 各リールの確定結果を順番に通知し、呼び出し側で表示を更新します。
+        if (onReelRevealed != null)
+        {
+            var revealedSymbols = new List<string>(symbols.Length);
+            foreach (var symbol in symbols)
+            {
+                revealedSymbols.Add(symbol);
+                await onReelRevealed(revealedSymbols.ToArray());
+            }
+        }
+
         var embed = CreateEmbed(symbols, rank, statistics);
 
         return new SlotSpinResult(embed, rank != SlotWinRank.Loss, statistics);
@@ -40,14 +62,10 @@ public sealed class SlotService
     // 永続化されているスロット統計を取得します。
     public Task<SlotStatistics> GetStatisticsAsync() => _repository.GetStatisticsAsync();
 
-    // 各リールを独立して抽選し、特別絵柄の3つ揃い確率を満たす重みを適用します。
+    // 各リールを独立して抽選し、指定された出現確率を適用します。
     public static string[] DrawSymbols()
     {
-        var regularProbability =
-            (1d - MegaJackpotProbabilityRoot - UltraRareProbabilityRoot - BigWinProbabilityRoot) /
-            RegularSymbols.Length;
-
-        return [DrawSymbol(regularProbability), DrawSymbol(regularProbability), DrawSymbol(regularProbability)];
+        return [DrawSymbol(), DrawSymbol(), DrawSymbol()];
     }
 
     // 3つの絵柄が揃っているか確認し、当たりランクを決定します。
@@ -66,32 +84,19 @@ public sealed class SlotService
         };
     }
 
-    private static double MegaJackpotProbabilityRoot => Math.Pow(MegaJackpotProbability, 1d / 3d);
-    private static double UltraRareProbabilityRoot => Math.Pow(UltraRareProbability, 1d / 3d);
-    private static double BigWinProbabilityRoot => Math.Pow(BigWinProbability, 1d / 3d);
-
-    private static string DrawSymbol(double regularProbability)
+    private static string DrawSymbol()
     {
         // 指定された累積確率の範囲から、1リール分の絵柄を選択します。
-        var value = Random.Shared.NextDouble();
-        var boundary = regularProbability;
-
-        foreach (var symbol in RegularSymbols)
+        var value = Random.Shared.Next(TotalProbability);
+        var boundary = 0;
+        foreach (var (symbol, weight) in SymbolWeights)
         {
+            boundary += weight;
             if (value < boundary)
                 return symbol;
-
-            boundary += regularProbability;
         }
 
-        if (value < boundary + UltraRareProbabilityRoot)
-            return UltraRare;
-
-        boundary += UltraRareProbabilityRoot;
-        if (value < boundary + BigWinProbabilityRoot)
-            return BigWin;
-
-        return MegaJackpot;
+        return SymbolWeights[^1].Symbol;
     }
 
     private static DiscordEmbed CreateEmbed(
@@ -106,7 +111,7 @@ public sealed class SlotService
         {
             return new DiscordEmbedBuilder()
                 .WithTitle("🎰 スロット")
-                .WithDescription($"{result}\nハズレ")
+                .WithDescription($"{result}\n\n😢 残念！もう一度挑戦してみよう！")
                 .WithColor(DiscordColor.Blurple)
                 .Build();
         }
@@ -120,10 +125,10 @@ public sealed class SlotService
         };
         var celebration = rank switch
         {
-            SlotWinRank.MegaJackpot => "💰 超当たり！！ 💰",
-            SlotWinRank.UltraRare => "✨ 激レア！！ ✨",
-            SlotWinRank.BigWin => "🎉 大当たり！！ 🎉",
-            _ => "🎊 3つ揃った！！ 🎊"
+            SlotWinRank.MegaJackpot => "🎊🎊🎊 超・大・当・た・り！！ 🎊🎊🎊\n💰💰💰 JACKPOT！！ 💰💰💰",
+            SlotWinRank.UltraRare => "✨✨✨ 激レア大当たり！！ ✨✨✨\n💎 奇跡の3つ揃い！ 💎",
+            SlotWinRank.BigWin => "🎉🎉🎉 大当たり！！ 🎉🎉🎉\n🔔 おめでとう！ 🔔",
+            _ => "🎊🎊🎊 3つ揃った！！ 🎊🎊🎊"
         };
         var embed = new DiscordEmbedBuilder()
             .WithTitle(title)

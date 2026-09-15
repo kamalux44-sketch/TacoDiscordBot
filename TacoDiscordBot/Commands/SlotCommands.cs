@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using DSharpPlus.SlashCommands;
 using TacoDiscordBot.Contexts;
@@ -18,8 +20,14 @@ public sealed class SlotCommands : ApplicationCommandModule
             return;
         }
 
-        var result = await service.SpinAsync();
-        await new InteractionResponseContext(ctx).RespondAsync(result.Embed);
+        var response = new InteractionResponseContext(ctx);
+        await response.DeferResponseAsync();
+        var result = await service.SpinAsync(async revealedSymbols =>
+        {
+            await Task.Delay(700);
+            await response.EditResponseAsync(CreateReelMessage(revealedSymbols));
+        });
+        await response.EditResponseAsync(result.Embed);
     }
 
     [SlashCommand("slotstatus", "スロットの統計を表示します")]
@@ -44,5 +52,18 @@ public sealed class SlotCommands : ApplicationCommandModule
             + $"最長ハマり：{statistics.LongestHitInterval}回転\n"
             + $"最短当たり：{statistics.ShortestHitInterval?.ToString() ?? "未記録"}回転\n"
             + $"累計回転数：{statistics.TotalSpins}回";
+    }
+
+    private static string CreateReelMessage(IReadOnlyList<string> revealedSymbols)
+    {
+        const string hiddenSymbol = "❔";
+        var symbols = Enumerable.Range(0, 3)
+            .Select(index => index < revealedSymbols.Count ? revealedSymbols[index] : hiddenSymbol);
+        var display = string.Join(" │ ", symbols);
+        var isReach = revealedSymbols.Count >= 2 && revealedSymbols
+            .GroupBy(symbol => symbol)
+            .Any(group => group.Count() >= 2);
+        var message = $"🎰 **スロット回転中！**\n\n`{display}`";
+        return isReach ? $"{message}\n\n🔥 **リーチ！** 🔥" : message;
     }
 }
