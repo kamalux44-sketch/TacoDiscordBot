@@ -46,7 +46,7 @@ public sealed class DoubleUpService
             throw new InvalidOperationException("⚠️ 現在 DOUBLE UP をプレイ中です。");
         }
 
-        return CreateResult(game, "HIGH / LOW を選択してください。", false);
+        return CreateResult(game, "HIGH / LOW を選択してください。");
     }
 
     public async Task<DoubleUpResult> SelectAsync(
@@ -82,7 +82,7 @@ public sealed class DoubleUpService
             {
                 game.SevenStreak++;
                 game.State = DoubleUpState.Selecting;
-                return CreateResult(game, CreateSevenMessage(game.SevenStreak), false);
+                return CreateResult(game, CreateSevenMessage(game.SevenStreak));
             }
 
             game.SevenStreak = 0;
@@ -92,12 +92,12 @@ public sealed class DoubleUpService
                 game.CurrentAmount = 0;
                 game.State = DoubleUpState.Lost;
                 _games.TryRemove(CreateGameKey(guildId, userId), out _);
-                return CreateResult(game, "💀 LOSE", true);
+                return CreateResult(game, "💀 LOSE");
             }
 
             game.CurrentAmount = checked(game.CurrentAmount * 2);
             game.State = DoubleUpState.Won;
-            return CreateResult(game, "🎉 WIN!", false);
+            return CreateResult(game, "🎉 WIN!");
         }
     }
 
@@ -113,7 +113,7 @@ public sealed class DoubleUpService
 
         await _coinService.AddCoinsAsync(guildId, userId, game.CurrentAmount);
         _games.TryRemove(CreateGameKey(guildId, userId), out _);
-        return CreateResult(game, $"💰 CASH OUT\n{game.CurrentAmount:N0} を受け取りました。", true);
+        return CreateResult(game, $"💰 CASH OUT\n{game.CurrentAmount:N0} を受け取りました。");
     }
 
     private DoubleUpGame GetGame(ulong guildId, ulong userId)
@@ -121,7 +121,7 @@ public sealed class DoubleUpService
             ? game
             : throw new InvalidOperationException("この DOUBLE UP ゲームは終了しています。");
 
-    private static DoubleUpResult CreateResult(DoubleUpGame game, string message, bool finished)
+    private static DoubleUpResult CreateResult(DoubleUpGame game, string message)
     {
         if (!game.LastNumber.HasValue)
             return CreateStartResult(game);
@@ -136,6 +136,13 @@ public sealed class DoubleUpService
         var streak = game.SevenStreak >= 3
             ? $"🔥 SEVEN × {game.SevenStreak} 🔥\nLUCKY GOD MODE"
             : game.SevenStreak >= 2 ? $"⚡ SEVEN × {game.SevenStreak} ⚡" : string.Empty;
+        var resultMessage = game.State switch
+        {
+            DoubleUpState.Lost => "💥💀 LOSE 💀💥\n\n残念！カードの数字が予想と違いました。\nこのゲームは終了です。",
+            DoubleUpState.Won => "🎉✨ WIN! ✨🎉\n\n💰 賞金が2倍になりました！",
+            DoubleUpState.CashedOut => $"🎊 CASH OUT! 🎊\n\n💰 {game.CurrentAmount:N0} を残高に追加しました。",
+            _ => message
+        };
         var description = string.Join("\n", new[]
         {
             "━━━━━━━━━━━━━━",
@@ -145,7 +152,7 @@ public sealed class DoubleUpService
             "",
             string.IsNullOrWhiteSpace(streak) ? null : streak,
             "",
-            message,
+            resultMessage,
             game.State == DoubleUpState.Selecting && game.LastNumber == SpecialCardNumber
                 ? "賭け金はそのまま。\nもう一度チャレンジできます。\n\n🤔 次のカードは7より...?"
                 : game.State == DoubleUpState.Won
@@ -158,7 +165,13 @@ public sealed class DoubleUpService
         var embed = new DiscordEmbedBuilder()
             .WithTitle("🎰 DOUBLE UP")
             .WithDescription(description)
-            .WithColor(finished ? DiscordColor.DarkRed : DiscordColor.Blurple)
+            .WithColor(game.State switch
+            {
+                DoubleUpState.Lost => DiscordColor.Red,
+                DoubleUpState.Won => DiscordColor.Green,
+                DoubleUpState.CashedOut => DiscordColor.Gold,
+                _ => DiscordColor.Blurple
+            })
             .Build();
         return new DoubleUpResult(
             embed,
