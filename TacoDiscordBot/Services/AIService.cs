@@ -37,13 +37,6 @@ public class AIService : IAiService
         // Bot や対象外チャンネルのメッセージを除外し、対象メッセージだけ AI へ渡します。
         var msg = e.Message;
 
-        Logger.Info(
-            "AIService: メッセージ受信 guild={GuildId} channel={ChannelId} author={AuthorId}",
-            e.Guild?.Id,
-            msg?.Channel?.Id,
-            msg?.Author?.Id
-        );
-
         if (msg == null)
             return;
         if (msg.Author == null)
