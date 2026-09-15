@@ -18,6 +18,8 @@ public sealed class CoinCommands : ApplicationCommandModule
             return;
         }
 
+        // status実行時にユーザーデータを作成し、初期コインを確定させます。
+        var balance = await BotHost.CoinService.GetBalanceAsync(ctx.User.Id);
         var users = await BotHost.CoinService.GetRankingAsync();
         var members = ctx.Guild.Members.Values.Where(member => !member.IsBot).Select(member => member.Id).ToHashSet();
         var ranking = users.Where(user => members.Contains(user.UserId)).ToList();
@@ -27,7 +29,7 @@ public sealed class CoinCommands : ApplicationCommandModule
             : await BotHost.VcRankingService.GetUserTotalSecondsAsync(ctx.Guild.Id, ctx.User.Id);
         var embed = new DiscordEmbedBuilder()
             .WithTitle("📊 STATUS")
-            .WithDescription($"👤 ユーザー名\n{ctx.User.Username}\n\n💰 所有コイン\n{await BotHost.CoinService.GetBalanceAsync(ctx.User.Id):N0}\n\n🎧 VC滞在時間\n{FormatDuration(seconds)}\n\n🏆 サーバーランキング\n{(rank > 0 ? $"{rank}位" : "圏外")}")
+            .WithDescription($"👤 ユーザー名\n{ctx.User.Username}\n\n💰 所有コイン\n{balance:N0}\n\n🎧 VC滞在時間\n{FormatDuration(seconds)}\n\n🏆 サーバーランキング\n{(rank > 0 ? $"{rank}位" : "圏外")}")
             .WithColor(DiscordColor.Blurple)
             .Build();
         await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder().AddEmbed(embed));

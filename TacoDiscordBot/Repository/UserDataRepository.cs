@@ -8,7 +8,7 @@ namespace TacoDiscordBot.Repository;
 
 public sealed class UserDataRepository
 {
-    public const long InitialCoins = 1000;
+    public const long InitialCoins = 5000;
     private readonly BaseRepository _base;
 
     public UserDataRepository(BaseRepository baseRepository)
@@ -18,13 +18,15 @@ public sealed class UserDataRepository
 
     public async Task EnsureTablesExistAsync()
     {
-        const string sql = """
+        var sql = $"""
             CREATE TABLE IF NOT EXISTS user_data (
                 user_id BIGINT PRIMARY KEY,
-                coins BIGINT NOT NULL DEFAULT 1000 CHECK (coins >= 0),
+                coins BIGINT NOT NULL DEFAULT {InitialCoins} CHECK (coins >= 0),
                 created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
                 updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
             );
+            ALTER TABLE user_data
+            ALTER COLUMN coins SET DEFAULT {InitialCoins};
             """;
 
         await _base.ExecuteNonQueryAsync(sql);
