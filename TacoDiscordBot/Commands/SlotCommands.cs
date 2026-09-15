@@ -60,7 +60,7 @@ public sealed class SlotCommands : ApplicationCommandModule
         var symbols = Enumerable.Range(0, 3)
             .Select(index => index < revealedSymbols.Count ? revealedSymbols[index] : hiddenSymbol);
         var display = string.Join(" │ ", symbols);
-        var isReach = revealedSymbols.Count >= 2 && revealedSymbols
+        var isReach = revealedSymbols.Count == 2 && revealedSymbols
             .GroupBy(symbol => symbol)
             .Any(group => group.Count() >= 2);
         var message = $"🎰 **スロット回転中！**\n\n`{display}`";
