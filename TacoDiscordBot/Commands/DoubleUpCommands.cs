@@ -128,7 +128,7 @@ public sealed class DoubleUpCommands : ApplicationCommandModule
         {
             builder.AddEmbed(new DiscordEmbedBuilder()
                 .WithTitle("🎰 DOUBLE UP")
-                .WithDescription("🃏")
+                .WithDescription("━━━━━━━━━━━━━━\n\n🔮 カードをめくります...\n\n🂠\n\n🤔 さて、このカードは7より...?\n\n━━━━━━━━━━━━━━")
                 .WithColor(DiscordColor.Blurple)
                 .Build());
             builder.AddComponents(CreateChoiceButtons(guildId, userId, true));

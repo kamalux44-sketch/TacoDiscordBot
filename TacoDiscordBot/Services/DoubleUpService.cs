@@ -97,7 +97,7 @@ public sealed class DoubleUpService
 
             game.CurrentAmount = checked(game.CurrentAmount * 2);
             game.State = DoubleUpState.Won;
-            return CreateResult(game, "🎉 WIN!", game.CurrentAmount >= game.InitialBet * MaximumMultiplier);
+            return CreateResult(game, "🎉 WIN!", false);
         }
     }
 
@@ -123,6 +123,9 @@ public sealed class DoubleUpService
 
     private static DoubleUpResult CreateResult(DoubleUpGame game, string message, bool finished)
     {
+        if (!game.LastNumber.HasValue)
+            return CreateStartResult(game);
+
         var choice = game.LastChoice switch
         {
             DoubleUpChoice.High => "🔺 HIGH",
@@ -135,14 +138,22 @@ public sealed class DoubleUpService
             : game.SevenStreak >= 2 ? $"⚡ SEVEN × {game.SevenStreak} ⚡" : string.Empty;
         var description = string.Join("\n", new[]
         {
+            "━━━━━━━━━━━━━━",
             choice,
+            "",
             card,
+            "",
             string.IsNullOrWhiteSpace(streak) ? null : streak,
+            "",
             message,
             game.State == DoubleUpState.Selecting && game.LastNumber == SpecialCardNumber
-                ? "賭け金はそのまま。\nもう一度チャレンジできます。"
+                ? "賭け金はそのまま。\nもう一度チャレンジできます。\n\n🤔 次のカードは7より...?"
+                : game.State == DoubleUpState.Won
+                    ? "\n🔥 さらに倍を狙う？\nそれとも賞金を受け取る？"
                 : null,
-            $"💰 {game.CurrentAmount:N0}"
+            "",
+            $"💰 賞金: {game.CurrentAmount:N0}",
+            "━━━━━━━━━━━━━━"
         }.Where(value => !string.IsNullOrWhiteSpace(value)));
         var embed = new DiscordEmbedBuilder()
             .WithTitle("🎰 DOUBLE UP")
@@ -156,6 +167,36 @@ public sealed class DoubleUpService
             game.LastNumber,
             game.LastChoice,
             game.CurrentAmount >= checked(game.InitialBet * MaximumMultiplier)
+        );
+    }
+
+    private static DoubleUpResult CreateStartResult(DoubleUpGame game)
+    {
+        var description = string.Join("\n", new[]
+        {
+            "━━━━━━━━━━━━━━",
+            "",
+            "🂠",
+            "",
+            "🤔 さて、このカードは7より...?",
+            "\n🔺 HIGH or🔻 LOW を選択してください。",
+            "",
+            $"💰 掛け金: {game.CurrentAmount:N0}",
+            "",
+            "━━━━━━━━━━━━━━"
+        });
+        var embed = new DiscordEmbedBuilder()
+            .WithTitle("🎰 DOUBLE UP")
+            .WithDescription(description)
+            .WithColor(DiscordColor.Blurple)
+            .Build();
+        return new DoubleUpResult(
+            embed,
+            game.State,
+            game.CurrentAmount,
+            game.LastNumber,
+            game.LastChoice,
+            false
         );
     }
 
