@@ -16,18 +16,18 @@ public sealed class SlotService
     private const string UltraRare = "💎";
     private const string BigWin = "🔔";
     private const int TotalProbability = 100;
-    private static readonly (string Symbol, int Weight)[] SymbolWeights =
+    private static readonly SlotSymbolConfiguration[] SymbolConfigurations =
     [
-        ("🍒", 20),
-        ("🍋", 18),
-        ("🍇", 15),
-        ("🍉", 13),
-        ("🍈", 12),
-        (UltraRare, 9),
-        (BigWin, 8),
-        (MegaJackpot, 5)
+        new("🍒", 0.30m, 10m, 0.5m),
+        new("🍋", 0.22m, 18m, 0.5m),
+        new("🍇", 0.15m, 28m, 1m),
+        new("🍉", 0.11m, 42m, 1m),
+        new("🍈", 0.09m, 64m, 1.5m),
+        new(UltraRare, 0.06m, 100m, 2m),
+        new(BigWin, 0.05m, 300m, 3m),
+        new(MegaJackpot, 0.02m, 900m, 5m)
     ];
-    private static readonly string[] Symbols = SymbolWeights.Select(item => item.Symbol).ToArray();
+    private static readonly string[] Symbols = SymbolConfigurations.Select(item => item.Symbol).ToArray();
     private readonly SlotRepository _repository;
     private readonly ICoinService _coinService;
 
@@ -55,7 +55,7 @@ public sealed class SlotService
         var symbols = DrawSymbols();
         var rank = DetermineRank(symbols);
         var statistics = await _repository.RecordSpinAsync(rank != SlotWinRank.Loss);
-        var payout = bet * GetPayoutMultiplier(rank);
+        var payout = CalculatePayout(bet, symbols, rank);
         if (payout > 0)
             await _coinService.AddCoinsAsync(guildId, userId, payout);
 
@@ -75,15 +75,30 @@ public sealed class SlotService
         return new SlotSpinResult(embed, rank != SlotWinRank.Loss, statistics, bet, payout);
     }
 
-    public static int GetPayoutMultiplier(SlotWinRank rank)
+    public static decimal GetPayoutMultiplier(SlotWinRank rank)
         => rank switch
         {
-            SlotWinRank.MegaJackpot => 50,
-            SlotWinRank.UltraRare => 10,
-            SlotWinRank.BigWin => 15,
-            SlotWinRank.Win => 2,
-            _ => 0
+            SlotWinRank.MegaJackpot => GetConfiguration(MegaJackpot).ThreeMatchMultiplier,
+            SlotWinRank.UltraRare => GetConfiguration(UltraRare).ThreeMatchMultiplier,
+            SlotWinRank.BigWin => GetConfiguration(BigWin).ThreeMatchMultiplier,
+            SlotWinRank.Win => GetConfiguration("🍒").ThreeMatchMultiplier,
+            _ => 0m
         };
+
+    public static long CalculatePayout(long bet, IReadOnlyList<string> symbols, SlotWinRank rank)
+    {
+        if (rank == SlotWinRank.Loss)
+            return 0;
+
+        var symbol = rank == SlotWinRank.MegaJackpot || rank == SlotWinRank.UltraRare
+            || rank == SlotWinRank.BigWin || rank == SlotWinRank.Win
+            ? symbols[0]
+            : symbols.First(symbol => symbols.Count(value => value == symbol) == 2);
+        var multiplier = rank == SlotWinRank.Reach
+            ? GetConfiguration(symbol).ReachMultiplier
+            : GetConfiguration(symbol).ThreeMatchMultiplier;
+        return checked((long)Math.Floor(bet * multiplier));
+    }
 
     // 永続化されているスロット統計を取得します。
     public Task<SlotStatistics> GetStatisticsAsync() => _repository.GetStatisticsAsync();
@@ -97,17 +112,21 @@ public sealed class SlotService
     // 3つの絵柄が揃っているか確認し、当たりランクを決定します。
     public static SlotWinRank DetermineRank(IReadOnlyList<string> symbols)
     {
-        if (symbols.Count != 3 || symbols.Any(symbol => symbol == null) || symbols.Distinct().Count() != 1)
+        if (symbols.Count != 3 || symbols.Any(symbol => symbol == null) || symbols.Any(symbol => !Symbols.Contains(symbol)))
             return SlotWinRank.Loss;
 
-        return symbols[0] switch
-        {
-            MegaJackpot => SlotWinRank.MegaJackpot,
-            UltraRare => SlotWinRank.UltraRare,
-            BigWin => SlotWinRank.BigWin,
-            _ when Symbols.Contains(symbols[0], StringComparer.Ordinal) => SlotWinRank.Win,
-            _ => SlotWinRank.Loss
-        };
+        if (symbols.Distinct().Count() == 1)
+            return symbols[0] switch
+            {
+                MegaJackpot => SlotWinRank.MegaJackpot,
+                UltraRare => SlotWinRank.UltraRare,
+                BigWin => SlotWinRank.BigWin,
+                _ => SlotWinRank.Win
+            };
+
+        return symbols.GroupBy(symbol => symbol).Any(group => group.Count() == 2)
+            ? SlotWinRank.Reach
+            : SlotWinRank.Loss;
     }
 
     private static string DrawSymbol()
@@ -115,15 +134,18 @@ public sealed class SlotService
         // 指定された累積確率の範囲から、1リール分の絵柄を選択します。
         var value = Random.Shared.Next(TotalProbability);
         var boundary = 0;
-        foreach (var (symbol, weight) in SymbolWeights)
+        foreach (var configuration in SymbolConfigurations)
         {
-            boundary += weight;
+            boundary += (int)(configuration.Probability * TotalProbability);
             if (value < boundary)
-                return symbol;
+                return configuration.Symbol;
         }
 
-        return SymbolWeights[^1].Symbol;
+        return SymbolConfigurations[^1].Symbol;
     }
+
+    private static SlotSymbolConfiguration GetConfiguration(string symbol)
+        => SymbolConfigurations.First(configuration => configuration.Symbol == symbol);
 
     private static DiscordEmbed CreateEmbed(
         IReadOnlyList<string> symbols,
@@ -149,6 +171,7 @@ public sealed class SlotService
             SlotWinRank.MegaJackpot => "🎰 MEGA JACKPOT 🎰",
             SlotWinRank.UltraRare => "💎 ULTRA RARE 💎",
             SlotWinRank.BigWin => "🔔 BIG WIN 🔔",
+            SlotWinRank.Reach => "🔥 リーチ！ 🔥",
             _ => "🎉 WIN! 🎉"
         };
         var celebration = rank switch
@@ -156,6 +179,7 @@ public sealed class SlotService
             SlotWinRank.MegaJackpot => "🎊🎊🎊 超・大・当・た・り！！ 🎊🎊🎊\n💰💰💰 JACKPOT！！ 💰💰💰",
             SlotWinRank.UltraRare => "✨✨✨ 激レア大当たり！！ ✨✨✨\n💎 奇跡の3つ揃い！ 💎",
             SlotWinRank.BigWin => "🎉🎉🎉 大当たり！！ 🎉🎉🎉\n🔔 おめでとう！ 🔔",
+            SlotWinRank.Reach => "🔥 リーチ！\n💰 コイン獲得！",
             _ => "🎊🎊🎊 3つ揃った！！ 🎊🎊🎊"
         };
         var embed = new DiscordEmbedBuilder()
@@ -166,6 +190,7 @@ public sealed class SlotService
                 SlotWinRank.MegaJackpot => DiscordColor.Yellow,
                 SlotWinRank.UltraRare => DiscordColor.Blurple,
                 SlotWinRank.BigWin => DiscordColor.Green,
+                SlotWinRank.Reach => DiscordColor.Orange,
                 _ => DiscordColor.Green
             })
             .AddField("最長ハマり", $"{statistics.LongestHitInterval}回転", true)
@@ -182,6 +207,7 @@ public sealed class SlotService
 public enum SlotWinRank
 {
     Loss,
+    Reach,
     Win,
     BigWin,
     UltraRare,

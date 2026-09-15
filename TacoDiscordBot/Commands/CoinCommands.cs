@@ -64,11 +64,24 @@ public sealed class CoinCommands : ApplicationCommandModule
         if (parts[1] != "confirm" || BotHost.VcExchangeService == null)
             return;
 
-        var result = await BotHost.VcExchangeService.ExchangeAsync(guildId, userId);
-        var response = result == null
-            ? new DiscordInteractionResponseBuilder().WithContent("⚠️ 現在換金できる時間がありません。")
-            : new DiscordInteractionResponseBuilder().AddEmbed(CreateExchangeCompletedEmbed(result));
-        await e.Interaction.CreateResponseAsync(InteractionResponseType.UpdateMessage, response);
+        // DB処理前にACKし、Discordの3秒制限を回避します。
+        await e.Interaction.CreateResponseAsync(InteractionResponseType.DeferredMessageUpdate);
+        try
+        {
+            var result = await BotHost.VcExchangeService.ExchangeAsync(guildId, userId);
+            var response = result == null
+                ? new DiscordWebhookBuilder().WithContent("⚠️ 現在換金できる時間がありません。")
+                : new DiscordWebhookBuilder().AddEmbed(CreateExchangeCompletedEmbed(result));
+            await e.Interaction.EditOriginalResponseAsync(response);
+        }
+        catch (Exception ex)
+        {
+            await e.Interaction.CreateFollowupMessageAsync(
+                new DiscordFollowupMessageBuilder()
+                    .WithContent("換金処理中にエラーが発生しました。時間をおいて再度お試しください。")
+                    .AsEphemeral(true));
+            Console.Error.WriteLine($"[CoinCommands] VC換金エラー: {ex}");
+        }
     }
 
     [SlashCommand("status", "自分のコインとVC滞在時間を表示します")]
