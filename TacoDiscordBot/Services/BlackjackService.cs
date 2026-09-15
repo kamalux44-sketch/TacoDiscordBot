@@ -63,7 +63,7 @@ public sealed class BlackjackService
         return CreateResult(game, false, "もう一度カードを引くか、STANDしてください。", 0);
     }
 
-    public async Task<BlackjackResult> StandAsync(ulong guildId, ulong userId)
+    public async Task<BlackjackResult> SurrenderAsync(ulong guildId, ulong userId)
     {
         if (!_games.TryGetValue(CreateGameKey(guildId, userId), out var game))
             throw new InvalidOperationException("このブラックジャックゲームは終了しています。");
@@ -72,8 +72,42 @@ public sealed class BlackjackService
         {
             if (game.IsFinished)
                 throw new InvalidOperationException("このブラックジャックゲームは終了しています。");
+        }
+
+        // ディーラーの初期2枚が21の場合は、サレンダーできません。
+        if (CalculateTotal(game.DealerCards) == 21)
+            return await FinishAsync(game, BlackjackOutcome.DealerBlackjack);
+
+        return await FinishAsync(game, BlackjackOutcome.Surrender);
+    }
+
+    public async Task<BlackjackResult> StandAsync(
+        ulong guildId,
+        ulong userId,
+        Func<BlackjackResult, Task>? onDealerCardRevealed = null
+    )
+    {
+        if (!_games.TryGetValue(CreateGameKey(guildId, userId), out var game))
+            throw new InvalidOperationException("このブラックジャックゲームは終了しています。");
+
+        var revealResults = new List<BlackjackResult>();
+        lock (game)
+        {
+            if (game.IsFinished)
+                throw new InvalidOperationException("このブラックジャックゲームは終了しています。");
+
+            revealResults.Add(CreateResult(game, false, "ディーラーのカードを公開します。", 0, true));
             while (CalculateTotal(game.DealerCards) < 17)
+            {
                 game.DealerCards.Add(game.Deck.Dequeue());
+                revealResults.Add(CreateResult(game, false, "ディーラーがカードを引きました。", 0, true));
+            }
+        }
+
+        if (onDealerCardRevealed != null)
+        {
+            foreach (var revealResult in revealResults)
+                await onDealerCardRevealed(revealResult);
         }
 
         var playerTotal = CalculateTotal(game.PlayerCards);
@@ -95,6 +129,8 @@ public sealed class BlackjackService
         return total;
     }
 
+    public static long CalculateSurrenderPayout(long bet) => bet / 2;
+
     private async Task<BlackjackResult> FinishAsync(BlackjackGame game, BlackjackOutcome outcome)
     {
         lock (game)
@@ -110,6 +146,7 @@ public sealed class BlackjackService
             BlackjackOutcome.Blackjack => game.Bet * 3,
             BlackjackOutcome.Win => game.Bet * 2,
             BlackjackOutcome.Push => game.Bet,
+            BlackjackOutcome.Surrender => CalculateSurrenderPayout(game.Bet),
             _ => 0
         };
         if (payout > 0)
@@ -120,6 +157,8 @@ public sealed class BlackjackService
             BlackjackOutcome.Blackjack => "🎉 BLACKJACK! 3倍払い戻し",
             BlackjackOutcome.Win => "🎉 勝利！",
             BlackjackOutcome.Push => "🤝 PUSH（引き分け）",
+            BlackjackOutcome.Surrender => "🏳️ サレンダー（ベットの半額返金）",
+            BlackjackOutcome.DealerBlackjack => "💥 ディーラーがブラックジャックのためサレンダーできません。",
             _ => CalculateTotal(game.PlayerCards) > 21 ? "💥 BUST!" : "😢 負け"
         };
         return CreateResult(game, true, message, payout);
@@ -127,14 +166,20 @@ public sealed class BlackjackService
 
     private static string CreateGameKey(ulong guildId, ulong userId) => $"{guildId}:{userId}";
 
-    private static BlackjackResult CreateResult(BlackjackGame game, bool finished, string message, long payout)
+    private static BlackjackResult CreateResult(
+        BlackjackGame game,
+        bool finished,
+        string message,
+        long payout,
+        bool revealDealerCards = false
+    )
     {
-        var dealer = finished
+        var dealer = finished || revealDealerCards
             ? string.Join(" ", game.DealerCards)
             : $"🂠 {game.DealerCards[1]}";
         var embed = new DiscordEmbedBuilder()
             .WithTitle("🃏 BLACKJACK")
-            .WithDescription($"**あなた**\n{string.Join(" ", game.PlayerCards)}\n合計: {CalculateTotal(game.PlayerCards)}\n\n**ディーラー**\n{dealer}\n合計: {(finished ? CalculateTotal(game.DealerCards).ToString() : "❓")}\n\n{message}\nベット: {game.Bet:N0}\n払い戻し: {payout:N0}")
+            .WithDescription($"**あなた**\n{string.Join(" ", game.PlayerCards)}\n合計: {CalculateTotal(game.PlayerCards)}\n\n**ディーラー**\n{dealer}\n合計: {(finished || revealDealerCards ? CalculateTotal(game.DealerCards).ToString() : "❓")}\n\n{message}\nベット: {game.Bet:N0}\n払い戻し: {payout:N0}")
             .WithColor(finished ? DiscordColor.Green : DiscordColor.Blurple)
             .Build();
         return new BlackjackResult(embed, finished);
@@ -159,7 +204,7 @@ public sealed class BlackjackService
         return new Queue<BlackjackCard>(cards);
     }
 
-    private enum BlackjackOutcome { Loss, Push, Win, Blackjack }
+    private enum BlackjackOutcome { Loss, Push, Win, Blackjack, Surrender, DealerBlackjack }
 }
 
 public sealed record BlackjackResult(DiscordEmbed Embed, bool IsFinished);

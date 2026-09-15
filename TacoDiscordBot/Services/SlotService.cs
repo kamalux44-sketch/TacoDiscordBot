@@ -54,8 +54,12 @@ public sealed class SlotService
         await _coinService.RemoveCoinsAsync(guildId, userId, bet);
         var symbols = DrawSymbols();
         var rank = DetermineRank(symbols);
-        var statistics = await _repository.RecordSpinAsync(rank != SlotWinRank.Loss);
         var payout = CalculatePayout(bet, symbols, rank);
+        // 払い戻しが発生しないリーチは、当たり演出や当たり統計の対象外にします。
+        if (rank == SlotWinRank.Reach && payout == 0)
+            rank = SlotWinRank.Loss;
+
+        var statistics = await _repository.RecordSpinAsync(rank != SlotWinRank.Loss);
         if (payout > 0)
             await _coinService.AddCoinsAsync(guildId, userId, payout);
 

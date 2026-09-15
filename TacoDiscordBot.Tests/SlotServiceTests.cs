@@ -49,6 +49,15 @@ public sealed class SlotServiceTests
     }
 
     [Fact]
+    public void 払い戻しが0になるリーチを確認できる()
+    {
+        var symbols = new[] { "🍒", "🍒", "🍋" };
+
+        Assert.Equal(SlotWinRank.Reach, SlotService.DetermineRank(symbols));
+        Assert.Equal(0, SlotService.CalculatePayout(1, symbols, SlotWinRank.Reach));
+    }
+
+    [Fact]
     public void 対象外の絵柄はハズレに判定する()
     {
         Assert.Equal(SlotWinRank.Loss, SlotService.DetermineRank(["❌", "❌", "❌"]));
