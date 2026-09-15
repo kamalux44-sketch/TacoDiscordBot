@@ -138,9 +138,9 @@ public sealed class DoubleUpService
             : game.SevenStreak >= 2 ? $"⚡ SEVEN × {game.SevenStreak} ⚡" : string.Empty;
         var resultMessage = game.State switch
         {
-            DoubleUpState.Lost => "💥💀 LOSE 💀💥\n\n残念！カードの数字が予想と違いました。\nこのゲームは終了です。",
-            DoubleUpState.Won => "🎉✨ WIN! ✨🎉\n\n💰 賞金が2倍になりました！",
-            DoubleUpState.CashedOut => $"🎊 CASH OUT! 🎊\n\n💰 {game.CurrentAmount:N0} を残高に追加しました。",
+            DoubleUpState.Lost => "💥💀 LOSE 💀💥\n\n残念！カードの数字が予想と違いました。\n\nこのゲームは終了です。",
+            DoubleUpState.Won => "🎉✨ WIN! ✨🎉\n\n💰 賞金が2倍になりました！\n\nさて、次のカードは7より...?",
+            DoubleUpState.CashedOut => $"🎊 CASH OUT! 🎊\n\n💰 {game.CurrentAmount:N0} を残高に追加しました。\n\nおめでとうございます！",
             _ => message
         };
         var description = string.Join("\n", new[]
@@ -155,13 +155,11 @@ public sealed class DoubleUpService
             resultMessage,
             game.State == DoubleUpState.Selecting && game.LastNumber == SpecialCardNumber
                 ? "賭け金はそのまま。\nもう一度チャレンジできます。\n\n🤔 次のカードは7より...?"
-                : game.State == DoubleUpState.Won
-                    ? "\n🔥 さらに倍を狙う？\nそれとも賞金を受け取る？"
                 : null,
             "",
             $"💰 賞金: {game.CurrentAmount:N0}",
             "━━━━━━━━━━━━━━"
-        }.Where(value => !string.IsNullOrWhiteSpace(value)));
+        }.Where(value => value is not null));
         var embed = new DiscordEmbedBuilder()
             .WithTitle("🎰 DOUBLE UP")
             .WithDescription(description)
@@ -192,7 +190,7 @@ public sealed class DoubleUpService
             "🂠",
             "",
             "🤔 さて、このカードは7より...?",
-            "\n🔺 HIGH or🔻 LOW を選択してください。",
+            "🔺 HIGH または 🔻 LOW を選択してください。",
             "",
             $"💰 掛け金: {game.CurrentAmount:N0}",
             "",
@@ -214,7 +212,9 @@ public sealed class DoubleUpService
     }
 
     private static string CreateSevenMessage(int streak)
-        => streak >= 3 ? $"🔥 SEVEN × {streak} 🔥\nLUCKY GOD MODE" : streak >= 2 ? $"⚡ SEVEN × {streak} ⚡" : "⚡ SEVEN! ⚡";
+        => streak >= 3
+            ? $"🔥 SEVEN × {streak} 🔥\n\nLUCKY GOD MODE"
+            : streak >= 2 ? $"⚡ SEVEN × {streak} ⚡" : "⚡ SEVEN! ⚡";
 
     private static string CreateGameKey(ulong guildId, ulong userId) => $"{guildId}:{userId}";
 
