@@ -119,6 +119,54 @@ public sealed class UserDataRepository
         return (long)value;
     }
 
+    public async Task<bool> TransferAsync(ulong guildId, ulong senderId, ulong receiverId, long amount)
+    {
+        if (amount <= 0)
+            throw new ArgumentOutOfRangeException(nameof(amount));
+        if (senderId == receiverId)
+            throw new ArgumentException("送信者と受信者は異なる必要があります。", nameof(receiverId));
+
+        var transferred = await _base.UseTransactionAsync<bool>(async (connection, transaction) =>
+        {
+            dynamic command = connection.CreateCommand();
+            command.CommandText = """
+                INSERT INTO user_data(guild_id, user_id)
+                VALUES (@guild_id, @sender_id), (@guild_id, @receiver_id)
+                ON CONFLICT (guild_id, user_id) DO NOTHING;
+
+                WITH deducted AS (
+                    UPDATE user_data
+                    SET coins = coins - @amount, updated_at = now()
+                    WHERE guild_id = @guild_id AND user_id = @sender_id AND coins >= @amount
+                    RETURNING guild_id
+                )
+                UPDATE user_data AS receiver
+                SET coins = receiver.coins + @amount, updated_at = now()
+                FROM deducted
+                WHERE receiver.guild_id = @guild_id AND receiver.user_id = @receiver_id
+                RETURNING receiver.coins;
+                """;
+            command.Transaction = transaction;
+            command.Parameters.AddWithValue("@guild_id", (long)guildId);
+            command.Parameters.AddWithValue("@sender_id", (long)senderId);
+            command.Parameters.AddWithValue("@receiver_id", (long)receiverId);
+            command.Parameters.AddWithValue("@amount", amount);
+
+            dynamic reader = await command.ExecuteReaderAsync();
+            var result = await reader.ReadAsync();
+            await reader.DisposeAsync();
+            return result;
+        });
+
+        if (transferred)
+        {
+            Logger.Info("UserDataRepository: コイン送金 guild={GuildId} sender={SenderId} receiver={ReceiverId} amount={Amount}",
+                guildId, senderId, receiverId, amount);
+        }
+
+        return transferred;
+    }
+
     public async Task<List<UserData>> GetAllAsync(ulong guildId)
     {
         var result = new List<UserData>();

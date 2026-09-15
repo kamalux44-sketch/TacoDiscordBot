@@ -61,6 +61,39 @@ namespace TacoDiscordBot.Repository
         }
 
         /// <summary>
+        /// DB接続とトランザクションを開始し、成功時にコミットします。
+        /// </summary>
+        public virtual async Task<T> UseTransactionAsync<T>(Func<dynamic, dynamic, Task<T>> func)
+        {
+            var connectionType = GetConnectionType();
+
+            if (connectionType == null)
+                throw new InvalidOperationException("Npgsql not available");
+
+            dynamic conn = Activator.CreateInstance(connectionType, _connString);
+            await conn.OpenAsync();
+            dynamic transaction = await conn.BeginTransactionAsync();
+
+            try
+            {
+                var result = await func(conn, transaction);
+                await transaction.CommitAsync();
+                return result;
+            }
+            catch
+            {
+                await transaction.RollbackAsync();
+                throw;
+            }
+            finally
+            {
+                await transaction.DisposeAsync();
+                await conn.CloseAsync();
+                await conn.DisposeAsync();
+            }
+        }
+
+        /// <summary>
         /// 結果を返さない SQL を実行します。
         /// </summary>
         public virtual async Task ExecuteNonQueryAsync(string sql)

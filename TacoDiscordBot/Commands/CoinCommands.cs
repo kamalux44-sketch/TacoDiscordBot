@@ -35,6 +35,52 @@ public sealed class CoinCommands : ApplicationCommandModule
         await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, builder);
     }
 
+    [SlashCommand("pay", "ユーザーにコインを送信します")]
+    public async Task Pay(
+        InteractionContext ctx,
+        [Option("user", "コインを送信するユーザー")] DiscordUser user,
+        [Option("coin", "送信するコイン数")] long coin)
+    {
+        if (ctx.Guild == null || BotHost.CoinService == null)
+        {
+            await RespondAsync(ctx, "このコマンドはDB接続済みのサーバー内で利用できます。", true);
+            return;
+        }
+
+        if (coin <= 0)
+        {
+            await RespondAsync(ctx, "❌ 送信するコインは1枚以上にしてください。", true);
+            return;
+        }
+
+        if (user.Id == ctx.User.Id)
+        {
+            await RespondAsync(ctx, "❌ 自分自身にコインを送信することはできません。", true);
+            return;
+        }
+
+        if (user.IsBot)
+        {
+            await RespondAsync(ctx, "❌ Botにコインを送信することはできません。", true);
+            return;
+        }
+
+        var balanceBefore = await BotHost.CoinService.GetBalanceAsync(ctx.Guild.Id, ctx.User.Id);
+        var transferred = await BotHost.CoinService.TransferAsync(ctx.Guild.Id, ctx.User.Id, user.Id, coin);
+        if (!transferred)
+        {
+            await RespondAsync(ctx,
+                $"❌ コインが不足しています。\n\n現在の残高：\n{balanceBefore:N0}コイン\n\n送信しようとしているコイン：\n{coin:N0}コイン",
+                true);
+            return;
+        }
+
+        var balanceAfter = await BotHost.CoinService.GetBalanceAsync(ctx.Guild.Id, ctx.User.Id);
+        await RespondAsync(ctx,
+            $"💰 コイン送信完了！\n\n<@{user.Id}> に {coin:N0}コインを送信しました。\n\n送信前残高：\n{balanceBefore:N0}コイン\n\n送信後残高：\n{balanceAfter:N0}コイン",
+            false);
+    }
+
     public static async Task HandleExchangeInteractionAsync(DiscordClient client, ComponentInteractionCreateEventArgs e)
     {
         var parts = e.Interaction.Data.CustomId?.Split(':');

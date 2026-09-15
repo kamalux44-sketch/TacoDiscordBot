@@ -36,6 +36,14 @@ public sealed class CoinService : ICoinService
         return balance.Value;
     }
 
+    public async Task<bool> TransferAsync(ulong guildId, ulong senderId, ulong receiverId, long coin)
+    {
+        if (coin <= 0 || senderId == receiverId)
+            return false;
+
+        return await _repository.TransferAsync(guildId, senderId, receiverId, coin);
+    }
+
     public async Task<bool> CanAffordAsync(ulong guildId, ulong userId, long amount)
     {
         if (amount <= 0)
