@@ -173,18 +173,34 @@ public sealed class UserDataRepository : ILastChanceStore
     }
 
     public async Task<List<UserData>> GetAllAsync(ulong guildId)
+        => await GetUsersAsync(guildId, null);
+
+    public async Task<List<UserData>> GetTopAsync(ulong guildId, int limit)
+    {
+        if (limit <= 0)
+            throw new ArgumentOutOfRangeException(nameof(limit));
+
+        return await GetUsersAsync(guildId, limit);
+    }
+
+    private async Task<List<UserData>> GetUsersAsync(ulong guildId, int? limit)
     {
         var result = new List<UserData>();
         await _base.UseConnectionAsync(async connection =>
         {
             dynamic command = connection.CreateCommand();
-            command.CommandText = """
+            var limitClause = limit.HasValue ? "LIMIT @limit" : string.Empty;
+            command.CommandText = $"""
                 SELECT guild_id, user_id, coins, lastchance_count
                 FROM user_data
                 WHERE guild_id = @guild_id
-                ORDER BY coins DESC;
+                ORDER BY coins DESC
+                {limitClause};
                 """;
             command.Parameters.AddWithValue("@guild_id", (long)guildId);
+            if (limit.HasValue)
+                command.Parameters.AddWithValue("@limit", limit.Value);
+
             dynamic reader = await command.ExecuteReaderAsync();
             while (await reader.ReadAsync())
             {

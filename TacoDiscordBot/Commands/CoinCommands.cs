@@ -11,6 +11,8 @@ namespace TacoDiscordBot.Commands;
 
 public sealed class CoinCommands : ApplicationCommandModule
 {
+    private const int RichRankingLimit = 10;
+
     [SlashCommand("exchange", "VC滞在時間をコインへ換金します")]
     public async Task Exchange(InteractionContext ctx)
     {
@@ -195,11 +197,7 @@ public sealed class CoinCommands : ApplicationCommandModule
             return;
         }
 
-        var members = ctx.Guild.Members.Values.Where(member => !member.IsBot).Select(member => member.Id).ToHashSet();
-        var ranking = (await BotHost.CoinService.GetRankingAsync(ctx.Guild.Id))
-            .Where(user => members.Contains(user.UserId))
-            .Take(10)
-            .ToList();
+        var ranking = await BotHost.CoinService.GetTopRankingAsync(ctx.Guild.Id, RichRankingLimit);
         var lines = ranking.Count == 0
             ? "ランキング対象のユーザーがいません。"
             : string.Join("\n", ranking.Select((user, index) => $"{index + 1}位 <@{user.UserId}>\n    {user.Coins:N0} coins　💀 破産: {user.LastChanceCount}回"));

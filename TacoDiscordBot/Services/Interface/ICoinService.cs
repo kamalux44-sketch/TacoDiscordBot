@@ -12,4 +12,5 @@ public interface ICoinService
     Task<bool> TransferAsync(ulong guildId, ulong senderId, ulong receiverId, long coin);
     Task<bool> CanAffordAsync(ulong guildId, ulong userId, long amount);
     Task<IReadOnlyList<UserData>> GetRankingAsync(ulong guildId);
+    Task<IReadOnlyList<UserData>> GetTopRankingAsync(ulong guildId, int limit);
 }

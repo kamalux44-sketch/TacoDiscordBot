@@ -67,4 +67,7 @@ public sealed class CoinService : ICoinService
 
     public async Task<IReadOnlyList<UserData>> GetRankingAsync(ulong guildId)
         => await _repository.GetAllAsync(guildId);
+
+    public async Task<IReadOnlyList<UserData>> GetTopRankingAsync(ulong guildId, int limit)
+        => await _repository.GetTopAsync(guildId, limit);
 }
