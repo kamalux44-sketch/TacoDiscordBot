@@ -13,6 +13,7 @@ public sealed class CoinCommands : ApplicationCommandModule
 {
     private const int RichRankingLimit = 10;
     private const int CoinAmountWidth = 9;
+    private const int BankruptcyCountWidth = 2;
 
     [SlashCommand("exchange", "VC滞在時間をコインへ換金します")]
     public async Task Exchange(InteractionContext ctx)
@@ -201,8 +202,8 @@ public sealed class CoinCommands : ApplicationCommandModule
         var ranking = await BotHost.CoinService.GetTopRankingAsync(ctx.Guild.Id, RichRankingLimit);
         var lines = ranking.Count == 0
             ? "ランキング対象のユーザーがいません。"
-            : string.Join("\n", ranking.Select((user, index) =>
-                $"{index + 1}位 <@{user.UserId}>\n    {user.Coins.ToString("N0").PadLeft(CoinAmountWidth)} coins\n    破産: {user.LastChanceCount:N0}回"));
+            : string.Join("\n\n", ranking.Select((user, index) =>
+                $"{index + 1}位 <@{user.UserId}>\n```text\n    {user.Coins.ToString("N0").PadLeft(CoinAmountWidth)} coins\n    破産: {user.LastChanceCount.ToString("N0").PadLeft(BankruptcyCountWidth)}回\n```"));
         var embed = new DiscordEmbedBuilder().WithTitle("💰 RICH RANKING").WithDescription(lines).WithColor(DiscordColor.Gold).Build();
         await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder().AddEmbed(embed));
     }
