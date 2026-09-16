@@ -7,6 +7,7 @@ using DSharpPlus.EventArgs;
 using DSharpPlus.SlashCommands;
 using TacoDiscordBot.Models;
 using TacoDiscordBot.Services;
+using TacoDiscordBot.Util;
 
 namespace TacoDiscordBot.Commands;
 
@@ -44,6 +45,13 @@ public sealed class MinesCommands : ApplicationCommandModule
         catch (InvalidOperationException ex)
         {
             await ctx.EditResponseAsync(new DiscordWebhookBuilder().WithContent(ex.Message));
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(ex, "Mines開始処理中に予期しないエラーが発生しました。");
+            await ctx.EditResponseAsync(
+                new DiscordWebhookBuilder().WithContent("MINESの開始処理に失敗しました。掛け金は返却されます。")
+            );
         }
     }
 
@@ -103,6 +111,13 @@ public sealed class MinesCommands : ApplicationCommandModule
         catch (InvalidOperationException ex)
         {
             await e.Interaction.EditOriginalResponseAsync(new DiscordWebhookBuilder().WithContent(ex.Message));
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(ex, "Minesコンポーネント処理中に予期しないエラーが発生しました。");
+            await e.Interaction.EditOriginalResponseAsync(
+                new DiscordWebhookBuilder().WithContent("MINESの処理に失敗しました。")
+            );
         }
     }
 

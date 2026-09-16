@@ -5,7 +5,6 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using TacoDiscordBot.Models;
-using TacoDiscordBot.Repository;
 using TacoDiscordBot.Services.Interface;
 
 namespace TacoDiscordBot.Services;
@@ -15,18 +14,16 @@ public sealed class MinesService
     private const int MinimumBet = 1;
     private const int MaximumSafeCount = MinesGame.BoardSize - MinesGame.BombCount;
     private readonly ICoinService _coinService;
-    private readonly IMinesRepository _repository;
+    private readonly ConcurrentDictionary<string, MinesGame> _games = new();
     private readonly Func<IReadOnlyCollection<int>> _createBombs;
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _locks = new();
 
     public MinesService(
         ICoinService coinService,
-        IMinesRepository repository,
         Func<IReadOnlyCollection<int>>? createBombs = null
     )
     {
         _coinService = coinService ?? throw new ArgumentNullException(nameof(coinService));
-        _repository = repository ?? throw new ArgumentNullException(nameof(repository));
         _createBombs = createBombs ?? CreateRandomBombs;
     }
 
@@ -36,7 +33,8 @@ public sealed class MinesService
             throw new ArgumentOutOfRangeException(nameof(bet), "掛け金は1以上で指定してください。");
 
         using var gameLock = await EnterAsync(guildId, userId);
-        if (await _repository.GetAsync(guildId, userId) != null)
+        var key = CreateGameKey(guildId, userId);
+        if (_games.ContainsKey(key))
             throw new InvalidOperationException("⚠️ 現在 MINES をプレイ中です。先に現在のゲームを終了してください。");
 
         await _coinService.RemoveCoinsAsync(guildId, userId, bet);
@@ -47,7 +45,7 @@ public sealed class MinesService
             throw new InvalidOperationException("爆弾配置を作成できませんでした。");
         }
 
-        if (!await _repository.TryCreateAsync(game))
+        if (!_games.TryAdd(key, game))
         {
             await _coinService.AddCoinsAsync(guildId, userId, bet);
             throw new InvalidOperationException("⚠️ 現在 MINES をプレイ中です。先に現在のゲームを終了してください。");
@@ -62,7 +60,7 @@ public sealed class MinesService
             throw new ArgumentOutOfRangeException(nameof(index));
 
         using var gameLock = await EnterAsync(guildId, userId);
-        var game = await GetGameAsync(guildId, userId);
+        var game = GetGame(guildId, userId);
         if (game.State != MinesGameState.Playing)
             throw new InvalidOperationException("このMINESゲームは終了しています。");
         if (!game.Opened.Add(index))
@@ -71,7 +69,7 @@ public sealed class MinesService
         if (game.Bombs.Contains(index))
         {
             game.State = MinesGameState.Lost;
-            await _repository.DeleteAsync(guildId, userId);
+            _games.TryRemove(CreateGameKey(guildId, userId), out _);
             return CreateResult(game, "💥 GAME OVER");
         }
 
@@ -79,30 +77,33 @@ public sealed class MinesService
         {
             game.State = MinesGameState.Won;
             await _coinService.AddCoinsAsync(guildId, userId, game.CurrentAmount);
-            await _repository.DeleteAsync(guildId, userId);
+            _games.TryRemove(CreateGameKey(guildId, userId), out _);
             return CreateResult(game, "🎉 ALL SAFE！自動回収しました。");
         }
 
-        await _repository.SaveAsync(game);
         return CreateResult(game, "安全マスです。続けるか回収してください。");
     }
 
     public async Task<MinesResult> CashOutAsync(ulong guildId, ulong userId)
     {
         using var gameLock = await EnterAsync(guildId, userId);
-        var game = await GetGameAsync(guildId, userId);
+        var game = GetGame(guildId, userId);
         if (game.State != MinesGameState.Playing)
             throw new InvalidOperationException("このMINESゲームは終了しています。");
 
         game.State = MinesGameState.CashedOut;
         await _coinService.AddCoinsAsync(guildId, userId, game.CurrentAmount);
-        await _repository.DeleteAsync(guildId, userId);
+        _games.TryRemove(CreateGameKey(guildId, userId), out _);
         return CreateResult(game, "💰 CHECKOUT！");
     }
 
-    private async Task<MinesGame> GetGameAsync(ulong guildId, ulong userId)
-        => await _repository.GetAsync(guildId, userId)
-            ?? throw new InvalidOperationException("このMINESゲームは終了しています。");
+    private MinesGame GetGame(ulong guildId, ulong userId)
+        => _games.TryGetValue(CreateGameKey(guildId, userId), out var game)
+            ? game
+            : throw new InvalidOperationException("このMINESゲームは終了しています。");
+
+    private static string CreateGameKey(ulong guildId, ulong userId)
+        => $"{guildId}:{userId}";
 
     private async Task<IDisposable> EnterAsync(ulong guildId, ulong userId)
     {
