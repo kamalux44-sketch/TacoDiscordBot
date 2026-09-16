@@ -79,7 +79,7 @@ public sealed class MinesService
         if (!game.Opened.Add(index))
             throw new InvalidOperationException("そのマスはすでに開放されています。");
 
-        if (_roleService != null)
+        if (_roleService != null && game.SafeOpenedCount > 0)
             await _roleService.RecordEventAsync(guildId, userId, "mines_safe_count", game.SafeOpenedCount);
 
         if (game.Bombs.Contains(index))
