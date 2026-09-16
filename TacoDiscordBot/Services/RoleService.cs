@@ -51,6 +51,19 @@ public sealed class RoleService
         }
     }
 
+    public async Task InitializeRolesAsync(ulong guildId)
+    {
+        var definitions = await _repository.GetDefinitionsAsync();
+        try
+        {
+            await InitializeGuildRolesAsync(guildId, definitions);
+        }
+        catch (Exception ex)
+        {
+            Logger.Error(ex, "RoleService: ギルドの実績ロール初期化に失敗 guild={GuildId}", guildId);
+        }
+    }
+
     public Task RefreshUserRolesAsync(ulong guildId, ulong userId)
         => UpdateUserRolesAsync(guildId, userId);
 

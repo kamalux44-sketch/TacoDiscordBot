@@ -30,6 +30,7 @@ public sealed class RoleCommands : ApplicationCommandModule
         }
 
         await service.SetNotificationChannelAsync(ctx.Guild.Id, ctx.Channel.Id);
+        await service.InitializeRolesAsync(ctx.Guild.Id);
         await new InteractionResponseContext(ctx).RespondAsync(
             $"✅ ロール通知チャンネルを #{ctx.Channel.Name} に設定しました。",
             true
