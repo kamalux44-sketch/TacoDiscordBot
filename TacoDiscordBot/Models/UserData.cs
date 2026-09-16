@@ -7,4 +7,6 @@ public sealed class UserData
     public ulong UserId { get; init; }
 
     public long Coins { get; init; }
+
+    public long LastChanceCount { get; init; }
 }

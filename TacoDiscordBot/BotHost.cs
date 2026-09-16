@@ -32,6 +32,8 @@ public static class BotHost
 
     public static Services.MinesService MinesService { get; private set; }
 
+    public static Services.LastChanceService LastChanceService { get; private set; }
+
     public static Services.VcExchangeService VcExchangeService { get; private set; }
 
     public static async Task RunAsync()
@@ -248,6 +250,10 @@ public static class BotHost
                 ? null
                 : new Services.MinesService(CoinService);
 
+            LastChanceService = userDataRepo == null
+                ? null
+                : new Services.LastChanceService(userDataRepo);
+
             SlotService = slotRepo == null || CoinService == null
                 ? null
                 : new Services.SlotService(slotRepo, CoinService);
@@ -274,6 +280,8 @@ public static class BotHost
             Client.ComponentInteractionCreated += Commands.DoubleUpCommands.HandleComponentInteractionAsync;
 
             Client.ComponentInteractionCreated += Commands.MinesCommands.HandleComponentInteractionAsync;
+
+            Client.ComponentInteractionCreated += Commands.LastChanceCommands.HandleComponentInteractionAsync;
 
             Client.ComponentInteractionCreated += Commands.CoinCommands.HandleExchangeComponentInteractionAsync;
 
@@ -323,6 +331,8 @@ public static class BotHost
             slash.RegisterCommands<Commands.DoubleUpCommands>();
 
             slash.RegisterCommands<Commands.MinesCommands>();
+
+            slash.RegisterCommands<Commands.LastChanceCommands>();
 
             slash.RegisterCommands<Commands.CoinCommands>();
 

@@ -2,11 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using TacoDiscordBot.Models;
+using TacoDiscordBot.Services.Interface;
 using TacoDiscordBot.Util;
 
 namespace TacoDiscordBot.Repository;
 
-public sealed class UserDataRepository
+public sealed class UserDataRepository : ILastChanceStore
 {
     public const long InitialCoins = 5000;
     private readonly BaseRepository _base;
@@ -23,12 +24,15 @@ public sealed class UserDataRepository
                 guild_id BIGINT NOT NULL,
                 user_id BIGINT NOT NULL,
                 coins BIGINT NOT NULL DEFAULT {InitialCoins} CHECK (coins >= 0),
+                lastchance_count BIGINT NOT NULL DEFAULT 0 CHECK (lastchance_count >= 0),
                 created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
                 updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
                 PRIMARY KEY (guild_id, user_id)
             );
             ALTER TABLE user_data
             ALTER COLUMN coins SET DEFAULT {InitialCoins};
+            ALTER TABLE user_data
+            ADD COLUMN IF NOT EXISTS lastchance_count BIGINT NOT NULL DEFAULT 0;
             """;
         await _base.ExecuteNonQueryAsync(sql);
         Logger.Info("UserDataRepository: サーバー単位ユーザーデータテーブル確認・作成完了");
@@ -44,7 +48,7 @@ public sealed class UserDataRepository
                 INSERT INTO user_data(guild_id, user_id)
                 VALUES (@guild_id, @user_id)
                 ON CONFLICT (guild_id, user_id) DO NOTHING;
-                SELECT guild_id, user_id, coins
+                SELECT guild_id, user_id, coins, lastchance_count
                 FROM user_data
                 WHERE guild_id = @guild_id AND user_id = @user_id;
                 """;
@@ -57,7 +61,8 @@ public sealed class UserDataRepository
                 {
                     GuildId = (ulong)reader.GetInt64(0),
                     UserId = (ulong)reader.GetInt64(1),
-                    Coins = reader.GetInt64(2)
+                    Coins = reader.GetInt64(2),
+                    LastChanceCount = reader.GetInt64(3)
                 };
             }
             await reader.DisposeAsync();
@@ -174,7 +179,7 @@ public sealed class UserDataRepository
         {
             dynamic command = connection.CreateCommand();
             command.CommandText = """
-                SELECT guild_id, user_id, coins
+                SELECT guild_id, user_id, coins, lastchance_count
                 FROM user_data
                 WHERE guild_id = @guild_id
                 ORDER BY coins DESC;
@@ -187,11 +192,56 @@ public sealed class UserDataRepository
                 {
                     GuildId = (ulong)reader.GetInt64(0),
                     UserId = (ulong)reader.GetInt64(1),
-                    Coins = reader.GetInt64(2)
+                    Coins = reader.GetInt64(2),
+                    LastChanceCount = reader.GetInt64(3)
                 });
             }
             await reader.DisposeAsync();
         });
         return result;
+    }
+
+    public async Task<bool> TryStartAsync(ulong guildId, ulong userId)
+    {
+        await GetOrCreateAsync(guildId, userId);
+        return await _base.UseTransactionAsync<bool>(async (connection, transaction) =>
+        {
+            dynamic command = connection.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandText = """
+                UPDATE user_data
+                SET lastchance_count = lastchance_count + 1, updated_at = now()
+                WHERE guild_id = @guild_id AND user_id = @user_id AND coins = 0
+                RETURNING lastchance_count;
+                """;
+            command.Parameters.AddWithValue("@guild_id", (long)guildId);
+            command.Parameters.AddWithValue("@user_id", (long)userId);
+            return (await command.ExecuteScalarAsync()) != null;
+        });
+    }
+
+    public async Task<long?> CompleteAsync(ulong guildId, ulong userId, long reward)
+    {
+        if (reward < 0)
+            throw new ArgumentOutOfRangeException(nameof(reward));
+
+        await GetOrCreateAsync(guildId, userId);
+        object value = null;
+        await _base.UseConnectionAsync(async connection =>
+        {
+            dynamic command = connection.CreateCommand();
+            command.CommandText = """
+                UPDATE user_data
+                SET coins = coins + @reward, updated_at = now()
+                WHERE guild_id = @guild_id AND user_id = @user_id AND coins = 0
+                RETURNING coins;
+                """;
+            command.Parameters.AddWithValue("@reward", reward);
+            command.Parameters.AddWithValue("@guild_id", (long)guildId);
+            command.Parameters.AddWithValue("@user_id", (long)userId);
+            value = await command.ExecuteScalarAsync();
+        });
+
+        return value == null || value == DBNull.Value ? null : (long)value;
     }
 }
