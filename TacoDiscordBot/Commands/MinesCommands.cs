@@ -1,5 +1,6 @@
 using System;
 using System.Globalization;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using DSharpPlus;
 using DSharpPlus.Entities;
@@ -33,9 +34,11 @@ public sealed class MinesCommands : ApplicationCommandModule
         }
 
         await ctx.CreateResponseAsync(InteractionResponseType.DeferredChannelMessageWithSource);
+        var gameStarted = false;
         try
         {
             var result = await service.StartAsync(ctx.Guild.Id, ctx.User.Id, bet);
+            gameStarted = true;
             await ctx.EditResponseAsync(CreateWebhookBuilder(result, ctx.Guild.Id, ctx.User.Id));
         }
         catch (ArgumentOutOfRangeException ex)
@@ -49,6 +52,18 @@ public sealed class MinesCommands : ApplicationCommandModule
         catch (Exception ex)
         {
             Logger.Error(ex, "Mines開始処理中に予期しないエラーが発生しました。");
+            if (gameStarted)
+            {
+                try
+                {
+                    await service.CancelAndRefundAsync(ctx.Guild.Id, ctx.User.Id, bet);
+                }
+                catch (Exception refundException)
+                {
+                    Logger.Error(refundException, "Mines開始失敗時の掛け金返却に失敗しました。");
+                }
+            }
+
             await ctx.EditResponseAsync(
                 new DiscordWebhookBuilder().WithContent("MINESの開始処理に失敗しました。掛け金は返却されます。")
             );
@@ -121,23 +136,26 @@ public sealed class MinesCommands : ApplicationCommandModule
         }
     }
 
-    private static DiscordInteractionResponseBuilder CreateBuilder(
-        MinesResult result,
-        ulong guildId,
-        ulong userId
-    )
+    private static string CreateContent(MinesResult result)
     {
         var game = result.Game;
         var payout = game.State == MinesGameState.Lost ? 0 : game.CurrentAmount;
-        var content = $"{result.Message}\n\n"
+        return $"{result.Message}\n\n"
             + $"**🎮 Mines**\n"
             + $"賭け金: **{game.Bet:N0} Coin**\n"
             + $"開放数: **{game.SafeOpenedCount} / 16**\n"
             + $"現在倍率: **{game.Multiplier:0.##}x**\n"
             + $"現在回収額: **{payout:N0} Coin**\n\n"
             + (game.State == MinesGameState.Lost ? "最終盤面:" : "盤面:");
+    }
 
-        var builder = new DiscordInteractionResponseBuilder().WithContent(content);
+    private static IEnumerable<DiscordComponent[]> CreateComponentRows(
+        MinesResult result,
+        ulong guildId,
+        ulong userId
+    )
+    {
+        var game = result.Game;
         for (var row = 0; row < MinesGame.RowCount; row++)
         {
             var buttons = new DiscordComponent[MinesGame.ColumnCount];
@@ -158,15 +176,29 @@ public sealed class MinesCommands : ApplicationCommandModule
                 );
             }
 
-            builder.AddComponents(buttons);
+            yield return buttons;
         }
 
-        builder.AddComponents(new DiscordButtonComponent(
-            ButtonStyle.Success,
-            $"mines:cashout:{guildId}:{userId}",
-            "💰 CHECKOUT",
-            game.State != MinesGameState.Playing
-        ));
+        yield return new DiscordComponent[]
+        {
+            new DiscordButtonComponent(
+                ButtonStyle.Success,
+                $"mines:cashout:{guildId}:{userId}",
+                "💰 CHECKOUT",
+                game.State != MinesGameState.Playing
+            )
+        };
+    }
+
+    private static DiscordInteractionResponseBuilder CreateBuilder(
+        MinesResult result,
+        ulong guildId,
+        ulong userId
+    )
+    {
+        var builder = new DiscordInteractionResponseBuilder().WithContent(CreateContent(result));
+        foreach (var row in CreateComponentRows(result, guildId, userId))
+            builder.AddComponents(row);
         return builder;
     }
 
@@ -176,9 +208,8 @@ public sealed class MinesCommands : ApplicationCommandModule
         ulong userId
     )
     {
-        var response = CreateBuilder(result, guildId, userId);
-        var builder = new DiscordWebhookBuilder().WithContent(response.Content);
-        foreach (var row in response.Components)
+        var builder = new DiscordWebhookBuilder().WithContent(CreateContent(result));
+        foreach (var row in CreateComponentRows(result, guildId, userId))
             builder.AddComponents(row);
         return builder;
     }

@@ -54,6 +54,16 @@ public sealed class MinesService
         return CreateResult(game, "マスを選択するか、回収してください。");
     }
 
+    public async Task<bool> CancelAndRefundAsync(ulong guildId, ulong userId, long bet)
+    {
+        using var gameLock = await EnterAsync(guildId, userId);
+        if (!_games.TryRemove(CreateGameKey(guildId, userId), out _))
+            return false;
+
+        await _coinService.AddCoinsAsync(guildId, userId, bet);
+        return true;
+    }
+
     public async Task<MinesResult> OpenAsync(ulong guildId, ulong userId, int index)
     {
         if (index < 0 || index >= MinesGame.BoardSize)
