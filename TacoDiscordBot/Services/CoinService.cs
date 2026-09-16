@@ -21,6 +21,9 @@ public sealed class CoinService : ICoinService
     public async Task<long> GetBalanceAsync(ulong guildId, ulong userId)
         => (await _repository.GetOrCreateAsync(guildId, userId)).Coins;
 
+    public Task<UserData> GetUserDataAsync(ulong guildId, ulong userId)
+        => _repository.GetOrCreateAsync(guildId, userId);
+
     public async Task<long> AddCoinsAsync(ulong guildId, ulong userId, long amount)
     {
         if (amount <= 0)

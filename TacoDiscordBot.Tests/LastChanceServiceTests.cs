@@ -54,10 +54,10 @@ public sealed class LastChanceServiceTests
     }
 
     [Fact]
-    public async Task 一発逆転は60パーセントで0になり40パーセントでJACKPOTになる()
+    public async Task 一発逆転は95パーセントで0になり5パーセントでJACKPOTになる()
     {
         var store = new FakeLastChanceStore();
-        var randomValues = new Queue<int>(new[] { 59, 60 });
+        var randomValues = new Queue<int>(new[] { 94, 95 });
         var service = new LastChanceService(store, () => randomValues.Dequeue());
 
         await service.StartAsync(1, 10);

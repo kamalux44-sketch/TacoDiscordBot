@@ -156,7 +156,7 @@ public sealed class CoinCommands : ApplicationCommandModule
             false);
     }
 
-    [SlashCommand("status", "自分のコインとVC滞在時間を表示します")]
+    [SlashCommand("status", "自分のコイン、破産回数、VC滞在時間を表示します")]
     public async Task Status(InteractionContext ctx)
     {
         if (ctx.Guild == null || BotHost.CoinService == null)
@@ -166,6 +166,7 @@ public sealed class CoinCommands : ApplicationCommandModule
         }
 
         var balance = await BotHost.CoinService.GetBalanceAsync(ctx.Guild.Id, ctx.User.Id);
+        var userData = await BotHost.CoinService.GetUserDataAsync(ctx.Guild.Id, ctx.User.Id);
         var users = await BotHost.CoinService.GetRankingAsync(ctx.Guild.Id);
         var members = ctx.Guild.Members.Values.Where(member => !member.IsBot).Select(member => member.Id).ToHashSet();
         var ranking = users.Where(user => members.Contains(user.UserId)).ToList();
@@ -179,7 +180,7 @@ public sealed class CoinCommands : ApplicationCommandModule
         var exchangeableMinutes = VcExchangeService.GetExchangeableMinutes(exchangeSummary);
         var embed = new DiscordEmbedBuilder()
             .WithTitle("📊 STATUS")
-            .WithDescription($"👤 ユーザー名\n{ctx.User.Username}\n\n💰 所有コイン\n{balance:N0}\n\n🎧 VC滞在時間\n{FormatDuration(seconds)}\n\n💰 換金済み時間\n{FormatDuration(exchangeSummary.ExchangedSeconds)}\n\n🔄 換金可能時間\n{FormatMinutes(exchangeableMinutes)}\n\n🏆 サーバーランキング\n{(rank > 0 ? $"{rank}位" : "圏外")}")
+            .WithDescription($"👤 ユーザー名\n{ctx.User.Username}\n\n💰 所有コイン\n{balance:N0}\n\n💀 破産回数\n{userData.LastChanceCount}回\n\n🎧 VC滞在時間\n{FormatDuration(seconds)}\n\n🔄 換金可能時間\n{FormatMinutes(exchangeableMinutes)}\n\n🏆 サーバーランキング\n{(rank > 0 ? $"{rank}位" : "圏外")}")
             .WithColor(DiscordColor.Blurple)
             .Build();
         await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder().AddEmbed(embed));

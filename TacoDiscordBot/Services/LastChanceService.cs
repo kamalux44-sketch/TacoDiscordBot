@@ -11,6 +11,8 @@ public sealed class LastChanceService
 {
     public const long StableReward = 1_000;
     public const long JackpotReward = 5_000;
+    private const int RandomRange = 100;
+    private const int JackpotProbabilityPercent = 5;
 
     private readonly ILastChanceStore _store;
     private readonly ConcurrentDictionary<string, LastChanceGame> _games = new();
@@ -25,7 +27,7 @@ public sealed class LastChanceService
     )
     {
         _store = store ?? throw new ArgumentNullException(nameof(store));
-        _nextRandom = nextRandom ?? (() => Random.Shared.Next(100));
+        _nextRandom = nextRandom ?? (() => Random.Shared.Next(RandomRange));
         _roleService = roleService;
     }
 
@@ -89,7 +91,9 @@ public sealed class LastChanceService
         {
             LastChanceChoice.Stable => StableReward,
             LastChanceChoice.Gamble => DetermineGambleReward(_nextRandom()),
-            LastChanceChoice.Jackpot => _nextRandom() < 60 ? 0 : JackpotReward,
+            LastChanceChoice.Jackpot => _nextRandom() >= RandomRange - JackpotProbabilityPercent
+                ? JackpotReward
+                : 0,
             _ => throw new ArgumentOutOfRangeException(nameof(choice))
         };
 
