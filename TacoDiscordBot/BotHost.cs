@@ -356,6 +356,12 @@ public static class BotHost
 
             Logger.Info("BotHost: Discord 接続完了");
 
+            if (RoleService != null)
+            {
+                await RoleService.InitializeRolesAsync();
+                Logger.Info("BotHost: 実績ロール初期化完了");
+            }
+
             // Botを終了させないために待機
             await Task.Delay(Timeout.Infinite);
         }

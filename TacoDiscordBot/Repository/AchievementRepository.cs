@@ -57,6 +57,12 @@ public sealed class AchievementRepository
                 granted_at TIMESTAMPTZ NOT NULL DEFAULT now(),
                 PRIMARY KEY (guild_id, user_id, achievement_id)
             );
+            CREATE TABLE IF NOT EXISTS guild_achievement_roles (
+                guild_id BIGINT NOT NULL,
+                achievement_id BIGINT NOT NULL REFERENCES achievement_definitions(id),
+                role_id BIGINT NOT NULL,
+                PRIMARY KEY (guild_id, achievement_id)
+            );
             INSERT INTO achievement_definitions
                 (role_name, condition_type, threshold, rarity, condition_description)
             VALUES
@@ -114,6 +120,61 @@ public sealed class AchievementRepository
             value = await command.ExecuteScalarAsync();
         });
         return value is null or DBNull ? null : (ulong)(long)value;
+    }
+
+    public async Task<IReadOnlyList<ulong>> GetConfiguredGuildIdsAsync()
+    {
+        var result = new List<ulong>();
+        await _base.UseConnectionAsync(async connection =>
+        {
+            dynamic command = connection.CreateCommand();
+            command.CommandText = """
+                SELECT guild_id
+                FROM guild_settings
+                WHERE role_notification_channel_id IS NOT NULL;
+                """;
+            dynamic reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+                result.Add((ulong)reader.GetInt64(0));
+            await reader.DisposeAsync();
+        });
+        return result;
+    }
+
+    public async Task<ulong?> GetGuildRoleIdAsync(ulong guildId, long achievementId)
+    {
+        object value = null;
+        await _base.UseConnectionAsync(async connection =>
+        {
+            dynamic command = connection.CreateCommand();
+            command.CommandText = """
+                SELECT role_id
+                FROM guild_achievement_roles
+                WHERE guild_id = @guild_id AND achievement_id = @achievement_id;
+                """;
+            command.Parameters.AddWithValue("@guild_id", (long)guildId);
+            command.Parameters.AddWithValue("@achievement_id", achievementId);
+            value = await command.ExecuteScalarAsync();
+        });
+        return value is null or DBNull ? null : (ulong)(long)value;
+    }
+
+    public async Task SetGuildRoleIdAsync(ulong guildId, long achievementId, ulong roleId)
+    {
+        await _base.UseConnectionAsync(async connection =>
+        {
+            dynamic command = connection.CreateCommand();
+            command.CommandText = """
+                INSERT INTO guild_achievement_roles(guild_id, achievement_id, role_id)
+                VALUES (@guild_id, @achievement_id, @role_id)
+                ON CONFLICT (guild_id, achievement_id) DO UPDATE
+                SET role_id = EXCLUDED.role_id;
+                """;
+            command.Parameters.AddWithValue("@guild_id", (long)guildId);
+            command.Parameters.AddWithValue("@achievement_id", achievementId);
+            command.Parameters.AddWithValue("@role_id", (long)roleId);
+            await command.ExecuteNonQueryAsync();
+        });
     }
 
     public async Task<AchievementStats> IncrementStatAsync(ulong guildId, ulong userId, string conditionType, long amount = 1)
