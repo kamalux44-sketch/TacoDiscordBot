@@ -256,7 +256,7 @@ public static class BotHost
 
             DoubleUpService = CoinService == null
                 ? null
-                : new Services.DoubleUpService(CoinService);
+                : new Services.DoubleUpService(CoinService, roleService: RoleService);
 
             MinesService = CoinService == null
                 ? null

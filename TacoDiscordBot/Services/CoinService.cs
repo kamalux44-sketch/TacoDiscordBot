@@ -38,8 +38,6 @@ public sealed class CoinService : ICoinService
         var balance = await _repository.TryRemoveCoinsAsync(guildId, userId, amount);
         if (!balance.HasValue)
             throw new InvalidOperationException("コインが不足しています。");
-        if (_roleService != null)
-            await _roleService.RefreshUserRolesAsync(guildId, userId);
         return balance.Value;
     }
 

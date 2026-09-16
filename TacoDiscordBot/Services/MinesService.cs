@@ -80,12 +80,20 @@ public sealed class MinesService
             throw new InvalidOperationException("そのマスはすでに開放されています。");
 
         if (_roleService != null && game.SafeOpenedCount > 0)
-            await _roleService.RecordEventAsync(guildId, userId, "mines_safe_count", game.SafeOpenedCount);
+            await _roleService.RecordEventAsync(
+                guildId,
+                userId,
+                "mines_safe_count",
+                game.SafeOpenedCount,
+                updateRoles: false
+            );
 
         if (game.Bombs.Contains(index))
         {
             game.State = MinesGameState.Lost;
             _games.TryRemove(CreateGameKey(guildId, userId), out _);
+            if (_roleService != null && game.SafeOpenedCount == 0)
+                await _roleService.RefreshUserRolesAsync(guildId, userId);
             return CreateResult(game, "💥 GAME OVER");
         }
 

@@ -71,6 +71,8 @@ public sealed class SlotService
 
         if (_roleService != null && rank is SlotWinRank.MegaJackpot or SlotWinRank.UltraRare or SlotWinRank.BigWin)
             await _roleService.RecordEventAsync(guildId, userId, "rare_slot_count");
+        else if (_roleService != null)
+            await _roleService.RefreshUserRolesAsync(guildId, userId);
 
         // 各リールの確定結果を順番に通知し、呼び出し側で表示を更新します。
         if (onReelRevealed != null)

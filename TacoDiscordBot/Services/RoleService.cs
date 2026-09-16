@@ -54,10 +54,17 @@ public sealed class RoleService
     public Task RefreshUserRolesAsync(ulong guildId, ulong userId)
         => UpdateUserRolesAsync(guildId, userId);
 
-    public async Task RecordEventAsync(ulong guildId, ulong userId, string conditionType, long amount = 1)
+    public async Task RecordEventAsync(
+        ulong guildId,
+        ulong userId,
+        string conditionType,
+        long amount = 1,
+        bool updateRoles = true
+    )
     {
         await _repository.IncrementStatAsync(guildId, userId, conditionType, amount);
-        await UpdateUserRolesAsync(guildId, userId);
+        if (updateRoles)
+            await UpdateUserRolesAsync(guildId, userId);
     }
 
     public async Task UpdateUserRolesAsync(ulong guildId, ulong userId)

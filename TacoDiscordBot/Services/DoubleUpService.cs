@@ -16,6 +16,7 @@ public sealed class DoubleUpService
     private const int MaximumMultiplier = 128;
     private const int DefaultRevealDelayMilliseconds = 800;
     private readonly ICoinService _coinService;
+    private readonly RoleService _roleService;
     private readonly ConcurrentDictionary<string, DoubleUpGame> _games = new();
     private readonly Func<int> _drawNumber;
     private readonly Func<TimeSpan, Task> _delay;
@@ -23,12 +24,14 @@ public sealed class DoubleUpService
     public DoubleUpService(
         ICoinService coinService,
         Func<int>? drawNumber = null,
-        Func<TimeSpan, Task>? delay = null
+        Func<TimeSpan, Task>? delay = null,
+        RoleService? roleService = null
     )
     {
         _coinService = coinService ?? throw new ArgumentNullException(nameof(coinService));
         _drawNumber = drawNumber ?? (() => Random.Shared.Next(MinimumCardNumber, MaximumCardNumber + 1));
         _delay = delay ?? Task.Delay;
+        _roleService = roleService;
     }
 
     public async Task<DoubleUpResult> StartAsync(ulong guildId, ulong userId, long bet)
@@ -57,6 +60,8 @@ public sealed class DoubleUpService
     )
     {
         var game = GetGame(guildId, userId);
+        DoubleUpResult result;
+        var lost = false;
         lock (game)
         {
             if (game.State != DoubleUpState.Selecting && game.State != DoubleUpState.Won)
@@ -92,13 +97,21 @@ public sealed class DoubleUpService
                 game.CurrentAmount = 0;
                 game.State = DoubleUpState.Lost;
                 _games.TryRemove(CreateGameKey(guildId, userId), out _);
-                return CreateResult(game, "💀 LOSE");
+                lost = true;
+                result = CreateResult(game, "💀 LOSE");
             }
-
-            game.CurrentAmount = checked(game.CurrentAmount * 2);
-            game.State = DoubleUpState.Won;
-            return CreateResult(game, "🎉 WIN!");
+            else
+            {
+                game.CurrentAmount = checked(game.CurrentAmount * 2);
+                game.State = DoubleUpState.Won;
+                result = CreateResult(game, "🎉 WIN!");
+            }
         }
+
+        if (lost && _roleService != null)
+            await _roleService.RefreshUserRolesAsync(guildId, userId);
+
+        return result;
     }
 
     public async Task<DoubleUpResult> CashOutAsync(ulong guildId, ulong userId)
