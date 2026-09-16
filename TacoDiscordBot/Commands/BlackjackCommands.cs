@@ -80,10 +80,49 @@ public sealed class BlackjackCommands : ApplicationCommandModule
 
         try
         {
+            if (parts[1] == "stand")
+            {
+                var hasResponded = false;
+                var standResult = await service.StandAsync(guildId, ownerId, async progress =>
+                {
+                    var progressBuilder = CreateBuilder(progress, guildId, ownerId, false);
+                    if (!hasResponded)
+                    {
+                        await e.Interaction.CreateResponseAsync(
+                            InteractionResponseType.UpdateMessage,
+                            progressBuilder
+                        );
+                        hasResponded = true;
+                        return;
+                    }
+
+                    await Task.Delay(700);
+                    await e.Interaction.EditOriginalResponseAsync(
+                        new DiscordWebhookBuilder().AddEmbed(progress.Embed)
+                    );
+                });
+
+                if (hasResponded)
+                {
+                    await e.Interaction.EditOriginalResponseAsync(
+                        new DiscordWebhookBuilder().AddEmbed(standResult.Embed)
+                    );
+                }
+                else
+                {
+                    await e.Interaction.CreateResponseAsync(
+                        InteractionResponseType.UpdateMessage,
+                        CreateBuilder(standResult, guildId, ownerId)
+                    );
+                }
+
+                return;
+            }
+
             var result = parts[1] switch
             {
                 "hit" => await service.HitAsync(guildId, ownerId),
-                "stand" => await service.StandAsync(guildId, ownerId),
+                "surrender" => await service.SurrenderAsync(guildId, ownerId),
                 _ => null
             };
             if (result == null)
@@ -103,16 +142,22 @@ public sealed class BlackjackCommands : ApplicationCommandModule
         }
     }
 
-    private static DiscordInteractionResponseBuilder CreateBuilder(BlackjackResult result, ulong guildId, ulong userId)
+    private static DiscordInteractionResponseBuilder CreateBuilder(
+        BlackjackResult result,
+        ulong guildId,
+        ulong userId,
+        bool showControls = true
+    )
     {
         var builder = new DiscordInteractionResponseBuilder().AddEmbed(result.Embed);
-        if (!result.IsFinished)
+        if (!result.IsFinished && showControls)
         {
             builder.AddComponents(
                 new DiscordComponent[]
                 {
                     new DiscordButtonComponent(ButtonStyle.Primary, $"blackjack:hit:{guildId}:{userId}", "HIT"),
-                    new DiscordButtonComponent(ButtonStyle.Success, $"blackjack:stand:{guildId}:{userId}", "STAND")
+                    new DiscordButtonComponent(ButtonStyle.Success, $"blackjack:stand:{guildId}:{userId}", "STAND"),
+                    new DiscordButtonComponent(ButtonStyle.Secondary, $"blackjack:surrender:{guildId}:{userId}", "SURRENDER")
                 }
             );
         }
