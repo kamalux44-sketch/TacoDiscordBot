@@ -30,6 +30,8 @@ public static class BotHost
 
     public static Services.DoubleUpService DoubleUpService { get; private set; }
 
+    public static Services.MinesService MinesService { get; private set; }
+
     public static Services.VcExchangeService VcExchangeService { get; private set; }
 
     public static async Task RunAsync()
@@ -87,6 +89,7 @@ public static class BotHost
             Repository.BirthdayRepository birthdayRepo = null;
             Repository.SlotRepository slotRepo = null;
             Repository.UserDataRepository userDataRepo = null;
+            Repository.MinesRepository minesRepo = null;
             Repository.VcExchangeRepository vcExchangeRepo = null;
             var host = Environment.GetEnvironmentVariable(Strings.EnvPgHost);
 
@@ -146,6 +149,7 @@ public static class BotHost
                         birthdayRepo = new Repository.BirthdayRepository(baseRepo);
                         slotRepo = new Repository.SlotRepository(baseRepo);
                         userDataRepo = new Repository.UserDataRepository(baseRepo);
+                        minesRepo = new Repository.MinesRepository(baseRepo);
                         vcExchangeRepo = new Repository.VcExchangeRepository(baseRepo);
                         // すべてのリポジトリについて
                         // テーブルの存在確認と作成を行う
@@ -171,6 +175,8 @@ public static class BotHost
                             slotRepo.EnsureTablesExistAsync().GetAwaiter().GetResult();
 
                             userDataRepo.EnsureTablesExistAsync().GetAwaiter().GetResult();
+
+                            minesRepo.EnsureTablesExistAsync().GetAwaiter().GetResult();
 
                             vcExchangeRepo.EnsureTablesExistAsync().GetAwaiter().GetResult();
 
@@ -242,6 +248,10 @@ public static class BotHost
                 ? null
                 : new Services.DoubleUpService(CoinService);
 
+            MinesService = minesRepo == null || CoinService == null
+                ? null
+                : new Services.MinesService(CoinService, minesRepo);
+
             SlotService = slotRepo == null || CoinService == null
                 ? null
                 : new Services.SlotService(slotRepo, CoinService);
@@ -266,6 +276,8 @@ public static class BotHost
             Client.ComponentInteractionCreated += Commands.BlackjackCommands.HandleComponentInteractionAsync;
 
             Client.ComponentInteractionCreated += Commands.DoubleUpCommands.HandleComponentInteractionAsync;
+
+            Client.ComponentInteractionCreated += Commands.MinesCommands.HandleComponentInteractionAsync;
 
             Client.ComponentInteractionCreated += Commands.CoinCommands.HandleExchangeComponentInteractionAsync;
 
@@ -313,6 +325,8 @@ public static class BotHost
             slash.RegisterCommands<Commands.BlackjackCommands>();
 
             slash.RegisterCommands<Commands.DoubleUpCommands>();
+
+            slash.RegisterCommands<Commands.MinesCommands>();
 
             slash.RegisterCommands<Commands.CoinCommands>();
 
