@@ -202,7 +202,7 @@ public sealed class CoinCommands : ApplicationCommandModule
             .ToList();
         var lines = ranking.Count == 0
             ? "ランキング対象のユーザーがいません。"
-            : string.Join("\n", ranking.Select((user, index) => $"{index + 1}位 <@{user.UserId}>\n    {user.Coins:N0} coins"));
+            : string.Join("\n", ranking.Select((user, index) => $"{index + 1}位 <@{user.UserId}>\n    {user.Coins:N0} coins　💀 破産: {user.LastChanceCount}回"));
         var embed = new DiscordEmbedBuilder().WithTitle("💰 RICH RANKING").WithDescription(lines).WithColor(DiscordColor.Gold).Build();
         await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder().AddEmbed(embed));
     }
