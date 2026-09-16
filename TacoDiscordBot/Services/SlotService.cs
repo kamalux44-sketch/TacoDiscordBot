@@ -30,11 +30,17 @@ public sealed class SlotService
     private static readonly string[] Symbols = SymbolConfigurations.Select(item => item.Symbol).ToArray();
     private readonly SlotRepository _repository;
     private readonly ICoinService _coinService;
+    private readonly RoleService _roleService;
 
-    public SlotService(SlotRepository repository, ICoinService coinService = null)
+    public SlotService(
+        SlotRepository repository,
+        ICoinService coinService = null,
+        RoleService? roleService = null
+    )
     {
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
         _coinService = coinService;
+        _roleService = roleService;
     }
 
     // 1回分の抽選、当たり判定、統計更新、結果Embedの作成をまとめて実行します。
@@ -62,6 +68,9 @@ public sealed class SlotService
         var statistics = await _repository.RecordSpinAsync(rank != SlotWinRank.Loss);
         if (payout > 0)
             await _coinService.AddCoinsAsync(guildId, userId, payout);
+
+        if (_roleService != null && rank is SlotWinRank.MegaJackpot or SlotWinRank.UltraRare or SlotWinRank.BigWin)
+            await _roleService.RecordEventAsync(guildId, userId, "rare_slot_count");
 
         // 各リールの確定結果を順番に通知し、呼び出し側で表示を更新します。
         if (onReelRevealed != null)

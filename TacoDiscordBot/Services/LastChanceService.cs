@@ -16,11 +16,17 @@ public sealed class LastChanceService
     private readonly ConcurrentDictionary<string, LastChanceGame> _games = new();
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _locks = new();
     private readonly Func<int> _nextRandom;
+    private readonly RoleService _roleService;
 
-    public LastChanceService(ILastChanceStore store, Func<int>? nextRandom = null)
+    public LastChanceService(
+        ILastChanceStore store,
+        Func<int>? nextRandom = null,
+        RoleService? roleService = null
+    )
     {
         _store = store ?? throw new ArgumentNullException(nameof(store));
         _nextRandom = nextRandom ?? (() => Random.Shared.Next(100));
+        _roleService = roleService;
     }
 
     public async Task StartAsync(ulong guildId, ulong userId)
@@ -34,6 +40,8 @@ public sealed class LastChanceService
             throw new InvalidOperationException("❌ /lastchance は所持コインが0のときのみ使用できます。");
 
         _games[key] = new LastChanceGame(guildId, userId);
+        if (_roleService != null)
+            await _roleService.RecordEventAsync(guildId, userId, "bankruptcy_count");
     }
 
     public async Task<LastChanceResult> SelectAsync(ulong guildId, ulong userId, LastChanceChoice choice)
@@ -49,6 +57,14 @@ public sealed class LastChanceService
             throw new InvalidOperationException("コインの更新に失敗しました。ゲームは終了しています。");
 
         _games.TryRemove(key, out _);
+        if (_roleService != null)
+        {
+            var conditionType = reward == JackpotReward
+                ? "lastchance_jackpot_count"
+                : reward == 0 ? "lastchance_zero_count" : null;
+            if (conditionType != null)
+                await _roleService.RecordEventAsync(guildId, userId, conditionType);
+        }
         return new LastChanceResult(reward, balance.Value, choice == LastChanceChoice.Jackpot && reward == JackpotReward);
     }
 

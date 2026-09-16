@@ -17,14 +17,17 @@ public sealed class MinesService
     private readonly ConcurrentDictionary<string, MinesGame> _games = new();
     private readonly Func<IReadOnlyCollection<int>> _createBombs;
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _locks = new();
+    private readonly RoleService _roleService;
 
     public MinesService(
         ICoinService coinService,
-        Func<IReadOnlyCollection<int>>? createBombs = null
+        Func<IReadOnlyCollection<int>>? createBombs = null,
+        RoleService? roleService = null
     )
     {
         _coinService = coinService ?? throw new ArgumentNullException(nameof(coinService));
         _createBombs = createBombs ?? CreateRandomBombs;
+        _roleService = roleService;
     }
 
     public async Task<MinesResult> StartAsync(ulong guildId, ulong userId, long bet)
@@ -75,6 +78,9 @@ public sealed class MinesService
             throw new InvalidOperationException("このMINESゲームは終了しています。");
         if (!game.Opened.Add(index))
             throw new InvalidOperationException("そのマスはすでに開放されています。");
+
+        if (_roleService != null)
+            await _roleService.RecordEventAsync(guildId, userId, "mines_safe_count", game.SafeOpenedCount);
 
         if (game.Bombs.Contains(index))
         {

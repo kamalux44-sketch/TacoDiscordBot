@@ -36,6 +36,8 @@ public static class BotHost
 
     public static Services.VcExchangeService VcExchangeService { get; private set; }
 
+    public static Services.RoleService RoleService { get; private set; }
+
     public static async Task RunAsync()
     {
         try
@@ -92,6 +94,7 @@ public static class BotHost
             Repository.SlotRepository slotRepo = null;
             Repository.UserDataRepository userDataRepo = null;
             Repository.VcExchangeRepository vcExchangeRepo = null;
+            Repository.AchievementRepository achievementRepo = null;
             var host = Environment.GetEnvironmentVariable(Strings.EnvPgHost);
 
             if (!string.IsNullOrWhiteSpace(host))
@@ -151,6 +154,7 @@ public static class BotHost
                         slotRepo = new Repository.SlotRepository(baseRepo);
                         userDataRepo = new Repository.UserDataRepository(baseRepo);
                         vcExchangeRepo = new Repository.VcExchangeRepository(baseRepo);
+                        achievementRepo = new Repository.AchievementRepository(baseRepo);
                         // すべてのリポジトリについて
                         // テーブルの存在確認と作成を行う
                         try
@@ -177,6 +181,8 @@ public static class BotHost
                             userDataRepo.EnsureTablesExistAsync().GetAwaiter().GetResult();
 
                             vcExchangeRepo.EnsureTablesExistAsync().GetAwaiter().GetResult();
+
+                            achievementRepo.EnsureTablesExistAsync().GetAwaiter().GetResult();
 
                             Logger.Info("BotHost: DB テーブル確認・作成完了");
                         }
@@ -234,13 +240,19 @@ public static class BotHost
 
             Logger.Info("BotHost: BirthdayService 作成完了");
 
+            RoleService = achievementRepo == null
+                ? null
+                : userDataRepo == null
+                    ? null
+                    : new Services.RoleService(Client, achievementRepo, userDataRepo);
+
             CoinService = userDataRepo == null
                 ? null
-                : new Services.CoinService(userDataRepo);
+                : new Services.CoinService(userDataRepo, RoleService);
 
             BlackjackService = CoinService == null
                 ? null
-                : new Services.BlackjackService(CoinService);
+                : new Services.BlackjackService(CoinService, RoleService);
 
             DoubleUpService = CoinService == null
                 ? null
@@ -248,19 +260,19 @@ public static class BotHost
 
             MinesService = CoinService == null
                 ? null
-                : new Services.MinesService(CoinService);
+                : new Services.MinesService(CoinService, roleService: RoleService);
 
             LastChanceService = userDataRepo == null
                 ? null
-                : new Services.LastChanceService(userDataRepo);
+                : new Services.LastChanceService(userDataRepo, roleService: RoleService);
 
             SlotService = slotRepo == null || CoinService == null
                 ? null
-                : new Services.SlotService(slotRepo, CoinService);
+                : new Services.SlotService(slotRepo, CoinService, RoleService);
 
             VcExchangeService = vcExchangeRepo == null
                 ? null
-                : new Services.VcExchangeService(vcExchangeRepo);
+                : new Services.VcExchangeService(vcExchangeRepo, RoleService);
 
             Logger.Info("BotHost: SlotService 作成完了");
 
@@ -319,6 +331,8 @@ public static class BotHost
             Logger.Info("BotHost: DeadlineCommands 登録完了");
 
             slash.RegisterCommands<Commands.BirthdayCommands>();
+
+            slash.RegisterCommands<Commands.RoleCommands>();
 
             Logger.Info("BotHost: BirthdayCommands 登録完了");
 

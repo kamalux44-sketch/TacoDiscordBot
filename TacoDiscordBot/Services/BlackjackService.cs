@@ -12,11 +12,13 @@ namespace TacoDiscordBot.Services;
 public sealed class BlackjackService
 {
     private readonly ICoinService _coinService;
+    private readonly RoleService _roleService;
     private readonly ConcurrentDictionary<string, BlackjackGame> _games = new();
 
-    public BlackjackService(ICoinService coinService)
+    public BlackjackService(ICoinService coinService, RoleService? roleService = null)
     {
         _coinService = coinService ?? throw new ArgumentNullException(nameof(coinService));
+        _roleService = roleService;
     }
 
     public async Task<BlackjackResult> StartAsync(ulong guildId, ulong userId, long bet)
@@ -151,6 +153,15 @@ public sealed class BlackjackService
         };
         if (payout > 0)
             await _coinService.AddCoinsAsync(game.GuildId, game.UserId, payout);
+
+        if (_roleService != null)
+        {
+            var conditionType = outcome is BlackjackOutcome.Win or BlackjackOutcome.Blackjack
+                ? "blackjack_win_streak"
+                : outcome == BlackjackOutcome.Loss ? "blackjack_loss_streak" : null;
+            if (conditionType != null)
+                await _roleService.RecordEventAsync(game.GuildId, game.UserId, conditionType);
+        }
 
         var message = outcome switch
         {

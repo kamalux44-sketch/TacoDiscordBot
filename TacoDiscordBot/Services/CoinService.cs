@@ -10,10 +10,12 @@ namespace TacoDiscordBot.Services;
 public sealed class CoinService : ICoinService
 {
     private readonly UserDataRepository _repository;
+    private readonly RoleService _roleService;
 
-    public CoinService(UserDataRepository repository)
+    public CoinService(UserDataRepository repository, RoleService? roleService = null)
     {
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
+        _roleService = roleService;
     }
 
     public async Task<long> GetBalanceAsync(ulong guildId, ulong userId)
@@ -23,7 +25,10 @@ public sealed class CoinService : ICoinService
     {
         if (amount <= 0)
             throw new ArgumentOutOfRangeException(nameof(amount));
-        return await _repository.AddCoinsAsync(guildId, userId, amount);
+        var balance = await _repository.AddCoinsAsync(guildId, userId, amount);
+        if (_roleService != null)
+            await _roleService.RefreshUserRolesAsync(guildId, userId);
+        return balance;
     }
 
     public async Task<long> RemoveCoinsAsync(ulong guildId, ulong userId, long amount)
@@ -33,6 +38,8 @@ public sealed class CoinService : ICoinService
         var balance = await _repository.TryRemoveCoinsAsync(guildId, userId, amount);
         if (!balance.HasValue)
             throw new InvalidOperationException("コインが不足しています。");
+        if (_roleService != null)
+            await _roleService.RefreshUserRolesAsync(guildId, userId);
         return balance.Value;
     }
 
@@ -41,7 +48,13 @@ public sealed class CoinService : ICoinService
         if (coin <= 0 || senderId == receiverId)
             return false;
 
-        return await _repository.TransferAsync(guildId, senderId, receiverId, coin);
+        var transferred = await _repository.TransferAsync(guildId, senderId, receiverId, coin);
+        if (transferred && _roleService != null)
+        {
+            await _roleService.RefreshUserRolesAsync(guildId, senderId);
+            await _roleService.RefreshUserRolesAsync(guildId, receiverId);
+        }
+        return transferred;
     }
 
     public async Task<bool> CanAffordAsync(ulong guildId, ulong userId, long amount)
