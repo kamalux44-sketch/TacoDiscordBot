@@ -180,7 +180,7 @@ public sealed class CoinCommands : ApplicationCommandModule
         var exchangeableMinutes = VcExchangeService.GetExchangeableMinutes(exchangeSummary);
         var embed = new DiscordEmbedBuilder()
             .WithTitle("📊 STATUS")
-            .WithDescription($"👤 ユーザー名\n{ctx.User.Username}\n\n💰 所有コイン\n{balance:N0}\n\n💀 破産回数\n{userData.LastChanceCount}回\n\n🎧 VC滞在時間\n{FormatDuration(seconds)}\n\n🔄 換金可能時間\n{FormatMinutes(exchangeableMinutes)}\n\n🏆 サーバーランキング\n{(rank > 0 ? $"{rank}位" : "圏外")}")
+            .WithDescription($"🏆 サーバーランキング\n{(rank > 0 ? $"{rank}位" : "圏外")}\n\n👤 ユーザー名\n{ctx.User.Username}\n\n💰 所有コイン\n{balance:N0}\n\n🎧 VC滞在時間\n{FormatDuration(seconds)}\n\n🔄 換金可能時間\n{FormatMinutes(exchangeableMinutes)}\n\n💀 破産回数\n{userData.LastChanceCount}回")
             .WithColor(DiscordColor.Blurple)
             .Build();
         await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder().AddEmbed(embed));
