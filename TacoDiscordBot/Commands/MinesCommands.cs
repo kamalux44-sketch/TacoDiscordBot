@@ -31,21 +31,19 @@ public sealed class MinesCommands : ApplicationCommandModule
             return;
         }
 
+        await ctx.CreateResponseAsync(InteractionResponseType.DeferredChannelMessageWithSource);
         try
         {
             var result = await service.StartAsync(ctx.Guild.Id, ctx.User.Id, bet);
-            await ctx.CreateResponseAsync(
-                InteractionResponseType.ChannelMessageWithSource,
-                CreateBuilder(result, ctx.Guild.Id, ctx.User.Id)
-            );
+            await ctx.EditResponseAsync(CreateWebhookBuilder(result, ctx.Guild.Id, ctx.User.Id));
         }
         catch (ArgumentOutOfRangeException ex)
         {
-            await RespondErrorAsync(ctx, ex.Message);
+            await ctx.EditResponseAsync(new DiscordWebhookBuilder().WithContent(ex.Message));
         }
         catch (InvalidOperationException ex)
         {
-            await RespondErrorAsync(ctx, ex.Message);
+            await ctx.EditResponseAsync(new DiscordWebhookBuilder().WithContent(ex.Message));
         }
     }
 
@@ -79,6 +77,7 @@ public sealed class MinesCommands : ApplicationCommandModule
         if (service == null)
             return;
 
+        await e.Interaction.CreateResponseAsync(InteractionResponseType.DeferredMessageUpdate);
         try
         {
             MinesResult result;
@@ -97,17 +96,13 @@ public sealed class MinesCommands : ApplicationCommandModule
                 return;
             }
 
-            await e.Interaction.CreateResponseAsync(
-                InteractionResponseType.UpdateMessage,
-                CreateBuilder(result, guildId, ownerId)
+            await e.Interaction.EditOriginalResponseAsync(
+                CreateWebhookBuilder(result, guildId, ownerId)
             );
         }
         catch (InvalidOperationException ex)
         {
-            await e.Interaction.CreateResponseAsync(
-                InteractionResponseType.ChannelMessageWithSource,
-                new DiscordInteractionResponseBuilder().WithContent(ex.Message).AsEphemeral(true)
-            );
+            await e.Interaction.EditOriginalResponseAsync(new DiscordWebhookBuilder().WithContent(ex.Message));
         }
     }
 
@@ -157,6 +152,19 @@ public sealed class MinesCommands : ApplicationCommandModule
             "💰 CHECKOUT",
             game.State != MinesGameState.Playing
         ));
+        return builder;
+    }
+
+    private static DiscordWebhookBuilder CreateWebhookBuilder(
+        MinesResult result,
+        ulong guildId,
+        ulong userId
+    )
+    {
+        var response = CreateBuilder(result, guildId, userId);
+        var builder = new DiscordWebhookBuilder().WithContent(response.Content);
+        foreach (var row in response.Components)
+            builder.AddComponents(row);
         return builder;
     }
 
