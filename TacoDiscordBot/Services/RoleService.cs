@@ -90,10 +90,42 @@ public sealed class RoleService
         var guild = await _client.GetGuildAsync(guildId);
         var member = await guild.GetMemberAsync(userId);
 
-        foreach (var definition in definitions.Where(definition => IsAchieved(definition, stats, userData.Coins, userData.Coins == minimumCoins)))
+        var achievedDefinitions = definitions
+            .Where(definition => IsAchieved(definition, stats, userData.Coins, userData.Coins == minimumCoins))
+            .GroupBy(GetGroupKey)
+            .Select(group => group.OrderByDescending(definition => definition.Threshold).First())
+            .ToHashSet();
+
+        foreach (var definition in definitions)
+        {
+            await RevokeRoleIfNeededAsync(guildId, member, definition, achievedDefinitions.Contains(definition));
+        }
+
+        foreach (var definition in achievedDefinitions)
         {
             await GrantRoleAsync(guildId, member, definition);
         }
+    }
+
+    private async Task RevokeRoleIfNeededAsync(
+        ulong guildId,
+        DiscordMember member,
+        AchievementDefinition definition,
+        bool shouldKeep
+    )
+    {
+        if (shouldKeep)
+            return;
+
+        var roleId = await _repository.GetGuildRoleIdAsync(guildId, definition.Id) ?? definition.RoleId;
+        if (!roleId.HasValue)
+            return;
+
+        var memberRole = member.Roles.FirstOrDefault(role => role.Id == roleId.Value);
+        if (memberRole == null)
+            return;
+
+        await member.RevokeRoleAsync(memberRole, "実績ロールの系統更新");
     }
 
     public async Task<bool> GrantRoleAsync(
@@ -198,4 +230,7 @@ public sealed class RoleService
             "blackjack_loss_streak" => stats.BlackjackLossStreak >= definition.Threshold,
             _ => false
         };
+
+    private static string GetGroupKey(AchievementDefinition definition)
+        => definition.GroupKey ?? definition.ConditionType;
 }

@@ -10,6 +10,8 @@ public sealed class AchievementDefinition
 
     public string ConditionType { get; init; }
 
+    public string GroupKey { get; init; }
+
     public long Threshold { get; init; }
 
     public string Rarity { get; init; }
