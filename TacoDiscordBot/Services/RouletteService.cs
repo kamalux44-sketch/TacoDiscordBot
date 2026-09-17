@@ -23,10 +23,10 @@ public sealed class RouletteService
 {
     private static readonly TimeSpan[] SpinDelays =
     [
-        TimeSpan.FromMilliseconds(250), TimeSpan.FromMilliseconds(250),
-        TimeSpan.FromMilliseconds(300), TimeSpan.FromMilliseconds(350),
-        TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(700),
-        TimeSpan.FromMilliseconds(800), TimeSpan.FromMilliseconds(1000)
+        TimeSpan.FromMilliseconds(200), TimeSpan.FromMilliseconds(200),
+        TimeSpan.FromMilliseconds(220), TimeSpan.FromMilliseconds(250),
+        TimeSpan.FromMilliseconds(300), TimeSpan.FromMilliseconds(400),
+        TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(700)
     ];
 
     private static readonly string[] SpinFrames =
