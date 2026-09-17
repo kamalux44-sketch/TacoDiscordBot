@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Threading.Tasks;
 using DSharpPlus;
 using DSharpPlus.Entities;
@@ -129,10 +130,22 @@ public sealed class HelpCommands : ApplicationCommandModule
     [SlashCommand("help", "TacoDiscordBotの利用ガイドを表示します")]
     public async Task Help(InteractionContext ctx)
     {
+        var options = Categories
+            .Select(category => new DiscordSelectComponentOption(
+                category.Value.Label,
+                category.Key,
+                $"{category.Value.Label} の利用方法を表示します。"))
+            .ToList();
+        var select = new DiscordSelectComponent(
+            $"{ComponentPrefix}:select:{ctx.User.Id}",
+            "カテゴリを選択してください",
+            options,
+            false,
+            1,
+            1);
         var response = new DiscordInteractionResponseBuilder()
-            .WithContent("📖 **TacoDiscordBot 利用ガイド**\n\nカテゴリを選択してください。");
-        foreach (var key in new[] { "ai", "recruitment", "birthday", "coin", "casino", "event", "admin" })
-            response.AddComponents(CreateButton(key, Categories[key], ctx.User.Id));
+            .WithContent("📖 **TacoDiscordBot 利用ガイド**\n\nカテゴリを選択してください。")
+            .AddComponents(select);
 
         await ctx.CreateResponseAsync(
             InteractionResponseType.ChannelMessageWithSource,
@@ -149,8 +162,8 @@ public sealed class HelpCommands : ApplicationCommandModule
 
         var parts = customId.Split(':');
         if (parts.Length != 3
-            || !ulong.TryParse(parts[2], NumberStyles.None, CultureInfo.InvariantCulture, out var ownerId)
-            || !Categories.TryGetValue(parts[1], out var category))
+            || parts[1] != "select"
+            || !ulong.TryParse(parts[2], NumberStyles.None, CultureInfo.InvariantCulture, out var ownerId))
             return;
 
         if (e.Interaction.User.Id != ownerId)
@@ -163,6 +176,10 @@ public sealed class HelpCommands : ApplicationCommandModule
             return;
         }
 
+        var categoryKey = e.Interaction.Data.Values?.FirstOrDefault();
+        if (string.IsNullOrWhiteSpace(categoryKey) || !Categories.TryGetValue(categoryKey, out var category))
+            return;
+
         await e.Interaction.CreateResponseAsync(
             InteractionResponseType.ChannelMessageWithSource,
             new DiscordInteractionResponseBuilder()
@@ -173,9 +190,4 @@ public sealed class HelpCommands : ApplicationCommandModule
                 .AsEphemeral(true));
     }
 
-    private static DiscordButtonComponent CreateButton(
-        string key,
-        (string Label, ButtonStyle Style, string Guide) category,
-        ulong userId)
-        => new(category.Style, $"{ComponentPrefix}:{key}:{userId}", category.Label);
 }
