@@ -17,68 +17,126 @@ public sealed class HelpCommands : ApplicationCommandModule
         new Dictionary<string, (string Label, ButtonStyle Style, string Guide)>
         {
             ["ai"] = ("🤖 AI", ButtonStyle.Primary,
-                "🤖 **AI**\n\n"
-                + "`/ai message:<内容>`\nAIにメッセージを送信します。サーバーではサーバーごとの会話履歴を考慮し、DMでは単発応答になります。\n\n"
-                + "`/aichannel`\n実行したチャンネルをAI会話チャンネルに設定します。通常のメッセージにAIが返信します。管理者のみ利用でき、再実行で無効になります。"),
+                "`/ai message:<内容>`\n"
+                + "AIにメッセージを送信します。\n"
+                + "・サーバー内では、サーバーごとの会話履歴を考慮して回答します。\n"
+                + "・DMでは会話履歴を使用しない単発応答です。\n"
+                + "・AIサービスが停止中または利用できない場合は実行できません。\n\n"
+                + "`/aichannel`\n"
+                + "実行したチャンネルを、そのサーバーのAI会話チャンネルに設定します。設定後、そのチャンネルへ通常のメッセージを投稿するとAIが返信します。\n"
+                + "・サーバー内でのみ利用できます。\n"
+                + "・AI会話チャンネルはサーバーごとに1つです。\n"
+                + "・BotやWebhookによる投稿はAIへの送信対象外です。\n"
+                + "・管理者のみ利用できます。\n"
+                + "・未設定の状態で実行すると有効になり、設定済みの状態で再実行すると無効になります。"),
             ["recruitment"] = ("✋ 募集・締切", ButtonStyle.Success,
-                "✋ **募集・締切**\n\n"
-                + "`/bo`\n参加者募集を作成します。募集内容、人数、ランク、締切日時、説明を指定できます。参加・参加取消・募集終了のボタンが表示されます。\n\n"
-                + "`/deadline`\n自分が作成した直近の募集に締切を設定します。日付は当日から25日分、時刻は5分単位で選択できます。"),
+                "`/bo`\n"
+                + "参加者募集を作成します。引数はすべて任意です。\n\n"
+                + "```text\n"
+                + "content     募集内容\n"
+                + "at          募集人数。募集主は含みません。\n"
+                + "            3なら募集主を含めて4人で終了します。\n"
+                + "rank        ランクや参加条件\n"
+                + "deadline    締切日時。yyyy-MM-dd HH:mm形式\n"
+                + "            例：2026-08-13 01:30\n"
+                + "description 募集の説明\n"
+                + "```\n\n"
+                + "参加、参加取消、募集終了のボタンが表示されます。指定人数への到達、または締切日時の経過で自動終了します。\n"
+                + "・`at`を未指定または`0`にすると、人数による自動終了はありません。\n"
+                + "・締切日時は日本時間として扱われます。\n"
+                + "・募集作成後に`/deadline`で締切を設定できます。\n"
+                + "・締切未設定の募集は、作成から7日を超えると自動的に整理されます。\n"
+                + "・終了後は同じ内容で再募集できます。\n\n"
+                + "`/deadline`\n"
+                + "自分が作成した直近の募集に締切を設定します。\n"
+                + "・当日から25日分の日付を選択できます。\n"
+                + "・時刻は5分単位です。\n"
+                + "・操作できるのはコマンド実行者本人です。"),
             ["birthday"] = ("🎂 誕生日", ButtonStyle.Secondary,
-                "🎂 **誕生日**\n\n"
-                + "`/birthday month:<月> day:<日> [user:<対象>] [year:<年>]`\n誕生日を登録または更新します。userを省略すると自分が対象です。サーバー内でのみ利用できます。\n\n"
-                + "`/birthdaychannel`\n実行したチャンネルを誕生日通知先に設定します。管理者のみ利用でき、再実行で無効になります。"),
+                "`/birthday month:<月> day:<日> [user:<対象>] [year:<年>]`\n"
+                + "誕生日を登録または更新します。`user`を省略すると自分が対象です。\n"
+                + "・月は1～12、日は1～31で指定します。\n"
+                + "・実在しない日付は登録できません。\n"
+                + "・`year`を指定すると、誕生日通知に年齢が表示されます。\n"
+                + "・サーバー内でのみ利用できます。\n\n"
+                + "`/birthdaychannel`\n"
+                + "実行したチャンネルを誕生日通知先に設定します。誕生日当日の日本時間に通知します。\n"
+                + "・管理者のみ利用できます。\n"
+                + "・未設定の状態で実行すると有効になり、設定済みの状態で再実行すると無効になります。"),
             ["coin"] = ("🪙 コイン・VC", ButtonStyle.Primary,
-                "🪙 **コイン・VC**\n\n"
-                + "`/status`：所持コイン、VC滞在時間、換金状況、順位、破産回数を表示します。\n"
-                + "`/exchange`：未換金のVC滞在時間を、6分=25コインで換金します。\n"
-                + "`/pay user:<相手> coin:<枚数>`：コインを送金します。\n"
-                + "`/richrank`：コイン保有量ランキングを表示します。\n"
-                + "`/vcrank period:<day|week|month|all>`：VC滞在時間ランキングを表示します。\n"
-                + "`/vcchannel` または `/vclog`：VCログの有効・無効を切り替えます。管理者のみ利用できます。"),
+                "`/status`\n"
+                + "自分の所持コイン、累計VC滞在時間、換金済み時間、換金可能時間、サーバー内のコイン順位、破産回数を表示します。\n\n"
+                + "`/exchange`\n"
+                + "未換金のVC滞在時間をコインへ換金します。換金レートは**6分 = 25コイン**で、6分未満の端数は次回へ繰り越されます。確認画面で「換金」を押すと確定します。\n\n"
+                + "`/pay user:<相手> coin:<枚数>`\n"
+                + "指定ユーザーへコインを送金します。1枚以上を指定してください。自分自身やBotには送金できず、残高不足の場合は送金されません。サーバー内でのみ利用できます。\n\n"
+                + "`/richrank`\n"
+                + "サーバー内のコイン保有量ランキングを表示します。Botを除く上位10名が表示されます。\n\n"
+                + "`/vcchannel` または `/vclog`\n"
+                + "VCへの参加、退出、チャンネル移動のログ表示を切り替えます。初回実行時は実行したテキストチャンネルをログ投稿先に設定し、設定済みの状態で再実行すると無効になります。管理者のみ利用できます。\n\n"
+                + "`/vcrank period:<day|week|month|all>`\n"
+                + "VC滞在時間のランキングを表示します。`day`は過去24時間、`week`は過去7日間、`month`は過去1か月、`all`は全期間です。最大10位までと実行者自身の順位が表示されます。"),
             ["casino"] = ("🎰 カジノ", ButtonStyle.Danger,
-                "🎰 **カジノ**\n\n"
-                + "`/blackjack bet:<額>`：ブラックジャックをプレイします。HIT、STAND、SURRENDERを選択できます。\n"
-                + "`/doubleup bet:<額>`：カードが7より上か下かを予想します。CASH OUTで賞金を確定できます。\n"
-                + "`/roulette bet:<額>`：1、3、5、10、20から予想してルーレットを回します。\n"
-                + "`/slot bet:<額>`：スロットを回します。\n"
-                + "`/slotstatus`：スロット統計を表示します。\n"
-                + "`/mines bet:<額>`：20マスから安全マスを開けます。CASH OUTで回収できます。\n"
-                + "`/lastchance`：所持コインが0のときに1回だけ利用できる復活ゲームです。"),
+                "`/blackjack bet:<額>`\n"
+                + "コインを賭けてブラックジャックをプレイします。ベット額は1以上かつ所持コイン以内です。\n"
+                + "・`HIT`：カードを1枚引く\n・`STAND`：その時点で勝負する\n・`SURRENDER`：降参する\n"
+                + "・Aは、合計が21を超えない範囲で1または11として扱います。\n"
+                + "配当：BLACKJACKはベット額の3倍、勝利は2倍、PUSHはそのまま返還、SURRENDERは50%返還、敗北・BUSTは0です。\n\n"
+                + "`/doubleup bet:<額>`\n"
+                + "カードの数字が7より上か下かを予想します。ベット額は1以上かつ所持コイン以内です。\n"
+                + "・`LOW`：1～6　・`7`：SPECIAL。勝敗を発生させず継続　・`HIGH`：8～13\n"
+                + "・`WIN`で賞金が2倍、`LOSE`で賞金0となりゲーム終了です。\n"
+                + "・`CASH OUT`で賞金を確定できます。最大倍率は128倍で、サーバーイベント中は当選倍率が2.4倍になる場合があります。\n\n"
+                + "`/roulette bet:<額>`\n"
+                + "数字を予想してルーレットを回します。ベット後に1、3、5、10、20から選択します。\n"
+                + "```text\n予想数字   出現数（25マス中）   的中時の配当\n1          12                   2倍\n3          6                    4倍\n5          4                    6倍\n10         2                    11倍\n20         1                    21倍\n```\n\n"
+                + "`/slot bet:<額>`\n"
+                + "スロットを回します。ベット額は1以上かつ所持コイン以内です。\n"
+                + "```text\n絵柄   出現率   3つ揃い   2つ揃い（リーチ）\n🍒     24%      8倍       0倍\n🍋     22%      12倍      0倍\n🍇     15%      20倍      0.5倍\n🍉     11%      35倍      1倍\n🍈     9%       55倍      1.5倍\n🔔     9%       160倍     4倍\n💎     6%       500倍     6倍\n7️⃣     4%       1000倍    10倍\n```\n"
+                + "3つ揃いは対応倍率、2つ揃いはリーチ倍率で払い戻します。リーチ倍率が0倍の場合や、すべて異なる場合はハズレです。小数点以下は切り捨てます。\n\n"
+                + "`/slotstatus`\nBot全体で共有されるスロット統計（累計回転数、最長ハマり回数、最短当たり回数）を表示します。\n\n"
+                + "`/mines bet:<額>`\n"
+                + "5列×4行の20マスから安全マスを開けます。ベット額は1以上かつ所持コイン以内です。爆弾は4個で、安全マスを開けるほど倍率が上がります。`CASH OUT`で回収でき、爆弾を開けると払い戻しなしで終了します。16個すべての安全マスを開けると自動回収されます。\n"
+                + "倍率：0～1マス ×1.0、2 ×1.5、3 ×2.0、4 ×2.5、5 ×3.5、6 ×5、7 ×7、8 ×10、9 ×14、10 ×22、11 ×35、12 ×60、13 ×110、14 ×250、15 ×600、16 ×5000。\n\n"
+                + "`/lastchance`\n"
+                + "所持コインが0のときに1回だけ利用できる復活ゲームです。開始すると破産回数が1回増えます。安定は1,000コインを確実に獲得、ギャンブルは0～3,000コイン、一発逆転は5,000コインまたは0コイン（5%で5,000コイン）です。サーバー内でのみ利用できます。"),
             ["event"] = ("🔥 サーバーイベント", ButtonStyle.Success,
-                "🔥 **サーバーイベント**\n\n"
-                + "`/serverevent`\n選択画面からサーバーイベントを発動します。ゲームの払い戻し倍率変更、スロット出現率変更、負けコイン保証、Minesの爆弾減少などの効果があります。\n\n"
-                + "通常のサーバーイベントは同時に1つだけ発動できます。発動コストはイベントと発動者またはサーバー内TOP10の所持コインを基準に計算されます。"),
+                "`/serverevent`\n"
+                + "選択画面からサーバーイベントを発動します。表示される必要コストは、発動時点の実装値に基づきます。\n\n"
+                + "```text\n"
+                + "💰 倍返しキャンペーン！\nコスト：TOP10合計コインの50%\n効果：30分間、ブラックジャック・DOUBLE UP・スロット・ルーレットの払い戻しが1.5倍\n\n"
+                + "🎰 激アツスロット×10！\nコスト：TOP10合計コインの50%\n効果：10分間、🍒16% / 🍋14% / 🍇10% / 🍉8% / 🍈10% / 🔔19% / 💎14% / 7️⃣9%\n\n"
+                + "🛡️ 50% BACK保証\nコスト：TOP10合計コインの30%\n効果：30分間、対象ゲームで負けた場合にベット額の50%を返還\n\n"
+                + "🍀 豪運に幸あれ！\nコスト：TOP10合計コインの10%\n効果：20分間、ブラックジャック・スロット・ルーレットの払い戻しが1.25倍\n\n"
+                + "🪙 ブラックジャック保険\nコスト：発動者の所持コインの50%\n効果：10分間、サレンダー時にベット額の80%を返還\n\n"
+                + "🔥 倍倍倍プッシュ！！\nコスト：20,000コイン\n効果：10分間、DOUBLE UPの当選倍率を2.4倍に変更\n\n"
+                + "💣 Mines安全週間1\nコスト：発動者の所持コインの20%\n効果：10分間、爆弾を1個減少（4個→3個）\n\n"
+                + "💣 Mines安全週間2\nコスト：発動者の所持コインの40%\n効果：10分間、爆弾を2個減少（4個→2個）\n\n"
+                + "💣 Mines安全週間3\nコスト：発動者の所持コインの95%\n効果：10分間、爆弾を3個減少（4個→1個）\n\n"
+                + "💎 生きるか死ぬか\nコスト：発動者の所持コインの50%\n効果：次の1ゲーム限定。勝利時は予定払い戻しが5倍、敗北時はゲーム後の所持コインの50%を失う\n"
+                + "```\n"
+                + "通常のサーバーイベントは同時に1つだけ発動できます。「生きるか死ぬか」は個人イベントのため、サーバーイベントと同時に発動できます。発動コストの割合は、発動者またはサーバー内TOP10の所持コインを基準に計算します。"),
             ["admin"] = ("⚙️ 管理・設定", ButtonStyle.Secondary,
-                "⚙️ **管理・設定**\n\n"
-                + "`/rolechannel`\nロール解除通知の投稿先を、実行したチャンネルに設定します。管理者のみ利用でき、再実行で無効になります。\n\n"
-                + "AI、誕生日、VCログの各通知・会話チャンネル設定は、それぞれのカテゴリから確認できます。")
+                "`/rolechannel`\n"
+                + "ロール解除通知の投稿先を、実行したチャンネルに設定します。\n"
+                + "・管理者のみ利用できます。\n"
+                + "・未設定の状態で実行すると、ロール解除通知が有効になります。\n"
+                + "・設定済みの状態で再実行すると、ロール解除通知が無効になります。\n\n"
+                + "AI、誕生日、VCログの各通知・会話チャンネル設定は、それぞれのカテゴリから確認できます。\n\n"
+                + "主な制限：サーバー専用コマンドはDMで実行できません。ベットや送金には残高が必要です。入力値や日時形式が不正な場合はエラーになります。ゲーム中は同じゲームを重複して開始できず、ゲームのボタンを操作できるのは開始者本人です。外部サービス障害時はAI機能を利用できません。")
         };
 
     [SlashCommand("help", "TacoDiscordBotの利用ガイドを表示します")]
     public async Task Help(InteractionContext ctx)
     {
-        var firstRow = new DiscordComponent[]
-        {
-            CreateButton("ai", Categories["ai"], ctx.User.Id),
-            CreateButton("recruitment", Categories["recruitment"], ctx.User.Id),
-            CreateButton("birthday", Categories["birthday"], ctx.User.Id),
-            CreateButton("coin", Categories["coin"], ctx.User.Id)
-        };
-        var secondRow = new DiscordComponent[]
-        {
-            CreateButton("casino", Categories["casino"], ctx.User.Id),
-            CreateButton("event", Categories["event"], ctx.User.Id),
-            CreateButton("admin", Categories["admin"], ctx.User.Id)
-        };
+        var response = new DiscordInteractionResponseBuilder()
+            .WithContent("📖 **TacoDiscordBot 利用ガイド**\n\nカテゴリを選択してください。");
+        foreach (var key in new[] { "ai", "recruitment", "birthday", "coin", "casino", "event", "admin" })
+            response.AddComponents(CreateButton(key, Categories[key], ctx.User.Id));
 
         await ctx.CreateResponseAsync(
             InteractionResponseType.ChannelMessageWithSource,
-            new DiscordInteractionResponseBuilder()
-                .WithContent("📖 **TacoDiscordBot 利用ガイド**\n\nカテゴリを選択してください。")
-                .AddComponents(firstRow)
-                .AddComponents(secondRow)
-                .AsEphemeral(true));
+            response.AsEphemeral(true));
     }
 
     public static async Task HandleComponentInteractionAsync(
@@ -108,7 +166,10 @@ public sealed class HelpCommands : ApplicationCommandModule
         await e.Interaction.CreateResponseAsync(
             InteractionResponseType.ChannelMessageWithSource,
             new DiscordInteractionResponseBuilder()
-                .WithContent(category.Guide)
+                .AddEmbed(new DiscordEmbedBuilder()
+                    .WithTitle(category.Label)
+                    .WithDescription(category.Guide)
+                    .Build())
                 .AsEphemeral(true));
     }
 
