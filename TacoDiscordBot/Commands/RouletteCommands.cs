@@ -107,38 +107,24 @@ public sealed class RouletteCommands : ApplicationCommandModule
 
         try
         {
-            var hasResponded = false;
+            await e.Interaction.CreateResponseAsync(InteractionResponseType.DeferredMessageUpdate);
             var result = await service.SelectAsync(guildId, ownerId, prediction, async frame =>
             {
-                if (!hasResponded)
-                {
-                    var response = new DiscordInteractionResponseBuilder().AddEmbed(frame);
-                    await using var stream = File.OpenRead(SpinAnimationPath);
-                    response.AddFile(RouletteService.SpinAnimationFileName, stream, true);
-                    await e.Interaction.CreateResponseAsync(InteractionResponseType.UpdateMessage, response);
-
-                    hasResponded = true;
-                    return;
-                }
-
-                await e.Interaction.EditOriginalResponseAsync(new DiscordWebhookBuilder().AddEmbed(frame));
+                var response = new DiscordWebhookBuilder().AddEmbed(frame);
+                await using var stream = File.OpenRead(SpinAnimationPath);
+                response.AddFile(RouletteService.SpinAnimationFileName, stream, true);
+                await e.Interaction.EditOriginalResponseAsync(response);
             });
 
-            if (hasResponded)
-                await e.Interaction.EditOriginalResponseAsync(new DiscordWebhookBuilder().AddEmbed(result.Embed));
-            else
-                await e.Interaction.CreateResponseAsync(
-                    InteractionResponseType.UpdateMessage,
-                    new DiscordInteractionResponseBuilder().AddEmbed(result.Embed)
-                );
+            await e.Interaction.EditOriginalResponseAsync(new DiscordWebhookBuilder().AddEmbed(result.Embed));
         }
         catch (ArgumentOutOfRangeException ex)
         {
-            await RespondComponentErrorAsync(e, ex.Message);
+            await e.Interaction.EditOriginalResponseAsync(new DiscordWebhookBuilder().WithContent(ex.Message));
         }
         catch (InvalidOperationException ex)
         {
-            await RespondComponentErrorAsync(e, ex.Message);
+            await e.Interaction.EditOriginalResponseAsync(new DiscordWebhookBuilder().WithContent(ex.Message));
         }
     }
 
