@@ -45,6 +45,20 @@ public class VcLogCommandsTests
     }
 
     [Fact]
+    public async Task 管理者以外はVCログを変更できない()
+    {
+        var response = CreateResponseMock();
+        var logger = new Mock<IVcLogService>();
+
+        await new VcLogCommands().VcChannelAsync(response.Object, 10, 123, logger.Object, false);
+
+        response.Verify(x => x.RespondAsync("このコマンドは管理者のみ実行できます。", true), Times.Once);
+        logger.Verify(x => x.IsConfiguredForGuild(It.IsAny<ulong>()), Times.Never);
+        logger.Verify(x => x.SetChannelAsync(It.IsAny<ulong>(), It.IsAny<ulong>()), Times.Never);
+        logger.Verify(x => x.RemoveChannelAsync(It.IsAny<ulong>()), Times.Never);
+    }
+
+    [Fact]
     public async Task 設定済みのギルドでは設定を削除して無効化メッセージを返す()
     {
         var response = CreateResponseMock();

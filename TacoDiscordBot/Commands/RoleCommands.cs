@@ -28,11 +28,12 @@ public sealed class RoleCommands : ApplicationCommandModule
             await new InteractionResponseContext(ctx).RespondAsync("ロールサービスは未設定です。", true);
             return;
         }
-
-        await service.SetNotificationChannelAsync(ctx.Guild.Id, ctx.Channel.Id);
+        var enabled = await service.ToggleNotificationChannelAsync(ctx.Guild.Id, ctx.Channel.Id);
         await service.InitializeRolesAsync(ctx.Guild.Id);
         await new InteractionResponseContext(ctx).RespondAsync(
-            $"✅ ロール通知チャンネルを #{ctx.Channel.Name} に設定しました。",
+            enabled
+                ? $"✅ ロール通知チャンネルを #{ctx.Channel.Name} に設定しました。"
+                : "✅ ロール解除通知を無効化しました。",
             true
         );
     }

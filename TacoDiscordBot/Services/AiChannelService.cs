@@ -28,6 +28,9 @@ public class AiChannelService : IAiChannelService
 
     public bool IsConfigured => _targets.Count > 0;
 
+    public bool IsConfiguredForGuild(ulong guildId)
+        => _targets.ContainsKey(guildId);
+
     // ギルドごとの設定チャンネルと受信チャンネルが一致するか確認します。
     public bool IsTargetChannel(ulong guildId, ulong channelId)
     {

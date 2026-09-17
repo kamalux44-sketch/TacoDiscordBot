@@ -45,6 +45,18 @@ public sealed class BirthdayService
         return _repository.SetChannelAsync(guildId, channelId);
     }
 
+    public async Task<bool> ToggleChannelAsync(ulong guildId, ulong channelId)
+    {
+        if (await _repository.GetChannelAsync(guildId).ConfigureAwait(false) is not null)
+        {
+            await _repository.RemoveChannelAsync(guildId).ConfigureAwait(false);
+            return false;
+        }
+
+        await SetChannelAsync(guildId, channelId).ConfigureAwait(false);
+        return true;
+    }
+
     public void StartDailyPosting()
     {
         Logger.Info("BirthdayService: 日次投稿処理を開始します");

@@ -19,7 +19,8 @@ public class AIChannelCommands : ApplicationCommandModule
             ctx.Guild?.Id ?? 0UL,
             ctx.Channel.Id,
             ctx.Channel.Name,
-            BotHost.AiChannelService
+            BotHost.AiChannelService,
+            ctx.Member?.Permissions.HasPermission(Permissions.Administrator) == true
         );
     }
 
@@ -28,7 +29,8 @@ public class AIChannelCommands : ApplicationCommandModule
         ulong guildId,
         ulong channelId,
         string channelName,
-        IAiChannelService service
+        IAiChannelService service,
+        bool isAdministrator = true
     )
     {
         // ギルドと AI チャンネルサービスの設定を確認してから、対象チャンネルを登録します。
@@ -40,10 +42,27 @@ public class AIChannelCommands : ApplicationCommandModule
             return;
         }
 
+        if (!isAdministrator)
+        {
+            await response.RespondAsync("このコマンドは管理者のみ実行できます。", true);
+            return;
+        }
+
         if (service == null)
         {
             await response.RespondAsync(
                 Strings.AiChannelServiceNotSet
+            );
+
+            return;
+        }
+
+        if (service.IsConfiguredForGuild(guildId))
+        {
+            await service.RemoveChannelAsync(guildId);
+            await response.RespondAsync(
+                "AI会話チャンネルを無効化しました。",
+                true
             );
 
             return;

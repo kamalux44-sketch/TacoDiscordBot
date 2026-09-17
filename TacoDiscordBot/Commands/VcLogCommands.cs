@@ -10,23 +10,36 @@ namespace TacoDiscordBot.Commands;
 
 public class VcLogCommands : ApplicationCommandModule
 {
-    [SlashCommand("vclog", "このテキストチャンネルへのVC参加・退出・移動のログ表示を切り替える")]
-    // Slash Command の入力を VC ログ設定処理へ渡します。
-    public async Task VcLog(InteractionContext ctx)
+    [SlashCommand("vcchannel", "このチャンネルへのVCログ表示を切り替えます（管理用）")]
+    public async Task VcChannel(InteractionContext ctx)
     {
-        await VcLogAsync(
+        await VcChannelAsync(
             new InteractionResponseContext(ctx),
             ctx.Guild?.Id ?? 0UL,
             ctx.Channel.Id,
-            BotHost.VcLogger
+            BotHost.VcLogger,
+            ctx.Member?.Permissions.HasPermission(Permissions.Administrator) == true
         );
     }
+
+    [SlashCommand("vclog", "このチャンネルへのVCログ表示を切り替えます（管理用）")]
+    public Task VcLog(InteractionContext ctx) => VcChannel(ctx);
 
     public async Task VcLogAsync(
         IInteractionResponseContext response,
         ulong guildId,
         ulong channelId,
-        IVcLogService logger
+        IVcLogService logger,
+        bool isAdministrator = true
+    )
+        => await VcChannelAsync(response, guildId, channelId, logger, isAdministrator);
+
+    public async Task VcChannelAsync(
+        IInteractionResponseContext response,
+        ulong guildId,
+        ulong channelId,
+        IVcLogService logger,
+        bool isAdministrator = true
     )
     {
         // ギルド専用コマンドであることを確認します。
@@ -34,6 +47,12 @@ public class VcLogCommands : ApplicationCommandModule
         {
             await response.RespondAsync(Strings.CommandGuildOnly, true);
 
+            return;
+        }
+
+        if (!isAdministrator)
+        {
+            await response.RespondAsync("このコマンドは管理者のみ実行できます。", true);
             return;
         }
 

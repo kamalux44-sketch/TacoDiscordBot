@@ -148,6 +148,13 @@ public sealed class AchievementRepository
         return value is null or DBNull ? null : (ulong)(long)value;
     }
 
+    public async Task RemoveNotificationChannelAsync(ulong guildId)
+    {
+        await _base.ExecuteNonQueryAsync(
+            $"UPDATE guild_settings SET role_notification_channel_id = NULL, updated_at = now() WHERE guild_id = {(long)guildId}"
+        );
+    }
+
     public async Task<IReadOnlyList<ulong>> GetConfiguredGuildIdsAsync()
     {
         var result = new List<ulong>();

@@ -71,6 +71,47 @@ public class AIChannelCommandsTests
             true), Times.Once);
     }
 
+    [Fact]
+    public async Task 管理者以外はAI会話チャンネルを変更できない()
+    {
+        var response = CreateResponseMock();
+        var service = new Mock<IAiChannelService>();
+
+        await new AIChannelCommands().AiChannelAsync(
+            response.Object,
+            10,
+            123,
+            "general",
+            service.Object,
+            false
+        );
+
+        response.Verify(x => x.RespondAsync("このコマンドは管理者のみ実行できます。", true), Times.Once);
+        service.Verify(x => x.IsConfiguredForGuild(It.IsAny<ulong>()), Times.Never);
+        service.Verify(x => x.SetChannelAsync(It.IsAny<ulong>(), It.IsAny<ulong>()), Times.Never);
+        service.Verify(x => x.RemoveChannelAsync(It.IsAny<ulong>()), Times.Never);
+    }
+
+    [Fact]
+    public async Task 設定済みの場合はAI会話チャンネルを解除する()
+    {
+        var response = CreateResponseMock();
+        var service = new Mock<IAiChannelService>();
+        service.Setup(x => x.IsConfiguredForGuild(10)).Returns(true);
+
+        await new AIChannelCommands().AiChannelAsync(
+            response.Object,
+            10,
+            123,
+            "general",
+            service.Object
+        );
+
+        service.Verify(x => x.RemoveChannelAsync(10), Times.Once);
+        service.Verify(x => x.SetChannelAsync(It.IsAny<ulong>(), It.IsAny<ulong>()), Times.Never);
+        response.Verify(x => x.RespondAsync("AI会話チャンネルを無効化しました。", true), Times.Once);
+    }
+
     // 設定処理の例外が呼び出し元へ伝播することを検証します。
     [Fact]
     public async Task チャンネル設定に失敗した場合は例外を呼び出し元へ返す()

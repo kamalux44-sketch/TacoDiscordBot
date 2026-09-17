@@ -75,6 +75,28 @@ public sealed class BirthdayRepository
         Logger.Info("BirthdayRepository: 投稿先の登録または更新完了 guild={GuildId}", guildId);
     }
 
+    public async Task<ulong?> GetChannelAsync(ulong guildId)
+    {
+        object value = null;
+        await _base.UseConnectionAsync(async connection =>
+        {
+            dynamic command = connection.CreateCommand();
+            command.CommandText = "SELECT channel_id FROM birthday_channels WHERE guild_id = @guild_id;";
+            command.Parameters.AddWithValue("@guild_id", (long)guildId);
+            value = await command.ExecuteScalarAsync();
+        });
+
+        return value is null or DBNull ? null : (ulong)(long)value;
+    }
+
+    public async Task RemoveChannelAsync(ulong guildId)
+    {
+        Logger.Info("BirthdayRepository: 投稿先を削除 guild={GuildId}", guildId);
+        await _base.ExecuteNonQueryAsync(
+            $"DELETE FROM birthday_channels WHERE guild_id = {(long)guildId}"
+        );
+    }
+
     public async Task<IReadOnlyList<ulong>> GetChannelIdsAsync()
     {
         var channelIds = new List<ulong>();

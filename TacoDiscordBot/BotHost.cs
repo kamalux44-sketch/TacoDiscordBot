@@ -318,6 +318,8 @@ public static class BotHost
 
             Client.ComponentInteractionCreated += Commands.ServerEventCommands.HandleComponentInteractionAsync;
 
+            Client.ComponentInteractionCreated += Commands.HelpCommands.HandleComponentInteractionAsync;
+
             // AI メッセージ
             Client.MessageCreated += AiService.HandleMessageCreated;
 
@@ -374,6 +376,8 @@ public static class BotHost
             slash.RegisterCommands<Commands.CoinCommands>();
 
             slash.RegisterCommands<Commands.ServerEventCommands>();
+
+            slash.RegisterCommands<Commands.HelpCommands>();
 
             Logger.Info("BotHost: Discord へ接続開始");
 

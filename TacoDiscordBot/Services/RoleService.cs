@@ -33,6 +33,18 @@ public sealed class RoleService
     public Task<ulong?> GetRoleNotificationChannelAsync(ulong guildId)
         => _repository.GetNotificationChannelAsync(guildId);
 
+    public async Task<bool> ToggleNotificationChannelAsync(ulong guildId, ulong channelId)
+    {
+        if (await GetRoleNotificationChannelAsync(guildId).ConfigureAwait(false) is not null)
+        {
+            await _repository.RemoveNotificationChannelAsync(guildId).ConfigureAwait(false);
+            return false;
+        }
+
+        await SetNotificationChannelAsync(guildId, channelId).ConfigureAwait(false);
+        return true;
+    }
+
     public async Task InitializeRolesAsync()
     {
         var guildIds = await _repository.GetConfiguredGuildIdsAsync();

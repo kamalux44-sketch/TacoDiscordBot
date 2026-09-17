@@ -10,6 +10,9 @@ public interface IAiChannelService
     // ギルドの AI 対象チャンネル登録を解除します。
     Task RemoveChannelAsync(ulong guildId);
 
+    // ギルドに AI 対象チャンネルが登録されているか判定します。
+    bool IsConfiguredForGuild(ulong guildId);
+
     // 指定チャンネルが AI 対象として登録されているか判定します。
     bool IsTargetChannel(ulong guildId, ulong channelId);
 }

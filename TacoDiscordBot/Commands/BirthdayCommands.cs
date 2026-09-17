@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using DSharpPlus.Entities;
+using DSharpPlus;
 using DSharpPlus.SlashCommands;
 using TacoDiscordBot.Contexts;
 using TacoDiscordBot.Services;
@@ -73,6 +74,12 @@ public sealed class BirthdayCommands : ApplicationCommandModule
             return;
         }
 
+        if (ctx.Member == null || !ctx.Member.Permissions.HasPermission(Permissions.Administrator))
+        {
+            await new InteractionResponseContext(ctx).RespondAsync("このコマンドは管理者のみ実行できます。", true);
+            return;
+        }
+
         var service = BotHost.BirthdayService;
         if (service == null)
         {
@@ -80,10 +87,12 @@ public sealed class BirthdayCommands : ApplicationCommandModule
             return;
         }
 
-        await service.SetChannelAsync(ctx.Guild.Id, ctx.Channel.Id);
+        var enabled = await service.ToggleChannelAsync(ctx.Guild.Id, ctx.Channel.Id);
         Logger.Info("Birthday channel setting completed guild={GuildId} channel={ChannelId}", ctx.Guild.Id, ctx.Channel.Id);
         await new InteractionResponseContext(ctx).RespondAsync(
-            "誕生日メッセージの投稿先をこのチャンネルに設定しました。",
+            enabled
+                ? "誕生日メッセージの投稿先をこのチャンネルに設定しました。"
+                : "誕生日メッセージ通知を無効化しました。",
             true
         );
     }
