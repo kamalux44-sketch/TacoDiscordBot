@@ -30,8 +30,8 @@ public sealed class BlackjackServiceTests
     }
 
     [Fact]
-    public void 敗北の予定払い戻し額は0になる()
+    public void 敗北時は通常勝利相当額を予定払い戻し額とする()
     {
-        Assert.Equal(0, BlackjackService.CalculateScheduledPayout(100, BlackjackOutcome.Loss));
+        Assert.Equal(200, BlackjackService.CalculateScheduledPayout(100, BlackjackOutcome.Loss));
     }
 }

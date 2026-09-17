@@ -257,6 +257,10 @@ public static class BotHost
                 ? null
                 : new Services.CoinService(userDataRepo, RoleService);
 
+            EventManager = CoinService == null
+                ? null
+                : new Services.EventManager(CoinService, NotifyServerEventAsync, serverEventRepo);
+
             BlackjackService = CoinService == null
                 ? null
                 : new Services.BlackjackService(CoinService, RoleService, EventManager);
@@ -276,10 +280,6 @@ public static class BotHost
             SlotService = slotRepo == null || CoinService == null
                 ? null
                 : new Services.SlotService(slotRepo, CoinService, RoleService, EventManager);
-
-            EventManager = CoinService == null
-                ? null
-                : new Services.EventManager(CoinService, NotifyServerEventAsync, serverEventRepo);
 
             VcExchangeService = vcExchangeRepo == null
                 ? null

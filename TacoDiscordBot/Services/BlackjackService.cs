@@ -146,6 +146,7 @@ public sealed class BlackjackService
         {
             BlackjackOutcome.Blackjack => checked(bet * 3),
             BlackjackOutcome.Win => checked(bet * 2),
+            BlackjackOutcome.Loss => checked(bet * 2),
             _ => 0
         };
 
