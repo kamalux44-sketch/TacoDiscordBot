@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Text;
 using System.Threading.Tasks;
 using DSharpPlus;
 using DSharpPlus.Entities;
@@ -14,6 +13,8 @@ namespace TacoDiscordBot.Services;
 
 public sealed class VcRankingService : IVcRankingService
 {
+    private const int RankingDisplayLimit = 10;
+
     // ランキング永続化:
     // 開いているセッションを管理し、リポジトリ経由で永続化します。
     private readonly VcRankingRepository _repo;
@@ -234,7 +235,7 @@ public sealed class VcRankingService : IVcRankingService
 
         var ranks = await repo.GetRankingAsync(guildId, since);
 
-        embed.WithTitle(string.Format(Strings.VcRankingEmbedTitleFormat, periodLabel));
+        embed.WithTitle($"🎧 VC RANKING ({periodLabel})");
 
         if (ranks == null || ranks.Count == 0)
         {
@@ -243,99 +244,22 @@ public sealed class VcRankingService : IVcRankingService
             return embed;
         }
 
-        // ランキングのフォーマットを組み立てる
-        var sb = new StringBuilder();
-
-        sb.AppendLine(Strings.VcRankingHeader);
-
-        sb.AppendLine(Strings.VcRankingSeparator);
-
-        sb.AppendLine(string.Format(Strings.VcRankingDescriptionFormat, periodLabel));
-
-        sb.AppendLine();
-
-        var displayCount = Math.Min(ranks.Count, 10);
-
-        var idx = 1;
+        var lines = new List<string>();
+        var displayCount = Math.Min(ranks.Count, RankingDisplayLimit);
 
         for (var i = 0; i < displayCount; i++)
         {
             var (userId, total) = ranks[i];
 
-            string name;
-
-            try
-            {
-                var member = await guild.GetMemberAsync(userId);
-
-                name = member.DisplayName;
-            }
-            catch
-            {
-                name = $"<@{userId}>";
-            }
-
             var hours = total / 3600;
-
             var mins = (total % 3600) / 60;
+            var time = $"{hours}時間{mins:D2}分";
+            var rank = i + 1;
 
-            var timestr = $"{hours}時間{mins:D2}分";
-
-            string line;
-
-            if (idx == 1)
-            {
-                line = $"🥇 {name}　{timestr}";
-            }
-            else if (idx == 2)
-            {
-                line = $"🥈 {name}　{timestr}";
-            }
-            else if (idx == 3)
-            {
-                line = $"🥉 {name}　{timestr}";
-            }
-            else
-            {
-                line = $"{idx, 2}. {name}　{timestr}";
-            }
-
-            sb.AppendLine(line);
-            idx++;
+            lines.Add($"{rank}位 <@{userId}>\n```text\n{time}\n```");
         }
 
-        sb.AppendLine();
-
-        sb.AppendLine(Strings.VcRankingSeparator);
-
-        // ユーザーの順位を見つける
-        var userRankIndex = -1;
-        long userTotal = 0;
-
-        for (var i = 0; i < ranks.Count; i++)
-        {
-            if (ranks[i].userId != requestingUser.Id)
-                continue;
-
-            userRankIndex = i + 1;
-
-            userTotal = ranks[i].totalSeconds;
-
-            break;
-        }
-
-        if (userRankIndex > 0)
-        {
-            var uh = userTotal / 3600;
-
-            var um = (userTotal % 3600) / 60;
-
-            sb.AppendLine(Strings.VcRankingCurrentUser);
-
-            sb.AppendLine($"{userRankIndex}位　{uh}時間{um:D2}分");
-        }
-
-        embed.WithDescription(sb.ToString());
+        embed.WithDescription(string.Join("\n", lines));
 
         return embed;
     }
