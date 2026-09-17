@@ -38,6 +38,58 @@ public sealed class ServerEventRepository
         Logger.Info("ServerEventRepository: イベントテーブル確認・作成完了");
     }
 
+    public async Task<bool> TryStartWithPaymentAsync(ServerEvent serverEvent, long cost)
+    {
+        if (cost <= 0)
+            throw new ArgumentOutOfRangeException(nameof(cost));
+
+        return await _base.UseTransactionAsync(async (connection, transaction) =>
+        {
+            dynamic createUserCommand = connection.CreateCommand();
+            createUserCommand.Transaction = transaction;
+            createUserCommand.CommandText = """
+                INSERT INTO user_data(guild_id, user_id)
+                VALUES (@guild_id, @activator_id)
+                ON CONFLICT (guild_id, user_id) DO NOTHING;
+                """;
+            createUserCommand.Parameters.AddWithValue("@guild_id", (long)serverEvent.GuildId);
+            createUserCommand.Parameters.AddWithValue("@activator_id", (long)serverEvent.ActivatorId);
+            await createUserCommand.ExecuteNonQueryAsync();
+
+            dynamic command = connection.CreateCommand();
+            command.Transaction = transaction;
+            command.CommandText = """
+                WITH deducted AS (
+                    UPDATE user_data
+                    SET coins = coins - @cost, updated_at = now()
+                    WHERE guild_id = @guild_id
+                      AND user_id = @activator_id
+                      AND coins >= @cost
+                    RETURNING guild_id
+                )
+                INSERT INTO server_events(
+                    guild_id, event_type, activator_id, started_at, ends_at, is_personal)
+                SELECT @guild_id, @event_type, @activator_id, @started_at, @ends_at, @is_personal
+                FROM deducted
+                ON CONFLICT (guild_id, activator_id, is_personal) DO UPDATE SET
+                    event_type = EXCLUDED.event_type,
+                    started_at = EXCLUDED.started_at,
+                    ends_at = EXCLUDED.ends_at
+                RETURNING guild_id;
+                """;
+            command.Parameters.AddWithValue("@guild_id", (long)serverEvent.GuildId);
+            command.Parameters.AddWithValue("@event_type", (int)serverEvent.Type);
+            command.Parameters.AddWithValue("@activator_id", (long)serverEvent.ActivatorId);
+            command.Parameters.AddWithValue("@started_at", serverEvent.StartedAt);
+            command.Parameters.AddWithValue("@ends_at", serverEvent.EndsAt);
+            command.Parameters.AddWithValue("@is_personal", serverEvent.IsPersonal);
+            command.Parameters.AddWithValue("@cost", cost);
+
+            var value = await command.ExecuteScalarAsync();
+            return value != null && value != DBNull.Value;
+        });
+    }
+
     public async Task<IReadOnlyList<ServerEvent>> GetActiveAsync()
     {
         var events = new List<ServerEvent>();

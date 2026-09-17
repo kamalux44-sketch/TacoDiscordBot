@@ -111,19 +111,38 @@ public sealed class EventManager : IAsyncDisposable
         if (!definition.IsPersonal && GetActiveEvent(guildId) != null)
             throw new InvalidOperationException($"現在「{GetDefinition(GetActiveEvent(guildId)!.Type).Name}」が発動中のため実行できません。");
 
-        await _coinService.RemoveCoinsAsync(guildId, userId, cost.Amount);
         var now = DateTimeOffset.UtcNow;
         var started = new ServerEvent(guildId, type, userId, now, definition.IsPersonal ? DateTimeOffset.MaxValue : now.Add(definition.Duration), definition.IsPersonal);
         if (definition.IsPersonal)
-            _personalEvents[CreatePersonalKey(guildId, userId)] = started;
+        {
+            if (!_personalEvents.TryAdd(CreatePersonalKey(guildId, userId), started))
+                throw new InvalidOperationException("生きるか死ぬかは、現在すでに発動中です。");
+        }
         else if (!_activeEvents.TryAdd(guildId, started))
         {
-            await _coinService.AddCoinsAsync(guildId, userId, cost.Amount);
             throw new InvalidOperationException("別のサーバーイベントが発動しました。もう一度お試しください。");
         }
 
-        if (_repository != null)
-            await _repository.SaveAsync(started);
+        try
+        {
+            if (_repository != null)
+            {
+                if (!await _repository.TryStartWithPaymentAsync(started, cost.Amount))
+                    throw new InvalidOperationException("コインが不足しています。");
+            }
+            else
+            {
+                await _coinService.RemoveCoinsAsync(guildId, userId, cost.Amount);
+            }
+        }
+        catch
+        {
+            if (definition.IsPersonal)
+                _personalEvents.TryRemove(CreatePersonalKey(guildId, userId), out _);
+            else
+                _activeEvents.TryRemove(guildId, out _);
+            throw;
+        }
 
         if (_notification != null && !definition.IsPersonal)
             await _notification(started, true);
