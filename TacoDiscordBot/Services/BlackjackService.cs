@@ -179,24 +179,21 @@ public sealed class BlackjackService
                 if (_eventManager.HasPersonalEvent(game.GuildId, game.UserId))
                 {
                     payout = 0;
-                    await _eventManager.ResolvePersonalLossAsync(
-                        game.GuildId,
-                        game.UserId,
-                        0);
                 }
                 else if (effects.SurrenderRefundRate > 0)
                     payout = (long)Math.Floor(game.Bet * effects.SurrenderRefundRate);
             }
-            if (outcome == BlackjackOutcome.Loss)
-                await _eventManager.ResolvePersonalLossAsync(
-                    game.GuildId,
-                    game.UserId,
-                    CalculateScheduledPayout(game.Bet, outcome));
-            else
-                _eventManager.ConsumePersonalEvent(game.GuildId, game.UserId);
         }
         if (payout > 0)
             await _coinService.AddCoinsAsync(game.GuildId, game.UserId, payout);
+
+        if (_eventManager != null)
+        {
+            if (outcome is BlackjackOutcome.Loss or BlackjackOutcome.Surrender or BlackjackOutcome.DealerBlackjack)
+                await _eventManager.ResolvePersonalLossAsync(game.GuildId, game.UserId);
+            else
+                _eventManager.ConsumePersonalEvent(game.GuildId, game.UserId);
+        }
 
         if (_roleService != null)
         {

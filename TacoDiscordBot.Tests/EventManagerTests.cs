@@ -60,15 +60,16 @@ public sealed class EventManagerTests
     }
 
     [Fact]
-    public async Task 個人イベントの敗北処理は所持金の範囲で5倍を徴収して消費する()
+    public async Task 個人イベントの敗北処理は敗北後残高の50パーセントを徴収して消費する()
     {
         var coins = new FakeCoinService(1_000);
         var manager = new EventManager(coins);
         await manager.StartEventAsync(1, 10, EventType.LiveOrDie);
 
-        var deducted = await manager.ResolvePersonalLossAsync(1, 10, 300);
+        var deducted = await manager.ResolvePersonalLossAsync(1, 10);
 
-        Assert.Equal(500, deducted);
+        Assert.Equal(250, deducted);
+        Assert.Equal(250, coins.Balance);
         Assert.False(manager.HasPersonalEvent(1, 10));
     }
 

@@ -57,10 +57,10 @@ public sealed class EventManager : IAsyncDisposable
 
     public static IReadOnlyList<EventDefinition> Definitions { get; } =
     [
-        new(EventType.DoublePayout, "💰 倍返しキャンペーン！", "30分間、blackjack・doubleup・slotの払い戻し1.5倍", TimeSpan.FromMinutes(30), DoublePayoutRate, 0),
+        new(EventType.DoublePayout, "💰 倍返しキャンペーン！", "30分間、blackjack・doubleup・slot・rouletteの払い戻し1.5倍", TimeSpan.FromMinutes(30), DoublePayoutRate, 0),
         new(EventType.HotSlot, "🎰 激アツスロット×10！", "10分間、スロットの高額絵柄出現率アップ", TimeSpan.FromMinutes(10), HotSlotRate, 0),
         new(EventType.LossBack, "🛡️ 50% BACK保証", "30分間、対象ゲームの敗北時にベットの50%を返還", TimeSpan.FromMinutes(30), LossBackRate, 0),
-        new(EventType.GoodLuck, "🍀 豪運に幸あれ！", "20分間、blackjack・slotの払い戻し1.25倍", TimeSpan.FromMinutes(20), GoodLuckRate, 0),
+        new(EventType.GoodLuck, "🍀 豪運に幸あれ！", "20分間、blackjack・slot・rouletteの払い戻し1.25倍", TimeSpan.FromMinutes(20), GoodLuckRate, 0),
         new(EventType.BlackjackInsurance, "🪙 ブラックジャック保険", "10分間、ブラックジャックのサレンダーでベットの90%を返還", TimeSpan.FromMinutes(10), 0, BlackjackInsuranceCost),
         new(EventType.DoubleUpBoost, "🔥 倍倍倍プッシュ！！", "10分間、DoubleUpの当選倍率を2.4倍に変更", TimeSpan.FromMinutes(10), 0, DoubleUpBoostCost),
         new(EventType.MinesSafetyOne, "💣 Mines安全週間１", "20分間、Minesの爆弾数を1個減少", TimeSpan.FromMinutes(20), 0, MinesSafetyOneCost),
@@ -168,8 +168,8 @@ public sealed class EventManager : IAsyncDisposable
             ? LiveOrDieMultiplier
             : GetActiveEvent(guildId)?.Type switch
             {
-                EventType.DoublePayout when gameType is "blackjack" or "doubleup" or "slot" => 1.5m,
-                EventType.GoodLuck when gameType is "blackjack" or "slot" => 1.25m,
+                EventType.DoublePayout when gameType is "blackjack" or "doubleup" or "slot" or "roulette" => 1.5m,
+                EventType.GoodLuck when gameType is "blackjack" or "slot" or "roulette" => 1.25m,
                 _ => 1m
             };
         return checked((long)Math.Floor(payout * multiplier));
@@ -183,19 +183,18 @@ public sealed class EventManager : IAsyncDisposable
         return (long)Math.Floor(bet * effects.LoseRefundRate);
     }
 
-    public async Task<long> ResolvePersonalLossAsync(ulong guildId, ulong userId, long scheduledPayout)
+    public async Task<long> ResolvePersonalLossAsync(ulong guildId, ulong userId)
     {
         if (!HasPersonalEvent(guildId, userId))
             return 0;
-        var amount = checked((long)Math.Floor(Math.Max(0, scheduledPayout) * LiveOrDieMultiplier));
+        var balance = await _coinService.GetBalanceAsync(guildId, userId);
+        var amount = (long)Math.Floor(balance * LiveOrDieRate);
+        if (amount > 0)
+            await _coinService.RemoveCoinsAsync(guildId, userId, amount);
         ConsumePersonalEvent(guildId, userId);
         if (amount <= 0)
             return 0;
-        var balance = await _coinService.GetBalanceAsync(guildId, userId);
-        var deduction = Math.Min(balance, amount);
-        if (deduction > 0)
-            await _coinService.RemoveCoinsAsync(guildId, userId, deduction);
-        return deduction;
+        return amount;
     }
 
     public bool HasPersonalEvent(ulong guildId, ulong userId)

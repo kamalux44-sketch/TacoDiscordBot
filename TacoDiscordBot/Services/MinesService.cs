@@ -93,7 +93,6 @@ public sealed class MinesService
 
         if (game.Bombs.Contains(index))
         {
-            var scheduledPayout = game.CurrentAmount;
             game.State = MinesGameState.Lost;
             _games.TryRemove(CreateGameKey(guildId, userId), out _);
             if (_roleService != null && game.SafeOpenedCount == 0)
@@ -102,7 +101,7 @@ public sealed class MinesService
             if (refund > 0)
                 await _coinService.AddCoinsAsync(guildId, userId, refund);
             if (_eventManager != null)
-                await _eventManager.ResolvePersonalLossAsync(guildId, userId, scheduledPayout);
+                await _eventManager.ResolvePersonalLossAsync(guildId, userId);
             return CreateResult(game, "💥 GAME OVER");
         }
 

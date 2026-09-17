@@ -98,7 +98,6 @@ public sealed class DoubleUpService
             var resultChoice = number >= 8 ? DoubleUpChoice.High : DoubleUpChoice.Low;
             if (resultChoice != choice)
             {
-                scheduledPayout = game.CurrentAmount;
                 game.CurrentAmount = 0;
                 game.State = DoubleUpState.Lost;
                 _games.TryRemove(CreateGameKey(guildId, userId), out _);
@@ -117,7 +116,7 @@ public sealed class DoubleUpService
         if (lost && _roleService != null)
             await _roleService.RefreshUserRolesAsync(guildId, userId);
         if (lost && _eventManager != null)
-            await _eventManager.ResolvePersonalLossAsync(guildId, userId, scheduledPayout);
+            await _eventManager.ResolvePersonalLossAsync(guildId, userId);
 
         return result;
     }
