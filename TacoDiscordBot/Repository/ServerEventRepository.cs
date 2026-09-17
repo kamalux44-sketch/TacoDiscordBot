@@ -85,7 +85,7 @@ public sealed class ServerEventRepository
             command.Parameters.AddWithValue("@is_personal", serverEvent.IsPersonal);
             command.Parameters.AddWithValue("@cost", cost);
 
-            var value = await command.ExecuteScalarAsync();
+            object value = await command.ExecuteScalarAsync();
             return value != null && value != DBNull.Value;
         });
     }
