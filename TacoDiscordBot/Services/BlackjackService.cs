@@ -170,7 +170,8 @@ public sealed class BlackjackService
         };
         if (_eventManager != null)
         {
-            payout = _eventManager.CalculatePayout(game.GuildId, game.UserId, payout, "blackjack");
+            if (outcome is BlackjackOutcome.Blackjack or BlackjackOutcome.Win)
+                payout = _eventManager.CalculatePayout(game.GuildId, game.UserId, payout, "blackjack");
             if (payout == 0 && outcome == BlackjackOutcome.Loss)
                 payout = _eventManager.CalculateLossRefund(game.GuildId, game.UserId, game.Bet);
             if (outcome == BlackjackOutcome.Surrender)

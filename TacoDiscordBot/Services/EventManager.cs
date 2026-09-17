@@ -19,10 +19,12 @@ public sealed class EventManager : IAsyncDisposable
     private const decimal GoodLuckRate = 0.1m;
     private const long BlackjackInsuranceCost = 10_000;
     private const long DoubleUpBoostCost = 20_000;
-    private const long MinesSafetyOneCost = 10_000;
-    private const long MinesSafetyTwoCost = 30_000;
-    private const long MinesSafetyThreeCost = 100_000;
+    private const decimal MinesSafetyOneRate = 0.2m;
+    private const decimal MinesSafetyTwoRate = 0.4m;
+    private const decimal MinesSafetyThreeRate = 0.95m;
     private const decimal LiveOrDieRate = 0.5m;
+    private const decimal BlackjackInsuranceRate = 0.5m;
+    private const decimal BlackjackInsuranceRefundRate = 0.8m;
     private const decimal LiveOrDieMultiplier = 5m;
     private readonly ICoinService _coinService;
     private readonly ServerEventRepository? _repository;
@@ -61,11 +63,11 @@ public sealed class EventManager : IAsyncDisposable
         new(EventType.HotSlot, "🎰 激アツスロット×10！", "10分間、スロットの高額絵柄出現率アップ", TimeSpan.FromMinutes(10), HotSlotRate, 0),
         new(EventType.LossBack, "🛡️ 50% BACK保証", "30分間、対象ゲームの敗北時にベットの50%を返還", TimeSpan.FromMinutes(30), LossBackRate, 0),
         new(EventType.GoodLuck, "🍀 豪運に幸あれ！", "20分間、blackjack・slot・rouletteの払い戻し1.25倍", TimeSpan.FromMinutes(20), GoodLuckRate, 0),
-        new(EventType.BlackjackInsurance, "🪙 ブラックジャック保険", "10分間、ブラックジャックのサレンダーでベットの90%を返還", TimeSpan.FromMinutes(10), 0, BlackjackInsuranceCost),
+        new(EventType.BlackjackInsurance, "🪙 ブラックジャック保険", "10分間、ブラックジャックのサレンダーでベットの80%を返還", TimeSpan.FromMinutes(10), 0, 0),
         new(EventType.DoubleUpBoost, "🔥 倍倍倍プッシュ！！", "10分間、DoubleUpの当選倍率を2.4倍に変更", TimeSpan.FromMinutes(10), 0, DoubleUpBoostCost),
-        new(EventType.MinesSafetyOne, "💣 Mines安全週間１", "20分間、Minesの爆弾数を1個減少", TimeSpan.FromMinutes(20), 0, MinesSafetyOneCost),
-        new(EventType.MinesSafetyTwo, "💣 Mines安全週間２", "20分間、Minesの爆弾数を2個減少", TimeSpan.FromMinutes(20), 0, MinesSafetyTwoCost),
-        new(EventType.MinesSafetyThree, "💣 Mines安全週間３", "30分間、Minesの爆弾数を3個減少", TimeSpan.FromMinutes(30), 0, MinesSafetyThreeCost),
+        new(EventType.MinesSafetyOne, "💣 Mines安全週間１", "10分間、Minesの爆弾数を4個から3個に減少", TimeSpan.FromMinutes(10), MinesSafetyOneRate, 0),
+        new(EventType.MinesSafetyTwo, "💣 Mines安全週間２", "10分間、Minesの爆弾数を4個から2個に減少", TimeSpan.FromMinutes(10), MinesSafetyTwoRate, 0),
+        new(EventType.MinesSafetyThree, "💣 Mines安全週間３", "10分間、Minesの爆弾数を4個から1個に減少", TimeSpan.FromMinutes(10), MinesSafetyThreeRate, 0),
         new(EventType.LiveOrDie, "💎 生きるか死ぬか", "次の勝負1回のみ、勝敗の払い戻し予定額を5倍", TimeSpan.Zero, 0, 0, true)
     ];
 
@@ -160,10 +162,16 @@ public sealed class EventManager : IAsyncDisposable
         return effects;
     }
 
-    public long CalculatePayout(ulong guildId, ulong userId, long payout, string gameType)
+    public long CalculatePayout(
+        ulong guildId,
+        ulong userId,
+        long payout,
+        string gameType,
+        long nonMultiplierAmount = 0)
     {
         if (payout <= 0)
             return 0;
+        nonMultiplierAmount = Math.Clamp(nonMultiplierAmount, 0, payout);
         var multiplier = HasPersonalEvent(guildId, userId) && gameType != "slot"
             ? LiveOrDieMultiplier
             : GetActiveEvent(guildId)?.Type switch
@@ -172,7 +180,8 @@ public sealed class EventManager : IAsyncDisposable
                 EventType.GoodLuck when gameType is "blackjack" or "slot" or "roulette" => 1.25m,
                 _ => 1m
             };
-        return checked((long)Math.Floor(payout * multiplier));
+        var multiplierTarget = payout - nonMultiplierAmount;
+        return checked(nonMultiplierAmount + (long)Math.Floor(multiplierTarget * multiplier));
     }
 
     public long CalculateLossRefund(ulong guildId, ulong userId, long bet)
@@ -248,6 +257,16 @@ public sealed class EventManager : IAsyncDisposable
             var balance = await _coinService.GetBalanceAsync(guildId, userId);
             return new EventCost(CalculatePercentageCost(balance, LiveOrDieRate), "発動者の所持金の50%");
         }
+        if (type is EventType.BlackjackInsurance or EventType.MinesSafetyOne or EventType.MinesSafetyTwo or EventType.MinesSafetyThree)
+        {
+            var balance = await _coinService.GetBalanceAsync(guildId, userId);
+            var rate = type == EventType.BlackjackInsurance
+                ? BlackjackInsuranceRate
+                : definition.TopRankingRate;
+            return new EventCost(
+                CalculatePercentageCost(balance, rate),
+                $"発動者の所持金の{rate:P0}");
+        }
         if (definition.FixedCost > 0)
             return new EventCost(definition.FixedCost, $"{definition.FixedCost:N0}コイン");
         return await CalculateCostAsync(guildId, type);
@@ -260,7 +279,7 @@ public sealed class EventManager : IAsyncDisposable
             EventType.HotSlot => effects,
             EventType.LossBack => effects with { LoseRefundRate = 0.5m },
             EventType.GoodLuck => effects with { PayoutMultiplier = 1.25m },
-            EventType.BlackjackInsurance => effects with { SurrenderRefundRate = 0.9m },
+            EventType.BlackjackInsurance => effects with { SurrenderRefundRate = BlackjackInsuranceRefundRate },
             EventType.DoubleUpBoost => effects with { DoubleUpMultiplier = 2.4m },
             EventType.MinesSafetyOne => effects with { MinesBombReduction = 1 },
             EventType.MinesSafetyTwo => effects with { MinesBombReduction = 2 },

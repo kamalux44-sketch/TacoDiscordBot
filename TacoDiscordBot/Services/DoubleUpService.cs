@@ -131,7 +131,12 @@ public sealed class DoubleUpService
             game.State = DoubleUpState.CashedOut;
         }
 
-        var payout = _eventManager?.CalculatePayout(guildId, userId, game.CurrentAmount, "doubleup")
+        var payout = _eventManager?.CalculatePayout(
+            guildId,
+            userId,
+            game.CurrentAmount,
+            "doubleup",
+            game.InitialBet)
             ?? game.CurrentAmount;
         await _coinService.AddCoinsAsync(guildId, userId, payout);
         _eventManager?.ConsumePersonalEvent(guildId, userId);

@@ -60,6 +60,44 @@ public sealed class EventManagerTests
     }
 
     [Fact]
+    public async Task 倍率対象外の返金額にはイベント倍率を適用しない()
+    {
+        var manager = new EventManager(new FakeCoinService(1_000_000)
+        {
+            Ranking = [new UserData { Coins = 100_000 }]
+        });
+
+        await manager.StartEventAsync(1, 10, EventType.DoublePayout);
+
+        Assert.Equal(100, manager.CalculatePayout(1, 10, 100, "doubleup", 100));
+        Assert.Equal(250, manager.CalculatePayout(1, 10, 200, "doubleup", 100));
+    }
+
+    [Fact]
+    public async Task ブラックジャック保険は所持金の50パーセントを発動コストとする()
+    {
+        var coins = new FakeCoinService(100_000);
+        var manager = new EventManager(coins);
+
+        var cost = await manager.CalculateCostAsync(1, 10, EventType.BlackjackInsurance);
+
+        Assert.Equal(50_000, cost.Amount);
+        Assert.Equal("発動者の所持金の50%", cost.Description);
+    }
+
+    [Fact]
+    public async Task ブラックジャック保険はサレンダー時にベットの80パーセントを返還する()
+    {
+        var coins = new FakeCoinService(100_000);
+        var manager = new EventManager(coins);
+        await manager.StartEventAsync(1, 10, EventType.BlackjackInsurance);
+
+        var effects = manager.GetEffects(1, 10);
+
+        Assert.Equal(0.8m, effects.SurrenderRefundRate);
+    }
+
+    [Fact]
     public async Task 個人イベントの敗北処理は敗北後残高の50パーセントを徴収して消費する()
     {
         var coins = new FakeCoinService(1_000);

@@ -11,6 +11,9 @@ namespace TacoDiscordBot.Commands;
 
 public sealed class SlotCommands : ApplicationCommandModule
 {
+    private const int ReelRevealDelayMilliseconds = 700;
+    private static readonly SlotAnimationTracker AnimationTracker = new();
+
     [SlashCommand("slot", "スロットを回します")]
     public async Task Slot(
         InteractionContext ctx,
@@ -33,26 +36,32 @@ public sealed class SlotCommands : ApplicationCommandModule
 
         var response = new InteractionResponseContext(ctx);
         await response.DeferResponseAsync();
+        var ownsAnimation = AnimationTracker.TryBegin(ctx.Guild.Id);
         SlotSpinResult result;
         try
         {
             result = await service.SpinAsync(ctx.Guild.Id, ctx.User.Id, bet, async revealedSymbols =>
             {
-                await Task.Delay(700);
+                if (ownsAnimation)
+                    await Task.Delay(ReelRevealDelayMilliseconds);
                 await response.EditResponseAsync(CreateReelMessage(revealedSymbols));
             });
+
+            await response.EditResponseAsync(result.Embed);
         }
         catch (ArgumentOutOfRangeException)
         {
             await response.EditResponseAsync("ベットは1以上で指定してください。");
-            return;
         }
         catch (InvalidOperationException ex)
         {
             await response.EditResponseAsync(ex.Message);
-            return;
         }
-        await response.EditResponseAsync(result.Embed);
+        finally
+        {
+            if (ownsAnimation)
+                AnimationTracker.End(ctx.Guild.Id);
+        }
     }
 
     [SlashCommand("slotstatus", "スロットの統計を表示します")]

@@ -100,6 +100,21 @@ public sealed class DoubleUpServiceTests
     }
 
     [Fact]
+    public async Task CASHOUTでは初期ベットにイベント倍率を適用しない()
+    {
+        var coins = new FakeCoinService(1_000_000);
+        var eventManager = new EventManager(coins);
+        await eventManager.StartEventAsync(1, 10, EventType.DoublePayout);
+        var service = CreateService(coins, eventManager, 10);
+
+        await service.StartAsync(1, 10, 100);
+        await service.SelectAsync(1, 10, DoubleUpChoice.High);
+        await service.CashOutAsync(1, 10);
+
+        Assert.Equal(new[] { 250L }, coins.Added);
+    }
+
+    [Fact]
     public async Task 最大倍率は128倍でそれ以上抽選できない()
     {
         var coins = new FakeCoinService(10_000);
@@ -128,13 +143,22 @@ public sealed class DoubleUpServiceTests
         Assert.Single(coins.Removed);
     }
 
-    private static DoubleUpService CreateService(FakeCoinService coins, params int[] numbers)
+    private static DoubleUpService CreateService(
+        FakeCoinService coins,
+        params int[] numbers)
+        => CreateService(coins, null, numbers);
+
+    private static DoubleUpService CreateService(
+        FakeCoinService coins,
+        EventManager? eventManager,
+        params int[] numbers)
     {
         var queue = new Queue<int>(numbers);
         return new DoubleUpService(
             coins,
             () => queue.Dequeue(),
-            _ => Task.CompletedTask
+            _ => Task.CompletedTask,
+            eventManager: eventManager
         );
     }
 

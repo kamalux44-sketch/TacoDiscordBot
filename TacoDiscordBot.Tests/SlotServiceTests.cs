@@ -62,4 +62,33 @@ public sealed class SlotServiceTests
     {
         Assert.Equal(SlotWinRank.Loss, SlotService.DetermineRank(["❌", "❌", "❌"]));
     }
+
+    [Fact]
+    public void 同一サーバーの演出は同時に一つだけ開始できる()
+    {
+        var tracker = new SlotAnimationTracker();
+
+        Assert.True(tracker.TryBegin(1));
+        Assert.False(tracker.TryBegin(1));
+    }
+
+    [Fact]
+    public void 演出終了後は同じサーバーで再開できる()
+    {
+        var tracker = new SlotAnimationTracker();
+
+        tracker.TryBegin(1);
+        tracker.End(1);
+
+        Assert.True(tracker.TryBegin(1));
+    }
+
+    [Fact]
+    public void 別サーバーの演出は同時に開始できる()
+    {
+        var tracker = new SlotAnimationTracker();
+
+        Assert.True(tracker.TryBegin(1));
+        Assert.True(tracker.TryBegin(2));
+    }
 }
