@@ -200,12 +200,24 @@ public sealed class CoinCommands : ApplicationCommandModule
             return;
         }
 
-        var ranking = await BotHost.CoinService.GetTopRankingAsync(ctx.Guild.Id, RichRankingLimit);
+        var allUsers = await BotHost.CoinService.GetRankingAsync(ctx.Guild.Id);
+        var ranking = allUsers.Take(RichRankingLimit).ToList();
+        var totalCoins = allUsers.Sum(user => (decimal)user.Coins);
+        var topRankingCoins = ranking.Sum(user => (decimal)user.Coins);
+        var topRankingShare = totalCoins <= 0
+            ? 0m
+            : topRankingCoins / totalCoins * 100m;
+        var summary = $"🏆 TOP10合計 / 総コイン: {topRankingCoins:N0} / {totalCoins:N0}コイン\n"
+            + $"📊 TOP10占有率: {topRankingShare:0.00}%";
         var lines = ranking.Count == 0
             ? "ランキング対象のユーザーがいません。"
             : string.Join("\n", ranking.Select((user, index) =>
                 $"{index + 1}位 <@{user.UserId}>\n```text\n{user.Coins.ToString("N0").PadLeft(CoinAmountWidth)} coins{RankingColumnSeparator}{FormatBankruptcyCount(user.LastChanceCount)}\n```"));
-        var embed = new DiscordEmbedBuilder().WithTitle("💰 RICH RANKING").WithDescription(lines).WithColor(DiscordColor.Gold).Build();
+        var embed = new DiscordEmbedBuilder()
+            .WithTitle("💰 RICH RANKING")
+            .WithDescription($"{summary}\n\n{lines}")
+            .WithColor(DiscordColor.Gold)
+            .Build();
         await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder().AddEmbed(embed));
     }
 
