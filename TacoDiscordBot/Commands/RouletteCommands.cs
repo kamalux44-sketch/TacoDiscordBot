@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Threading.Tasks;
 using DSharpPlus;
 using DSharpPlus.Entities;
@@ -50,8 +51,11 @@ public sealed class RouletteCommands : ApplicationCommandModule
             await ctx.CreateResponseAsync(
                 InteractionResponseType.ChannelMessageWithSource,
                 new DiscordInteractionResponseBuilder()
-                    .AddEmbed(CreateSelectionEmbed(bet))
-                    .AddComponents(buttons)
+                    .AddEmbed(CreateSelectionEmbed(bet, service))
+                    .AddComponents(new DiscordComponent[]
+                    {
+                        buttons[0], buttons[1], buttons[2], buttons[3], buttons[4]
+                    })
             );
         }
         catch (ArgumentOutOfRangeException ex)
@@ -131,10 +135,17 @@ public sealed class RouletteCommands : ApplicationCommandModule
         }
     }
 
-    private static DiscordEmbed CreateSelectionEmbed(long bet)
+    private static DiscordEmbed CreateSelectionEmbed(long bet, RouletteService service)
         => new DiscordEmbedBuilder()
             .WithTitle("🎲 ルーレット")
-            .WithDescription($"賭け金: {bet:N0} Scrap\n\n賭ける数字を選択してください。")
+            .WithDescription(
+                $"賭け金: {bet:N0} Scrap\n\n"
+                + "数字ボタンを選択してください。\n\n"
+                + string.Join(
+                    "\n",
+                    SelectableNumbers.Select(number =>
+                        $"{number}: {service.Configuration.Wheel.Count(value => value == number)}/25　倍率 ×{service.Configuration.PayoutMultipliers[number]}"))
+            )
             .WithColor(DiscordColor.Blurple)
             .Build();
 

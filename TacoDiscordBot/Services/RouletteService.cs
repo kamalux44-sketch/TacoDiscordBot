@@ -55,6 +55,8 @@ public sealed class RouletteService
         ValidateConfiguration(_configuration);
     }
 
+    public RouletteConfiguration Configuration => _configuration;
+
     public async Task StartAsync(ulong guildId, ulong userId, long bet)
     {
         ValidateBet(bet);
