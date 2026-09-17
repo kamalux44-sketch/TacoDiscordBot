@@ -136,18 +136,31 @@ public sealed class RouletteCommands : ApplicationCommandModule
     }
 
     private static DiscordEmbed CreateSelectionEmbed(long bet, RouletteService service)
-        => new DiscordEmbedBuilder()
-            .WithTitle("🎲 ルーレット")
+    {
+        var embed = new DiscordEmbedBuilder()
+            .WithTitle("🎲 ルーレットチャレンジ")
             .WithDescription(
-                $"賭け金: {bet:N0} Scrap\n\n"
-                + "数字ボタンを選択してください。\n\n"
-                + string.Join(
-                    "\n",
-                    SelectableNumbers.Select(number =>
-                        $"{number}: {service.Configuration.Wheel.Count(value => value == number)}/25　倍率 ×{service.Configuration.PayoutMultipliers[number]}"))
+                "ボタンで予想する数字を選んでください。\n"
+                + "的中すると、賭け金に倍率を掛けた Scrap を獲得できます。"
             )
             .WithColor(DiscordColor.Blurple)
+            .AddField("💰 賭け金", $"**{bet:N0} Scrap**", true);
+
+        foreach (var number in SelectableNumbers)
+        {
+            var occurrenceCount = service.Configuration.Wheel.Count(value => value == number);
+            var multiplier = service.Configuration.PayoutMultipliers[number];
+            embed.AddField(
+                $"数字 {number}",
+                $"出現率 **{occurrenceCount}/25**\n配当 **×{multiplier}**",
+                true
+            );
+        }
+
+        return embed
+            .WithFooter("数字ボタンを押してルーレットを開始")
             .Build();
+    }
 
     private static Task RespondErrorAsync(InteractionContext ctx, string message)
         => ctx.CreateResponseAsync(
