@@ -105,16 +105,28 @@ public sealed class ServerEventCommands : ApplicationCommandModule
     {
         var value = e.Interaction.Data.Values?.FirstOrDefault();
         if (!Enum.TryParse<EventType>(value, out var type) || manager.GetDefinition(type) == null)
+        {
+            await e.Interaction.CreateResponseAsync(
+                InteractionResponseType.UpdateMessage,
+                new DiscordInteractionResponseBuilder().WithContent("選択されたイベントは無効です。"));
             return;
+        }
 
-        var cost = await manager.CalculateCostAsync(guildId, userId, type);
-        await e.Interaction.CreateResponseAsync(
-            InteractionResponseType.UpdateMessage,
-            new DiscordInteractionResponseBuilder()
-                .WithContent($"イベント「{manager.GetDefinition(type).Name}」を発令します！\n\n必要コスト:\n{cost.Amount:N0}コイン（{cost.Description}）\n\nこの金額を支払いますか？")
-                .AddComponents(
-                    new DiscordButtonComponent(ButtonStyle.Success, $"{ConfirmPrefix}:{type}:{guildId}:{userId}", "発令する"),
-                    new DiscordButtonComponent(ButtonStyle.Danger, $"{CancelPrefix}:{guildId}:{userId}", "キャンセル")));
+        await e.Interaction.CreateResponseAsync(InteractionResponseType.DeferredMessageUpdate);
+        try
+        {
+            var cost = await manager.CalculateCostAsync(guildId, userId, type);
+            await e.Interaction.EditOriginalResponseAsync(
+                new DiscordWebhookBuilder()
+                    .WithContent($"イベント「{manager.GetDefinition(type).Name}」を発令します！\n\n必要コスト:\n{cost.Amount:N0}コイン（{cost.Description}）\n\nこの金額を支払いますか？")
+                    .AddComponents(
+                        new DiscordButtonComponent(ButtonStyle.Success, $"{ConfirmPrefix}:{type}:{guildId}:{userId}", "発令する"),
+                        new DiscordButtonComponent(ButtonStyle.Danger, $"{CancelPrefix}:{guildId}:{userId}", "キャンセル")));
+        }
+        catch (InvalidOperationException ex)
+        {
+            await e.Interaction.EditOriginalResponseAsync(new DiscordWebhookBuilder().WithContent(ex.Message));
+        }
     }
 
     private static async Task HandleConfirmationAsync(
@@ -126,19 +138,18 @@ public sealed class ServerEventCommands : ApplicationCommandModule
     {
         if (!Enum.TryParse<EventType>(eventTypeValue, out var type))
             return;
+
+        await e.Interaction.CreateResponseAsync(InteractionResponseType.DeferredMessageUpdate);
         try
         {
             var started = await manager.StartEventAsync(guildId, userId, type);
-            await e.Interaction.CreateResponseAsync(
-                InteractionResponseType.UpdateMessage,
-                new DiscordInteractionResponseBuilder().WithContent(
+            await e.Interaction.EditOriginalResponseAsync(
+                new DiscordWebhookBuilder().WithContent(
                     $"{manager.GetDefinition(started.Type).Name}を発令しました。\n終了予定: {started.EndsAt.LocalDateTime:yyyy/MM/dd HH:mm:ss}"));
         }
         catch (InvalidOperationException ex)
         {
-            await e.Interaction.CreateResponseAsync(
-                InteractionResponseType.ChannelMessageWithSource,
-                new DiscordInteractionResponseBuilder().WithContent(ex.Message).AsEphemeral(true));
+            await e.Interaction.EditOriginalResponseAsync(new DiscordWebhookBuilder().WithContent(ex.Message));
         }
     }
 
