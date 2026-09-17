@@ -265,7 +265,7 @@ public static class BotHost
 
             BlackjackService = CoinService == null
                 ? null
-                : new Services.BlackjackService(CoinService, RoleService, EventManager);
+                : new Services.BlackjackService(CoinService, RoleService, EventManager, userDataRepo);
 
             RouletteService = CoinService == null
                 ? null

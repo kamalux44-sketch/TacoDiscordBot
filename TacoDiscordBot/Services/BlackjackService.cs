@@ -5,6 +5,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using DSharpPlus.Entities;
 using TacoDiscordBot.Models;
+using TacoDiscordBot.Repository;
 using TacoDiscordBot.Services.Interface;
 
 namespace TacoDiscordBot.Services;
@@ -16,17 +17,20 @@ public sealed class BlackjackService
     private readonly ICoinService _coinService;
     private readonly RoleService _roleService;
     private readonly EventManager _eventManager;
+    private readonly UserDataRepository _userDataRepository;
     private readonly ConcurrentDictionary<string, BlackjackGame> _games = new();
 
     public BlackjackService(
         ICoinService coinService,
         RoleService? roleService = null,
-        EventManager? eventManager = null
+        EventManager? eventManager = null,
+        UserDataRepository? userDataRepository = null
     )
     {
         _coinService = coinService ?? throw new ArgumentNullException(nameof(coinService));
         _roleService = roleService;
         _eventManager = eventManager;
+        _userDataRepository = userDataRepository;
     }
 
     public async Task<BlackjackResult> StartAsync(ulong guildId, ulong userId, long bet)
@@ -106,11 +110,11 @@ public sealed class BlackjackService
             if (game.IsFinished)
                 throw new InvalidOperationException("このブラックジャックゲームは終了しています。");
 
-            revealResults.Add(CreateResult(game, false, "ディーラーのカードを公開します。", 0, true));
+            revealResults.Add(CreateResult(game, false, "ディーラーのカードを公開します。", 0, revealDealerCards: true));
             while (CalculateTotal(game.DealerCards) < 17)
             {
                 game.DealerCards.Add(game.Deck.Dequeue());
-                revealResults.Add(CreateResult(game, false, "ディーラーがカードを引きました。", 0, true));
+                revealResults.Add(CreateResult(game, false, "ディーラーがカードを引きました。", 0, revealDealerCards: true));
             }
         }
 
@@ -205,6 +209,15 @@ public sealed class BlackjackService
                 await _roleService.RecordEventAsync(game.GuildId, game.UserId, conditionType);
         }
 
+        var statistics = _userDataRepository == null
+            ? null
+            : await _userDataRepository.RecordBlackjackOutcomeAsync(
+                game.GuildId,
+                game.UserId,
+                outcome is BlackjackOutcome.Win or BlackjackOutcome.Blackjack,
+                outcome == BlackjackOutcome.Push,
+                outcome == BlackjackOutcome.Surrender ? 1 : outcome is BlackjackOutcome.Loss or BlackjackOutcome.DealerBlackjack ? 2 : 0);
+
         var message = outcome switch
         {
             BlackjackOutcome.Blackjack => "🎉 BLACKJACK! 3倍払い戻し",
@@ -214,7 +227,7 @@ public sealed class BlackjackService
             BlackjackOutcome.DealerBlackjack => "💥 ディーラーがブラックジャックのためサレンダーできません。",
             _ => CalculateTotal(game.PlayerCards) > 21 ? "💥 BUST!" : "😢 負け"
         };
-        return CreateResult(game, true, message, payout);
+        return CreateResult(game, true, message, payout, statistics);
     }
 
     private static string CreateGameKey(ulong guildId, ulong userId) => $"{guildId}:{userId}";
@@ -224,6 +237,7 @@ public sealed class BlackjackService
         bool finished,
         string message,
         long payout,
+        BlackjackStatistics? statistics = null,
         bool revealDealerCards = false
     )
     {
@@ -232,7 +246,7 @@ public sealed class BlackjackService
             : $"🂠 {game.DealerCards[1]}";
         var embed = new DiscordEmbedBuilder()
             .WithTitle("🃏 BLACKJACK")
-            .WithDescription($"**あなた**\n{string.Join(" ", game.PlayerCards)}\n合計: {CalculateTotal(game.PlayerCards)}\n\n**ディーラー**\n{dealer}\n合計: {(finished || revealDealerCards ? CalculateTotal(game.DealerCards).ToString() : "❓")}\n\n{message}\nベット: {game.Bet:N0}\n払い戻し: {payout:N0}")
+            .WithDescription($"**あなた**\n{string.Join(" ", game.PlayerCards)}\n合計: {CalculateTotal(game.PlayerCards)}\n\n**ディーラー**\n{dealer}\n合計: {(finished || revealDealerCards ? CalculateTotal(game.DealerCards).ToString() : "❓")}\n\n{message}\n{(statistics == null ? string.Empty : $"勝{statistics.Wins}/負{statistics.LossHalfUnits / 2d:0.##}/分{statistics.Draws} 勝率{Math.Round(statistics.WinRate):0}%\n")}ベット: {game.Bet:N0}\n払い戻し: {payout:N0}")
             .WithColor(finished ? DiscordColor.Green : DiscordColor.Blurple)
             .Build();
         return new BlackjackResult(embed, finished);

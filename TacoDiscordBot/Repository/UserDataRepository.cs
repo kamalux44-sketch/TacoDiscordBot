@@ -25,6 +25,9 @@ public sealed class UserDataRepository : ILastChanceStore
                 user_id BIGINT NOT NULL,
                 coins BIGINT NOT NULL DEFAULT {InitialCoins} CHECK (coins >= 0),
                 lastchance_count BIGINT NOT NULL DEFAULT 0 CHECK (lastchance_count >= 0),
+                blackjack_wins BIGINT NOT NULL DEFAULT 0 CHECK (blackjack_wins >= 0),
+                blackjack_loss_half_units BIGINT NOT NULL DEFAULT 0 CHECK (blackjack_loss_half_units >= 0),
+                blackjack_draws BIGINT NOT NULL DEFAULT 0 CHECK (blackjack_draws >= 0),
                 created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
                 updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
                 PRIMARY KEY (guild_id, user_id)
@@ -33,6 +36,12 @@ public sealed class UserDataRepository : ILastChanceStore
             ALTER COLUMN coins SET DEFAULT {InitialCoins};
             ALTER TABLE user_data
             ADD COLUMN IF NOT EXISTS lastchance_count BIGINT NOT NULL DEFAULT 0;
+            ALTER TABLE user_data
+            ADD COLUMN IF NOT EXISTS blackjack_wins BIGINT NOT NULL DEFAULT 0;
+            ALTER TABLE user_data
+            ADD COLUMN IF NOT EXISTS blackjack_loss_half_units BIGINT NOT NULL DEFAULT 0;
+            ALTER TABLE user_data
+            ADD COLUMN IF NOT EXISTS blackjack_draws BIGINT NOT NULL DEFAULT 0;
             """;
         await _base.ExecuteNonQueryAsync(sql);
         Logger.Info("UserDataRepository: サーバー単位ユーザーデータテーブル確認・作成完了");
@@ -69,6 +78,52 @@ public sealed class UserDataRepository : ILastChanceStore
         });
 
         return result ?? throw new InvalidOperationException("サーバー単位のユーザーデータを作成できませんでした。");
+    }
+
+    public async Task<BlackjackStatistics> RecordBlackjackOutcomeAsync(
+        ulong guildId,
+        ulong userId,
+        bool isWin,
+        bool isDraw,
+        long lossHalfUnits
+    )
+    {
+        if (lossHalfUnits < 0 || lossHalfUnits > 2)
+            throw new ArgumentOutOfRangeException(nameof(lossHalfUnits));
+
+        await GetOrCreateAsync(guildId, userId);
+        BlackjackStatistics result = null;
+        await _base.UseConnectionAsync(async connection =>
+        {
+            dynamic command = connection.CreateCommand();
+            command.CommandText = """
+                UPDATE user_data
+                SET blackjack_wins = blackjack_wins + @wins,
+                    blackjack_loss_half_units = blackjack_loss_half_units + @loss_half_units,
+                    blackjack_draws = blackjack_draws + @draws,
+                    updated_at = now()
+                WHERE guild_id = @guild_id AND user_id = @user_id
+                RETURNING blackjack_wins, blackjack_loss_half_units, blackjack_draws;
+                """;
+            command.Parameters.AddWithValue("@wins", isWin ? 1 : 0);
+            command.Parameters.AddWithValue("@loss_half_units", lossHalfUnits);
+            command.Parameters.AddWithValue("@draws", isDraw ? 1 : 0);
+            command.Parameters.AddWithValue("@guild_id", (long)guildId);
+            command.Parameters.AddWithValue("@user_id", (long)userId);
+            dynamic reader = await command.ExecuteReaderAsync();
+            if (await reader.ReadAsync())
+            {
+                result = new BlackjackStatistics
+                {
+                    Wins = reader.GetInt64(0),
+                    LossHalfUnits = reader.GetInt64(1),
+                    Draws = reader.GetInt64(2)
+                };
+            }
+            await reader.DisposeAsync();
+        });
+
+        return result ?? throw new InvalidOperationException("ブラックジャック戦績を更新できませんでした。");
     }
 
     public async Task<long> AddCoinsAsync(ulong guildId, ulong userId, long amount)

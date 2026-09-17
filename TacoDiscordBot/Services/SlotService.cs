@@ -75,7 +75,9 @@ public sealed class SlotService
             // Slotは個人イベントの予定払い戻し額計算対象外ですが、1プレイで消費します。
             _eventManager.ConsumePersonalEvent(guildId, userId);
         }
-        var statistics = await _repository.RecordSpinAsync(rank != SlotWinRank.Loss);
+        // リーチは払い戻しがあっても、統計上の当たりには含めません。
+        var isHit = rank is SlotWinRank.Win or SlotWinRank.BigWin or SlotWinRank.UltraRare or SlotWinRank.MegaJackpot;
+        var statistics = await _repository.RecordSpinAsync(isHit);
         if (payout > 0)
             await _coinService.AddCoinsAsync(guildId, userId, payout);
 
@@ -97,7 +99,7 @@ public sealed class SlotService
 
         var embed = CreateEmbed(symbols, rank, statistics, bet, payout);
 
-        return new SlotSpinResult(embed, rank != SlotWinRank.Loss, statistics, bet, payout);
+        return new SlotSpinResult(embed, isHit, statistics, bet, payout);
     }
 
     public static decimal GetPayoutMultiplier(SlotWinRank rank)

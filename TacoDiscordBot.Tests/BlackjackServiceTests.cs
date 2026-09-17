@@ -1,4 +1,6 @@
+using System;
 using TacoDiscordBot.Services;
+using TacoDiscordBot.Models;
 using Xunit;
 
 namespace TacoDiscordBot.Tests;
@@ -33,5 +35,18 @@ public sealed class BlackjackServiceTests
     public void 敗北時は通常勝利相当額を予定払い戻し額とする()
     {
         Assert.Equal(200, BlackjackService.CalculateScheduledPayout(100, BlackjackOutcome.Loss));
+    }
+
+    [Fact]
+    public void サレンダーは半敗として勝率を計算する()
+    {
+        var statistics = new BlackjackStatistics
+        {
+            Wins = 100,
+            LossHalfUnits = 181,
+            Draws = 10
+        };
+
+        Assert.Equal(50, Math.Round(statistics.WinRate));
     }
 }
