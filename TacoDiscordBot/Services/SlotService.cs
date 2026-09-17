@@ -23,8 +23,8 @@ public sealed class SlotService
         new("🍇", 0.15m, 20m, 0.5m),
         new("🍉", 0.11m, 35m, 1m),
         new("🍈", 0.09m, 55m, 1.5m),
-        new(UltraRare, 0.09m, 160m, 4m),
-        new(BigWin, 0.06m, 500m, 6m),
+        new(BigWin, 0.09m, 160m, 4m),
+        new(UltraRare, 0.06m, 500m, 6m),
         new(MegaJackpot, 0.04m, 1000m, 10m)
     ];
     private static readonly string[] Symbols = SymbolConfigurations.Select(item => item.Symbol).ToArray();
