@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using DSharpPlus;
@@ -13,6 +14,11 @@ public sealed class RouletteCommands : ApplicationCommandModule
 {
     private const string CustomIdPrefix = "roulette:select";
     private static readonly int[] SelectableNumbers = [1, 3, 5, 10, 20];
+    private static readonly string SpinAnimationPath = Path.Combine(
+        AppContext.BaseDirectory,
+        "Contents",
+        RouletteService.SpinAnimationFileName
+    );
 
     [SlashCommand("roulette", "ルーレットを回します")]
     public async Task Roulette(
@@ -106,10 +112,11 @@ public sealed class RouletteCommands : ApplicationCommandModule
             {
                 if (!hasResponded)
                 {
-                    await e.Interaction.CreateResponseAsync(
-                        InteractionResponseType.UpdateMessage,
-                        new DiscordInteractionResponseBuilder().AddEmbed(frame)
-                    );
+                    var response = new DiscordInteractionResponseBuilder().AddEmbed(frame);
+                    await using var stream = File.OpenRead(SpinAnimationPath);
+                    response.AddFile(RouletteService.SpinAnimationFileName, stream, true);
+                    await e.Interaction.CreateResponseAsync(InteractionResponseType.UpdateMessage, response);
+
                     hasResponded = true;
                     return;
                 }

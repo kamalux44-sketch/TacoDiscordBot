@@ -21,26 +21,9 @@ public sealed record RouletteConfiguration(
 
 public sealed class RouletteService
 {
-    private static readonly TimeSpan[] SpinDelays =
-    [
-        TimeSpan.FromMilliseconds(200), TimeSpan.FromMilliseconds(200),
-        TimeSpan.FromMilliseconds(220), TimeSpan.FromMilliseconds(250),
-        TimeSpan.FromMilliseconds(300), TimeSpan.FromMilliseconds(400),
-        TimeSpan.FromMilliseconds(500), TimeSpan.FromMilliseconds(700)
-    ];
+    public const string SpinAnimationFileName = "roulette_spin.gif";
 
-    private static readonly string[] SpinFrames =
-    [
-        "             #########\n         ####    20   ####\n      ### 1             1 ###\n    ## 5                   3 ##\n   # 3                       5 #\n  # 1                           #\n #                             1 #\n#                ↑               #\n# 10             ◇             5 #\n#                                 #\n #                             3 #\n  # 1                           #\n   #  3                      1 #\n    ##   1                10 ##\n      ###  5            1 ###\n         ####  1    3 ####\n             #########",
-        "             #########\n         ####    20   ####\n      ### 1             1 ###\n    ## 5                   3 ##\n   # 3                       5 #\n  # 1                           #\n #                             1 #\n#                                 #\n# 10             ◇→           5 #\n#                                 #\n #                             3 #\n  # 1                           #\n   #  3                      1 #\n    ##   1                10 ##\n      ###  5            1 ###\n         ####  1    3 ####\n             #########",
-        "             #########\n         ####    20   ####\n      ### 1             1 ###\n    ## 5                   3 ##\n   # 3                       5 #\n  # 1                           #\n #                             1 #\n#                                 #\n# 10             ◇             5 #\n#                ↓               #\n #                             3 #\n  # 1                           #\n   #  3                      1 #\n    ##   1                10 ##\n      ###  5            1 ###\n         ####  1    3 ####\n             #########",
-        "             #########\n         ####    20   ####\n      ### 1             1 ###\n    ## 5                   3 ##\n   # 3                       5 #\n  # 1                           #\n #                             1 #\n#                                 #\n# 10           ←◇             5 #\n#                                 #\n #                             3 #\n  # 1                           #\n   #  3                      1 #\n    ##   1                10 ##\n      ###  5            1 ###\n         ####  1    3 ####\n             #########"
-        ,
-        "             #########\n         ####    20   ####\n      ### 1             1 ###\n    ## 5                   3 ##\n   # 3                       5 #\n  # 1                           #\n #                             1 #\n#                ↑               #\n# 10             ◇             5 #\n#                                 #\n #                             3 #\n  # 1                           #\n   #  3                      1 #\n    ##   1                10 ##\n      ###  5            1 ###\n         ####  1    3 ####\n             #########",
-        "             #########\n         ####    20   ####\n      ### 1             1 ###\n    ## 5                   3 ##\n   # 3                       5 #\n  # 1                           #\n #                             1 #\n#                                 #\n# 10             ◇→           5 #\n#                                 #\n #                             3 #\n  # 1                           #\n   #  3                      1 #\n    ##   1                10 ##\n      ###  5            1 ###\n         ####  1    3 ####\n             #########",
-        "             #########\n         ####    20   ####\n      ### 1             1 ###\n    ## 5                   3 ##\n   # 3                       5 #\n  # 1                           #\n #                             1 #\n#                                 #\n# 10             ◇             5 #\n#                ↓               #\n #                             3 #\n  # 1                           #\n   #  3                      1 #\n    ##   1                10 ##\n      ###  5            1 ###\n         ####  1    3 ####\n             #########",
-        "             #########\n         ####    20   ####\n      ### 1             1 ###\n    ## 5                   3 ##\n   # 3                       5 #\n  # 1                           #\n #                             1 #\n#                                 #\n# 10           ←◇             5 #\n#                                 #\n #                             3 #\n  # 1                           #\n   #  3                      1 #\n    ##   1                10 ##\n      ###  5            1 ###\n         ####  1    3 ####\n             #########"
-    ];
+    private static readonly TimeSpan SpinDuration = TimeSpan.FromSeconds(3);
 
     private readonly ICoinService _coinService;
     private readonly EventManager? _eventManager;
@@ -106,14 +89,11 @@ public sealed class RouletteService
                 payout = _eventManager.CalculateLossRefund(guildId, userId, game.Bet);
         }
 
-        // 抽選結果を確定した後、編集通知で回転演出を行います。
+        // GIFの再生中は結果処理を待機します。
         if (onSpinFrame != null)
         {
-            for (var index = 0; index < SpinFrames.Length; index++)
-            {
-                await onSpinFrame(CreateSpinEmbed(SpinFrames[index]));
-                await Task.Delay(SpinDelays[index]);
-            }
+            await onSpinFrame(CreateSpinEmbed());
+            await Task.Delay(SpinDuration);
         }
 
         _games.TryRemove(CreateGameKey(guildId, userId), out _);
@@ -141,10 +121,10 @@ public sealed class RouletteService
         return checked(bet * multiplier);
     }
 
-    private static DiscordEmbed CreateSpinEmbed(string frame)
+    private static DiscordEmbed CreateSpinEmbed()
         => new DiscordEmbedBuilder()
             .WithTitle("🎲 ルーレット回転中…")
-            .WithDescription($"```\n{frame}\n```")
+            .WithImageUrl($"attachment://{SpinAnimationFileName}")
             .WithColor(DiscordColor.Blurple)
             .Build();
 
