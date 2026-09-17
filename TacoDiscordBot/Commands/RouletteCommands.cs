@@ -116,15 +116,24 @@ public sealed class RouletteCommands : ApplicationCommandModule
                 await e.Interaction.EditOriginalResponseAsync(response);
             });
 
-            await e.Interaction.EditOriginalResponseAsync(new DiscordWebhookBuilder().AddEmbed(result.Embed));
+            await e.Interaction.EditOriginalResponseAsync(
+                new DiscordWebhookBuilder().AddEmbed(result.Embed),
+                Array.Empty<DiscordAttachment>()
+            );
         }
         catch (ArgumentOutOfRangeException ex)
         {
-            await e.Interaction.EditOriginalResponseAsync(new DiscordWebhookBuilder().WithContent(ex.Message));
+            await e.Interaction.EditOriginalResponseAsync(
+                new DiscordWebhookBuilder().WithContent(ex.Message),
+                Array.Empty<DiscordAttachment>()
+            );
         }
         catch (InvalidOperationException ex)
         {
-            await e.Interaction.EditOriginalResponseAsync(new DiscordWebhookBuilder().WithContent(ex.Message));
+            await e.Interaction.EditOriginalResponseAsync(
+                new DiscordWebhookBuilder().WithContent(ex.Message),
+                Array.Empty<DiscordAttachment>()
+            );
         }
     }
 
