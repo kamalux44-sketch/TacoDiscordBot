@@ -173,6 +173,9 @@ public sealed class DoubleUpServiceTests
         public Task<bool> CanAffordAsync(ulong guildId, ulong userId, long amount)
             => Task.FromResult(Balance >= amount);
 
+        public Task<IReadOnlyList<UserData>> GetTopRankingAsync(ulong guildId, int limit)
+            => Task.FromResult<IReadOnlyList<UserData>>(Array.Empty<UserData>());
+
         public Task<IReadOnlyList<UserData>> GetRankingAsync(ulong guildId)
             => Task.FromResult<IReadOnlyList<UserData>>(Array.Empty<UserData>());
     }

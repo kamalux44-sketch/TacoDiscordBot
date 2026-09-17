@@ -17,6 +17,7 @@ public sealed class DoubleUpService
     private const int DefaultRevealDelayMilliseconds = 800;
     private readonly ICoinService _coinService;
     private readonly RoleService _roleService;
+    private readonly EventManager _eventManager;
     private readonly ConcurrentDictionary<string, DoubleUpGame> _games = new();
     private readonly Func<int> _drawNumber;
     private readonly Func<TimeSpan, Task> _delay;
@@ -25,13 +26,15 @@ public sealed class DoubleUpService
         ICoinService coinService,
         Func<int>? drawNumber = null,
         Func<TimeSpan, Task>? delay = null,
-        RoleService? roleService = null
+        RoleService? roleService = null,
+        EventManager? eventManager = null
     )
     {
         _coinService = coinService ?? throw new ArgumentNullException(nameof(coinService));
         _drawNumber = drawNumber ?? (() => Random.Shared.Next(MinimumCardNumber, MaximumCardNumber + 1));
         _delay = delay ?? Task.Delay;
         _roleService = roleService;
+        _eventManager = eventManager;
     }
 
     public async Task<DoubleUpResult> StartAsync(ulong guildId, ulong userId, long bet)
@@ -62,6 +65,7 @@ public sealed class DoubleUpService
         var game = GetGame(guildId, userId);
         DoubleUpResult result;
         var lost = false;
+        long scheduledPayout = 0;
         lock (game)
         {
             if (game.State != DoubleUpState.Selecting && game.State != DoubleUpState.Won)
@@ -94,6 +98,7 @@ public sealed class DoubleUpService
             var resultChoice = number >= 8 ? DoubleUpChoice.High : DoubleUpChoice.Low;
             if (resultChoice != choice)
             {
+                scheduledPayout = game.CurrentAmount;
                 game.CurrentAmount = 0;
                 game.State = DoubleUpState.Lost;
                 _games.TryRemove(CreateGameKey(guildId, userId), out _);
@@ -102,7 +107,8 @@ public sealed class DoubleUpService
             }
             else
             {
-                game.CurrentAmount = checked(game.CurrentAmount * 2);
+                var multiplier = _eventManager?.GetEffects(guildId, userId).DoubleUpMultiplier ?? 2m;
+                game.CurrentAmount = checked((long)Math.Floor(game.CurrentAmount * multiplier));
                 game.State = DoubleUpState.Won;
                 result = CreateResult(game, "🎉 WIN!");
             }
@@ -110,6 +116,8 @@ public sealed class DoubleUpService
 
         if (lost && _roleService != null)
             await _roleService.RefreshUserRolesAsync(guildId, userId);
+        if (lost && _eventManager != null)
+            await _eventManager.ResolvePersonalLossAsync(guildId, userId, scheduledPayout);
 
         return result;
     }
@@ -124,7 +132,10 @@ public sealed class DoubleUpService
             game.State = DoubleUpState.CashedOut;
         }
 
-        await _coinService.AddCoinsAsync(guildId, userId, game.CurrentAmount);
+        var payout = _eventManager?.CalculatePayout(guildId, userId, game.CurrentAmount, "doubleup")
+            ?? game.CurrentAmount;
+        await _coinService.AddCoinsAsync(guildId, userId, payout);
+        _eventManager?.ConsumePersonalEvent(guildId, userId);
         _games.TryRemove(CreateGameKey(guildId, userId), out _);
         return CreateResult(game, $"💰 CASH OUT\n{game.CurrentAmount:N0} を受け取りました。");
     }

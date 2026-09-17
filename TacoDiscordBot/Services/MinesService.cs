@@ -12,22 +12,24 @@ namespace TacoDiscordBot.Services;
 public sealed class MinesService
 {
     private const int MinimumBet = 1;
-    private const int MaximumSafeCount = MinesGame.BoardSize - MinesGame.BombCount;
     private readonly ICoinService _coinService;
     private readonly ConcurrentDictionary<string, MinesGame> _games = new();
     private readonly Func<IReadOnlyCollection<int>> _createBombs;
     private readonly ConcurrentDictionary<string, SemaphoreSlim> _locks = new();
     private readonly RoleService _roleService;
+    private readonly EventManager _eventManager;
 
     public MinesService(
         ICoinService coinService,
         Func<IReadOnlyCollection<int>>? createBombs = null,
-        RoleService? roleService = null
+        RoleService? roleService = null,
+        EventManager? eventManager = null
     )
     {
         _coinService = coinService ?? throw new ArgumentNullException(nameof(coinService));
         _createBombs = createBombs ?? CreateRandomBombs;
         _roleService = roleService;
+        _eventManager = eventManager;
     }
 
     public async Task<MinesResult> StartAsync(ulong guildId, ulong userId, long bet)
@@ -41,8 +43,9 @@ public sealed class MinesService
             throw new InvalidOperationException("⚠️ 現在 MINES をプレイ中です。先に現在のゲームを終了してください。");
 
         await _coinService.RemoveCoinsAsync(guildId, userId, bet);
-        var game = new MinesGame(guildId, userId, bet, _createBombs());
-        if (game.Bombs.Count != MinesGame.BombCount || game.Bombs.Any(index => index < 0 || index >= MinesGame.BoardSize))
+        var reduction = _eventManager?.GetEffects(guildId, userId).MinesBombReduction ?? 0;
+        var game = new MinesGame(guildId, userId, bet, CreateBombs(reduction));
+        if (game.Bombs.Count != MinesGame.BombCount - reduction || game.Bombs.Any(index => index < 0 || index >= MinesGame.BoardSize))
         {
             await _coinService.AddCoinsAsync(guildId, userId, bet);
             throw new InvalidOperationException("爆弾配置を作成できませんでした。");
@@ -90,17 +93,26 @@ public sealed class MinesService
 
         if (game.Bombs.Contains(index))
         {
+            var scheduledPayout = game.CurrentAmount;
             game.State = MinesGameState.Lost;
             _games.TryRemove(CreateGameKey(guildId, userId), out _);
             if (_roleService != null && game.SafeOpenedCount == 0)
                 await _roleService.RefreshUserRolesAsync(guildId, userId);
+            var refund = _eventManager?.CalculateLossRefund(guildId, userId, game.Bet) ?? 0;
+            if (refund > 0)
+                await _coinService.AddCoinsAsync(guildId, userId, refund);
+            if (_eventManager != null)
+                await _eventManager.ResolvePersonalLossAsync(guildId, userId, scheduledPayout);
             return CreateResult(game, "💥 GAME OVER");
         }
 
-        if (game.SafeOpenedCount == MaximumSafeCount)
+        if (game.SafeOpenedCount == MinesGame.BoardSize - game.Bombs.Count)
         {
             game.State = MinesGameState.Won;
-            await _coinService.AddCoinsAsync(guildId, userId, game.CurrentAmount);
+            var payout = _eventManager?.CalculatePayout(guildId, userId, game.CurrentAmount, "mines")
+                ?? game.CurrentAmount;
+            await _coinService.AddCoinsAsync(guildId, userId, payout);
+            _eventManager?.ConsumePersonalEvent(guildId, userId);
             _games.TryRemove(CreateGameKey(guildId, userId), out _);
             return CreateResult(game, "🎉 ALL SAFE！自動回収しました。");
         }
@@ -116,7 +128,10 @@ public sealed class MinesService
             throw new InvalidOperationException("このMINESゲームは終了しています。");
 
         game.State = MinesGameState.CashedOut;
-        await _coinService.AddCoinsAsync(guildId, userId, game.CurrentAmount);
+        var payout = _eventManager?.CalculatePayout(guildId, userId, game.CurrentAmount, "mines")
+            ?? game.CurrentAmount;
+        await _coinService.AddCoinsAsync(guildId, userId, payout);
+        _eventManager?.ConsumePersonalEvent(guildId, userId);
         _games.TryRemove(CreateGameKey(guildId, userId), out _);
         return CreateResult(game, "💰 CHECKOUT！");
     }
@@ -144,6 +159,16 @@ public sealed class MinesService
             .OrderBy(_ => Random.Shared.Next())
             .Take(MinesGame.BombCount)
             .ToArray();
+
+    private IReadOnlyCollection<int> CreateBombs(int reduction)
+    {
+        if (reduction <= 0)
+            return _createBombs();
+        return Enumerable.Range(0, MinesGame.BoardSize)
+            .OrderBy(_ => Random.Shared.Next())
+            .Take(MinesGame.BombCount - reduction)
+            .ToArray();
+    }
 
     private sealed class Releaser : IDisposable
     {

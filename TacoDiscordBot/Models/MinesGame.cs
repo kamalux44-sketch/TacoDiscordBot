@@ -55,10 +55,10 @@ public static class MinesRules
 
     public static double GetMultiplier(int safeOpenedCount)
     {
-        if (safeOpenedCount < 0 || safeOpenedCount >= Multipliers.Length)
+        if (safeOpenedCount < 0)
             throw new ArgumentOutOfRangeException(nameof(safeOpenedCount));
 
-        return Multipliers[safeOpenedCount];
+        return safeOpenedCount < Multipliers.Length ? Multipliers[safeOpenedCount] : Multipliers[^1];
     }
 }
 

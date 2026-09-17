@@ -1,6 +1,7 @@
 using DSharpPlus;
 using DSharpPlus.SlashCommands;
 using Microsoft.Extensions.Logging;
+using TacoDiscordBot.Models;
 using TacoDiscordBot.Services.Interface;
 using TacoDiscordBot.Util;
 
@@ -37,6 +38,8 @@ public static class BotHost
     public static Services.VcExchangeService VcExchangeService { get; private set; }
 
     public static Services.RoleService RoleService { get; private set; }
+
+    public static Services.EventManager EventManager { get; private set; }
 
     public static async Task RunAsync()
     {
@@ -95,6 +98,7 @@ public static class BotHost
             Repository.UserDataRepository userDataRepo = null;
             Repository.VcExchangeRepository vcExchangeRepo = null;
             Repository.AchievementRepository achievementRepo = null;
+            Repository.ServerEventRepository serverEventRepo = null;
             var host = Environment.GetEnvironmentVariable(Strings.EnvPgHost);
 
             if (!string.IsNullOrWhiteSpace(host))
@@ -155,6 +159,7 @@ public static class BotHost
                         userDataRepo = new Repository.UserDataRepository(baseRepo);
                         vcExchangeRepo = new Repository.VcExchangeRepository(baseRepo);
                         achievementRepo = new Repository.AchievementRepository(baseRepo);
+                        serverEventRepo = new Repository.ServerEventRepository(baseRepo);
                         // すべてのリポジトリについて
                         // テーブルの存在確認と作成を行う
                         try
@@ -183,6 +188,8 @@ public static class BotHost
                             vcExchangeRepo.EnsureTablesExistAsync().GetAwaiter().GetResult();
 
                             achievementRepo.EnsureTablesExistAsync().GetAwaiter().GetResult();
+
+                            serverEventRepo.EnsureTablesExistAsync().GetAwaiter().GetResult();
 
                             Logger.Info("BotHost: DB テーブル確認・作成完了");
                         }
@@ -252,15 +259,15 @@ public static class BotHost
 
             BlackjackService = CoinService == null
                 ? null
-                : new Services.BlackjackService(CoinService, RoleService);
+                : new Services.BlackjackService(CoinService, RoleService, EventManager);
 
             DoubleUpService = CoinService == null
                 ? null
-                : new Services.DoubleUpService(CoinService, roleService: RoleService);
+                : new Services.DoubleUpService(CoinService, roleService: RoleService, eventManager: EventManager);
 
             MinesService = CoinService == null
                 ? null
-                : new Services.MinesService(CoinService, roleService: RoleService);
+                : new Services.MinesService(CoinService, roleService: RoleService, eventManager: EventManager);
 
             LastChanceService = userDataRepo == null
                 ? null
@@ -268,7 +275,11 @@ public static class BotHost
 
             SlotService = slotRepo == null || CoinService == null
                 ? null
-                : new Services.SlotService(slotRepo, CoinService, RoleService);
+                : new Services.SlotService(slotRepo, CoinService, RoleService, EventManager);
+
+            EventManager = CoinService == null
+                ? null
+                : new Services.EventManager(CoinService, NotifyServerEventAsync, serverEventRepo);
 
             VcExchangeService = vcExchangeRepo == null
                 ? null
@@ -296,6 +307,8 @@ public static class BotHost
             Client.ComponentInteractionCreated += Commands.LastChanceCommands.HandleComponentInteractionAsync;
 
             Client.ComponentInteractionCreated += Commands.CoinCommands.HandleExchangeComponentInteractionAsync;
+
+            Client.ComponentInteractionCreated += Commands.ServerEventCommands.HandleComponentInteractionAsync;
 
             // AI メッセージ
             Client.MessageCreated += AiService.HandleMessageCreated;
@@ -350,6 +363,8 @@ public static class BotHost
 
             slash.RegisterCommands<Commands.CoinCommands>();
 
+            slash.RegisterCommands<Commands.ServerEventCommands>();
+
             Logger.Info("BotHost: Discord へ接続開始");
 
             await Client.ConnectAsync();
@@ -362,6 +377,10 @@ public static class BotHost
                 Logger.Info("BotHost: 実績ロール初期化完了");
             }
 
+            if (EventManager != null)
+                await EventManager.RestoreAsync();
+            EventManager?.StartMonitoring();
+
             // Botを終了させないために待機
             await Task.Delay(Timeout.Infinite);
         }
@@ -371,5 +390,23 @@ public static class BotHost
 
             throw;
         }
+    }
+
+    private static async Task NotifyServerEventAsync(ServerEvent serverEvent, bool started)
+    {
+        if (RoleService == null)
+            return;
+
+        var channelId = await RoleService.GetRoleNotificationChannelAsync(serverEvent.GuildId);
+        if (!channelId.HasValue)
+            return;
+
+        var channel = await Client.GetChannelAsync(channelId.Value);
+        var definition = Services.EventManager.Definitions
+            .First(item => item.Type == serverEvent.Type);
+        var message = started
+            ? $"📢 サーバーイベント発令！\n\n{definition.Name}\n\n発令者: <@{serverEvent.ActivatorId}>\n\n効果:\n{definition.Description}\n\n終了予定: {serverEvent.EndsAt.LocalDateTime:yyyy/MM/dd HH:mm:ss}"
+            : $"📢 サーバーイベント終了\n\n{definition.Name}\n\nイベント効果が終了しました。";
+        await channel.SendMessageAsync(message);
     }
 }

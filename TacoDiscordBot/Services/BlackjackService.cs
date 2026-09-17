@@ -9,16 +9,24 @@ using TacoDiscordBot.Services.Interface;
 
 namespace TacoDiscordBot.Services;
 
+public enum BlackjackOutcome { Loss, Push, Win, Blackjack, Surrender, DealerBlackjack }
+
 public sealed class BlackjackService
 {
     private readonly ICoinService _coinService;
     private readonly RoleService _roleService;
+    private readonly EventManager _eventManager;
     private readonly ConcurrentDictionary<string, BlackjackGame> _games = new();
 
-    public BlackjackService(ICoinService coinService, RoleService? roleService = null)
+    public BlackjackService(
+        ICoinService coinService,
+        RoleService? roleService = null,
+        EventManager? eventManager = null
+    )
     {
         _coinService = coinService ?? throw new ArgumentNullException(nameof(coinService));
         _roleService = roleService;
+        _eventManager = eventManager;
     }
 
     public async Task<BlackjackResult> StartAsync(ulong guildId, ulong userId, long bet)
@@ -133,6 +141,14 @@ public sealed class BlackjackService
 
     public static long CalculateSurrenderPayout(long bet) => bet / 2;
 
+    public static long CalculateScheduledPayout(long bet, BlackjackOutcome outcome)
+        => outcome switch
+        {
+            BlackjackOutcome.Blackjack => checked(bet * 3),
+            BlackjackOutcome.Win => checked(bet * 2),
+            _ => 0
+        };
+
     private async Task<BlackjackResult> FinishAsync(BlackjackGame game, BlackjackOutcome outcome)
     {
         lock (game)
@@ -145,12 +161,39 @@ public sealed class BlackjackService
         _games.TryRemove(CreateGameKey(game.GuildId, game.UserId), out _);
         var payout = outcome switch
         {
-            BlackjackOutcome.Blackjack => game.Bet * 3,
-            BlackjackOutcome.Win => game.Bet * 2,
+            BlackjackOutcome.Blackjack => CalculateScheduledPayout(game.Bet, outcome),
+            BlackjackOutcome.Win => CalculateScheduledPayout(game.Bet, outcome),
             BlackjackOutcome.Push => game.Bet,
             BlackjackOutcome.Surrender => CalculateSurrenderPayout(game.Bet),
             _ => 0
         };
+        if (_eventManager != null)
+        {
+            payout = _eventManager.CalculatePayout(game.GuildId, game.UserId, payout, "blackjack");
+            if (payout == 0 && outcome == BlackjackOutcome.Loss)
+                payout = _eventManager.CalculateLossRefund(game.GuildId, game.UserId, game.Bet);
+            if (outcome == BlackjackOutcome.Surrender)
+            {
+                var effects = _eventManager.GetEffects(game.GuildId, game.UserId);
+                if (_eventManager.HasPersonalEvent(game.GuildId, game.UserId))
+                {
+                    payout = 0;
+                    await _eventManager.ResolvePersonalLossAsync(
+                        game.GuildId,
+                        game.UserId,
+                        0);
+                }
+                else if (effects.SurrenderRefundRate > 0)
+                    payout = (long)Math.Floor(game.Bet * effects.SurrenderRefundRate);
+            }
+            if (outcome == BlackjackOutcome.Loss)
+                await _eventManager.ResolvePersonalLossAsync(
+                    game.GuildId,
+                    game.UserId,
+                    CalculateScheduledPayout(game.Bet, outcome));
+            else
+                _eventManager.ConsumePersonalEvent(game.GuildId, game.UserId);
+        }
         if (payout > 0)
             await _coinService.AddCoinsAsync(game.GuildId, game.UserId, payout);
 
@@ -215,7 +258,6 @@ public sealed class BlackjackService
         return new Queue<BlackjackCard>(cards);
     }
 
-    private enum BlackjackOutcome { Loss, Push, Win, Blackjack, Surrender, DealerBlackjack }
 }
 
 public sealed record BlackjackResult(DiscordEmbed Embed, bool IsFinished);

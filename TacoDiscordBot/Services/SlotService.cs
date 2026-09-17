@@ -31,16 +31,19 @@ public sealed class SlotService
     private readonly SlotRepository _repository;
     private readonly ICoinService _coinService;
     private readonly RoleService _roleService;
+    private readonly EventManager _eventManager;
 
     public SlotService(
         SlotRepository repository,
         ICoinService coinService = null,
-        RoleService? roleService = null
+        RoleService? roleService = null,
+        EventManager? eventManager = null
     )
     {
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
         _coinService = coinService;
         _roleService = roleService;
+        _eventManager = eventManager;
     }
 
     // 1回分の抽選、当たり判定、統計更新、結果Embedの作成をまとめて実行します。
@@ -58,13 +61,20 @@ public sealed class SlotService
             throw new ArgumentOutOfRangeException(nameof(bet), "ベットは1以上で指定してください。");
 
         await _coinService.RemoveCoinsAsync(guildId, userId, bet);
-        var symbols = DrawSymbols();
+        var symbols = DrawSymbols(_eventManager?.GetActiveEvent(guildId)?.Type == EventType.HotSlot);
         var rank = DetermineRank(symbols);
         var payout = CalculatePayout(bet, symbols, rank);
-        // 払い戻しが発生しないリーチは、当たり演出や当たり統計の対象外にします。
+        // 払い戻しが発生しないリーチは、敗北として扱います。
         if (rank == SlotWinRank.Reach && payout == 0)
             rank = SlotWinRank.Loss;
-
+        if (_eventManager != null)
+        {
+            payout = _eventManager.CalculatePayout(guildId, userId, payout, "slot");
+            if (payout == 0 && rank == SlotWinRank.Loss)
+                payout = _eventManager.CalculateLossRefund(guildId, userId, bet);
+            // Slotは個人イベントの予定払い戻し額計算対象外ですが、1プレイで消費します。
+            _eventManager.ConsumePersonalEvent(guildId, userId);
+        }
         var statistics = await _repository.RecordSpinAsync(rank != SlotWinRank.Loss);
         if (payout > 0)
             await _coinService.AddCoinsAsync(guildId, userId, payout);
@@ -121,8 +131,22 @@ public sealed class SlotService
     // 各リールを独立して抽選し、指定された出現確率を適用します。
     public static string[] DrawSymbols()
     {
-        return [DrawSymbol(), DrawSymbol(), DrawSymbol()];
+        return DrawSymbols(false);
     }
+
+    private static string[] DrawSymbols(bool hotSlot)
+    {
+        var configurations = hotSlot ? HotSlotConfigurations : SymbolConfigurations;
+        return [DrawSymbol(configurations), DrawSymbol(configurations), DrawSymbol(configurations)];
+    }
+
+    private static readonly SlotSymbolConfiguration[] HotSlotConfigurations =
+    [
+        new("🍒", 0.16m, 8m, 0m), new("🍋", 0.14m, 12m, 0m),
+        new("🍇", 0.10m, 20m, 0.5m), new("🍉", 0.08m, 35m, 1m),
+        new("🍈", 0.10m, 55m, 1.5m), new(UltraRare, 0.14m, 160m, 4m),
+        new(BigWin, 0.19m, 500m, 6m), new(MegaJackpot, 0.09m, 1000m, 10m)
+    ];
 
     // 3つの絵柄が揃っているか確認し、当たりランクを決定します。
     public static SlotWinRank DetermineRank(IReadOnlyList<string> symbols)
@@ -144,19 +168,19 @@ public sealed class SlotService
             : SlotWinRank.Loss;
     }
 
-    private static string DrawSymbol()
+    private static string DrawSymbol(IReadOnlyList<SlotSymbolConfiguration> configurations)
     {
         // 指定された累積確率の範囲から、1リール分の絵柄を選択します。
         var value = Random.Shared.Next(TotalProbability);
         var boundary = 0;
-        foreach (var configuration in SymbolConfigurations)
+        foreach (var configuration in configurations)
         {
             boundary += (int)(configuration.Probability * TotalProbability);
             if (value < boundary)
                 return configuration.Symbol;
         }
 
-        return SymbolConfigurations[^1].Symbol;
+        return configurations[^1].Symbol;
     }
 
     private static SlotSymbolConfiguration GetConfiguration(string symbol)
