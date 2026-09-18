@@ -127,8 +127,8 @@ public sealed class PokerCommands : ApplicationCommandModule
                 case "refresh" when parts.Length == 3:
                     await ShowPrivateAsync(e, service, parts[2]);
                     break;
-                case "raise" when parts.Length == 3:
-                    await ShowRaiseModalAsync(e, parts[2]);
+                case "bet" or "raise" when parts.Length == 3:
+                    await ShowBettingModalAsync(e, parts[1], parts[2]);
                     break;
                 case "card" when parts.Length == 6 && int.TryParse(parts[4], out var cardIndex) && int.TryParse(parts[5], out var mask):
                     await ToggleCardAsync(e, service, parts[2], cardIndex, mask);
@@ -158,44 +158,50 @@ public sealed class PokerCommands : ApplicationCommandModule
             return;
 
         var parts = customId.Split(':');
-        if (parts.ElementAtOrDefault(1) != "raise" || parts.Length != 3)
+        var operation = parts.ElementAtOrDefault(1);
+        if (operation is not ("bet" or "raise") || parts.Length != 3)
             return;
 
         var service = BotHost.PokerService;
         if (service == null)
             return;
 
+        var deferred = false;
         try
         {
+            await e.Interaction.CreateResponseAsync(
+                InteractionResponseType.DeferredChannelMessageWithSource,
+                new DiscordInteractionResponseBuilder().AsEphemeral(true));
+            deferred = true;
+
             EnsureUser(service, parts[2], e.Interaction.User.Id);
             if (!e.Values.TryGetValue("amount", out var amountText)
                 || !long.TryParse(amountText, out var amount))
             {
-                throw new InvalidOperationException("レイズ額には整数を入力してください。");
+                throw new InvalidOperationException("Bet/Raise額には整数を入力してください。");
             }
 
-            var result = await service.ActAsync(parts[2], e.Interaction.User.Id, PokerAction.Raise, amount);
+            var action = operation == "bet" ? PokerAction.Bet : PokerAction.Raise;
+            var result = await service.ActAsync(parts[2], e.Interaction.User.Id, action, amount);
             if (result.Finished)
                 await service.SettleAsync(parts[2]);
 
             var privateSnapshot = service.GetPrivateSnapshot(parts[2], e.Interaction.User.Id);
-            var privateBuilder = new DiscordInteractionResponseBuilder()
-                .WithContent("レイズしました。\n\n" + CreatePrivateContent(privateSnapshot, 0))
-                .AddComponents(CreatePrivateComponents(privateSnapshot, 0))
-                .AsEphemeral(true);
-            await e.Interaction.CreateResponseAsync(
-                InteractionResponseType.ChannelMessageWithSource,
-                privateBuilder);
+            var actionText = operation == "bet" ? "Betしました。" : "レイズしました。";
+            var privateBuilder = new DiscordWebhookBuilder()
+                .WithContent($"{actionText}\n\n" + CreatePrivateContent(privateSnapshot, 0));
+            AddPrivateComponents(privateBuilder, privateSnapshot, 0);
+            await e.Interaction.EditOriginalResponseAsync(privateBuilder);
 
             await UpdatePublicAsync(client, result.Game, service.GetSnapshot(parts[2]));
         }
         catch (ArgumentException ex)
         {
-            await RespondModalErrorAsync(e, ex.Message);
+            await RespondModalErrorAsync(e, ex.Message, deferred);
         }
         catch (InvalidOperationException ex)
         {
-            await RespondModalErrorAsync(e, ex.Message);
+            await RespondModalErrorAsync(e, ex.Message, deferred);
         }
     }
 
@@ -261,17 +267,17 @@ public sealed class PokerCommands : ApplicationCommandModule
         await UpdatePublicAsync(client, result.Game, service.GetSnapshot(parts[2]));
     }
 
-    private static async Task ShowRaiseModalAsync(ComponentInteractionCreateEventArgs e, string tableId)
+    private static async Task ShowBettingModalAsync(ComponentInteractionCreateEventArgs e, string operation, string tableId)
     {
         await e.Interaction.CreateResponseAsync(
             InteractionResponseType.Modal,
             new DiscordInteractionResponseBuilder()
-                .WithCustomId($"{Prefix}raise:{tableId}")
-                .WithTitle("レイズ額を入力")
+                .WithCustomId($"{Prefix}{operation}:{tableId}")
+                .WithTitle(operation == "bet" ? "Bet額を入力" : "レイズ額を入力")
                 .AddComponents(new TextInputComponent(
-                    "レイズ後の合計ベット額",
+                    operation == "bet" ? "Bet額" : "レイズ後の合計ベット額",
                     "amount",
-                    "例：300",
+                    operation == "bet" ? "例：100" : "例：300",
                     string.Empty,
                     true,
                     TextInputStyle.Short,
@@ -299,9 +305,7 @@ public sealed class PokerCommands : ApplicationCommandModule
         var snapshot = service.GetPrivateSnapshot(tableId, e.Interaction.User.Id);
         var builder = new DiscordInteractionResponseBuilder()
             .WithContent(CreatePrivateContent(snapshot, 0));
-        var components = CreatePrivateComponents(snapshot, 0);
-        if (components.Length > 0)
-            builder.AddComponents(components);
+        AddPrivateComponents(builder, snapshot, 0);
         await e.Interaction.CreateResponseAsync(
             InteractionResponseType.ChannelMessageWithSource,
             builder.AsEphemeral(true));
@@ -375,23 +379,11 @@ public sealed class PokerCommands : ApplicationCommandModule
         return components.ToArray();
     }
 
-    private static DiscordInteractionResponseBuilder CreatePrivateBuilder(PokerPrivateSnapshot snapshot, int selectedMask)
-    {
-        var builder = new DiscordInteractionResponseBuilder()
-            .WithContent(CreatePrivateContent(snapshot, selectedMask));
-        var components = CreatePrivateComponents(snapshot, selectedMask);
-        if (components.Length > 0)
-            builder.AddComponents(components);
-        return builder;
-    }
-
     private static DiscordWebhookBuilder CreatePrivateWebhookBuilder(PokerPrivateSnapshot snapshot, int selectedMask)
     {
         var builder = new DiscordWebhookBuilder()
             .WithContent(CreatePrivateContent(snapshot, selectedMask));
-        var components = CreatePrivateComponents(snapshot, selectedMask);
-        if (components.Length > 0)
-            builder.AddComponents(components);
+        AddPrivateComponents(builder, snapshot, selectedMask);
         return builder;
     }
 
@@ -399,10 +391,40 @@ public sealed class PokerCommands : ApplicationCommandModule
     {
         var builder = new DiscordFollowupMessageBuilder()
             .WithContent(CreatePrivateContent(snapshot, selectedMask));
-        var components = CreatePrivateComponents(snapshot, selectedMask);
-        if (components.Length > 0)
-            builder.AddComponents(components);
+        AddPrivateComponents(builder, snapshot, selectedMask);
         return builder;
+    }
+
+    private static void AddPrivateComponents(
+        DiscordInteractionResponseBuilder builder,
+        PokerPrivateSnapshot snapshot,
+        int selectedMask)
+    {
+        AddPrivateComponentRows(CreatePrivateComponents(snapshot, selectedMask), row => { builder.AddComponents(row); });
+    }
+
+    private static void AddPrivateComponents(
+        DiscordWebhookBuilder builder,
+        PokerPrivateSnapshot snapshot,
+        int selectedMask)
+    {
+        AddPrivateComponentRows(CreatePrivateComponents(snapshot, selectedMask), row => { builder.AddComponents(row); });
+    }
+
+    private static void AddPrivateComponents(
+        DiscordFollowupMessageBuilder builder,
+        PokerPrivateSnapshot snapshot,
+        int selectedMask)
+    {
+        AddPrivateComponentRows(CreatePrivateComponents(snapshot, selectedMask), row => { builder.AddComponents(row); });
+    }
+
+    private static void AddPrivateComponentRows(
+        DiscordComponent[] components,
+        Action<DiscordComponent[]> addRow)
+    {
+        foreach (var row in components.Chunk(5))
+            addRow(row);
     }
 
     private static DiscordComponent[] CreatePrivateComponents(PokerPrivateSnapshot snapshot, int selectedMask)
@@ -431,7 +453,7 @@ public sealed class PokerCommands : ApplicationCommandModule
         else
             components.Add(new DiscordButtonComponent(ButtonStyle.Primary, $"{Prefix}action:{game.TableId}:Call:0", $"Call {game.CurrentBet - player.CurrentBet}"));
         if (game.CurrentBet == 0)
-            components.Add(new DiscordButtonComponent(ButtonStyle.Primary, $"{Prefix}action:{game.TableId}:Bet:100", "Bet 100"));
+            components.Add(new DiscordButtonComponent(ButtonStyle.Primary, $"{Prefix}bet:{game.TableId}", "Bet"));
         else
             components.Add(new DiscordButtonComponent(ButtonStyle.Primary, $"{Prefix}raise:{game.TableId}", "Raise"));
         components.Add(new DiscordButtonComponent(ButtonStyle.Danger, $"{Prefix}action:{game.TableId}:Fold:0", "Fold"));
@@ -461,8 +483,12 @@ public sealed class PokerCommands : ApplicationCommandModule
     private static Task RespondErrorAsync(ComponentInteractionCreateEventArgs e, string message)
         => e.Interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder().WithContent(message).AsEphemeral(true));
 
-    private static Task RespondModalErrorAsync(ModalSubmitEventArgs e, string message)
-        => e.Interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource, new DiscordInteractionResponseBuilder().WithContent(message).AsEphemeral(true));
+    private static Task RespondModalErrorAsync(ModalSubmitEventArgs e, string message, bool deferred)
+        => deferred
+            ? e.Interaction.EditOriginalResponseAsync(new DiscordWebhookBuilder().WithContent(message))
+            : e.Interaction.CreateResponseAsync(
+                InteractionResponseType.ChannelMessageWithSource,
+                new DiscordInteractionResponseBuilder().WithContent(message).AsEphemeral(true));
 
     private static Task RespondComponentErrorAsync(
         ComponentInteractionCreateEventArgs e,
