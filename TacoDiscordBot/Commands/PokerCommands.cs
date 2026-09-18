@@ -332,45 +332,55 @@ public sealed class PokerCommands : ApplicationCommandModule
                     dmChannel = await member.CreateDmChannelAsync();
                 }
 
-                var directPublicMessage = await GetMessageOrNullAsync(
-                    dmChannel,
-                    player.DirectPublicMessageId);
-                if (directPublicMessage == null)
+                DiscordMessage? directPublicMessage = null;
+                var directPublicMessageId = player.DirectPublicMessageId;
+                if (!directPublicMessageId.HasValue)
                 {
                     directPublicMessage = await dmChannel.SendMessageAsync(
                         CreateDirectPublicMessageBuilder(snapshot));
+                    directPublicMessageId = directPublicMessage.Id;
                 }
                 else
                 {
-                    await directPublicMessage.ModifyAsync(
-                        CreateDirectPublicMessageBuilder(snapshot));
+                    directPublicMessage = await GetMessageOrNullAsync(dmChannel, directPublicMessageId);
+                    if (directPublicMessage != null)
+                    {
+                        await directPublicMessage.ModifyAsync(CreateDirectPublicMessageBuilder(snapshot));
+                    }
                 }
 
-                var handMessage = await GetMessageOrNullAsync(
-                    dmChannel,
-                    player.DirectHandMessageId);
-                var handBuilder = CreatePrivateMessageBuilder(
-                    service.GetPrivateSnapshot(game.TableId, player.UserId),
-                    0);
-                if (handMessage == null)
+                DiscordMessage? handMessage = null;
+                var handMessageId = player.DirectHandMessageId;
+                if (!handMessageId.HasValue)
                 {
-                    handMessage = await dmChannel.SendMessageAsync(handBuilder);
+                    handMessage = await dmChannel.SendMessageAsync(
+                        CreatePrivateMessageBuilder(
+                            service.GetPrivateSnapshot(game.TableId, player.UserId),
+                            0));
+                    handMessageId = handMessage.Id;
                 }
                 else
                 {
-                    await handMessage.ModifyAsync(handBuilder);
+                    handMessage = await GetMessageOrNullAsync(dmChannel, handMessageId);
+                    if (handMessage != null)
+                    {
+                        await handMessage.ModifyAsync(
+                            CreatePrivateMessageBuilder(
+                                service.GetPrivateSnapshot(game.TableId, player.UserId),
+                                0));
+                    }
                 }
 
                 if (player.DirectMessageChannelId != dmChannel.Id
-                    || player.DirectPublicMessageId != directPublicMessage.Id
-                    || player.DirectHandMessageId != handMessage.Id)
+                    || player.DirectPublicMessageId != directPublicMessageId
+                    || player.DirectHandMessageId != handMessageId)
                 {
                     await service.SetPlayerDirectMessageIdsAsync(
                         game.TableId,
                         player.UserId,
                         dmChannel.Id,
-                        directPublicMessage.Id,
-                        handMessage.Id);
+                        directPublicMessageId ?? 0,
+                        handMessageId ?? 0);
                 }
             }
             catch (Exception ex)
@@ -400,24 +410,60 @@ public sealed class PokerCommands : ApplicationCommandModule
     private static DiscordInteractionResponseBuilder CreatePublicBuilder(PokerGameSnapshot snapshot, bool includeJoin)
     {
         var builder = new DiscordInteractionResponseBuilder()
-            .AddEmbed(CreatePublicEmbed(snapshot))
-            .AddComponents(CreatePublicComponents(snapshot, includeJoin));
+            .AddEmbed(CreatePublicEmbed(snapshot));
+        AddPublicComponents(builder, snapshot, includeJoin);
         return builder;
     }
 
     private static DiscordMessageBuilder CreatePublicMessageBuilder(PokerGameSnapshot snapshot, bool includeJoin)
-        => new DiscordMessageBuilder()
-            .AddEmbed(CreatePublicEmbed(snapshot))
-            .AddComponents(CreatePublicComponents(snapshot, includeJoin));
+    {
+        var builder = new DiscordMessageBuilder()
+            .AddEmbed(CreatePublicEmbed(snapshot));
+        AddPublicComponents(builder, snapshot, includeJoin);
+        return builder;
+    }
 
     private static DiscordMessageBuilder CreateDirectPublicMessageBuilder(PokerGameSnapshot snapshot)
         => new DiscordMessageBuilder()
             .AddEmbed(CreatePublicEmbed(snapshot));
 
     private static DiscordWebhookBuilder CreatePublicWebhookBuilder(PokerGameSnapshot snapshot, bool includeJoin)
-        => new DiscordWebhookBuilder()
-            .AddEmbed(CreatePublicEmbed(snapshot))
-            .AddComponents(CreatePublicComponents(snapshot, includeJoin));
+    {
+        var builder = new DiscordWebhookBuilder()
+            .AddEmbed(CreatePublicEmbed(snapshot));
+        AddPublicComponents(builder, snapshot, includeJoin);
+        return builder;
+    }
+
+    private static void AddPublicComponents(
+        DiscordInteractionResponseBuilder builder,
+        PokerGameSnapshot snapshot,
+        bool includeJoin)
+    {
+        var components = CreatePublicComponents(snapshot, includeJoin);
+        if (components.Length > 0)
+            builder.AddComponents(components);
+    }
+
+    private static void AddPublicComponents(
+        DiscordMessageBuilder builder,
+        PokerGameSnapshot snapshot,
+        bool includeJoin)
+    {
+        var components = CreatePublicComponents(snapshot, includeJoin);
+        if (components.Length > 0)
+            builder.AddComponents(components);
+    }
+
+    private static void AddPublicComponents(
+        DiscordWebhookBuilder builder,
+        PokerGameSnapshot snapshot,
+        bool includeJoin)
+    {
+        var components = CreatePublicComponents(snapshot, includeJoin);
+        if (components.Length > 0)
+            builder.AddComponents(components);
+    }
 
     private static DiscordEmbed CreatePublicEmbed(PokerGameSnapshot snapshot)
     {
