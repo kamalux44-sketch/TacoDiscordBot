@@ -4,12 +4,14 @@ using DSharpPlus.EventArgs;
 using DSharpPlus.SlashCommands;
 using TacoDiscordBot.Models;
 using TacoDiscordBot.Services;
+using TacoDiscordBot.Util;
 
 namespace TacoDiscordBot.Commands;
 
 public sealed class PokerCommands : ApplicationCommandModule
 {
     private const string Prefix = "poker:";
+    private static readonly SemaphoreSlim RestoredGamesSyncLock = new(1, 1);
 
     [SlashCommand("pokerstart", "5 Card Draw Pokerの卓を作成します")]
     public async Task PokerStart(InteractionContext ctx, [Option("coin", "参加者1人あたりの参加費") ] long coin)
@@ -49,35 +51,48 @@ public sealed class PokerCommands : ApplicationCommandModule
 
     public static async Task ResyncRestoredGamesAsync(DiscordClient client, PokerService service)
     {
-        foreach (var game in service.GetGames())
+        await RestoredGamesSyncLock.WaitAsync();
+        try
         {
-            var snapshot = service.GetSnapshot(game.TableId);
-            DiscordMessage? message = null;
-            try
+            foreach (var game in service.GetGames())
             {
-                var channel = await client.GetChannelAsync(game.ChannelId);
-                if (game.PublicMessageId.HasValue)
-                    message = await channel.GetMessageAsync(game.PublicMessageId.Value);
+                try
+                {
+                    var snapshot = service.GetSnapshot(game.TableId);
+                    var channel = await client.GetChannelAsync(game.ChannelId);
+                    DiscordMessage? message = null;
 
-                if (message == null)
-                {
-                    message = await channel.SendMessageAsync(
-                        CreatePublicMessageBuilder(snapshot, snapshot.Phase == PokerPhase.Waiting));
-                    await service.SetPublicMessageIdAsync(game.TableId, message.Id);
+                    if (game.PublicMessageId.HasValue)
+                    {
+                        try
+                        {
+                            message = await channel.GetMessageAsync(game.PublicMessageId.Value);
+                        }
+                        catch (DSharpPlus.Exceptions.NotFoundException)
+                        {
+                            message = null;
+                        }
+                    }
+
+                    if (message == null)
+                    {
+                        await service.CloseDueToMissingPublicMessageAsync(game.TableId);
+                    }
+                    else
+                    {
+                        await message.ModifyAsync(
+                            CreatePublicMessageBuilder(snapshot, snapshot.Phase == PokerPhase.Waiting));
+                    }
                 }
-                else
+                catch (Exception ex)
                 {
-                    await message.ModifyAsync(
-                        CreatePublicMessageBuilder(snapshot, snapshot.Phase == PokerPhase.Waiting));
+                    Logger.Error(ex, "Poker卓の公開メッセージ再同期に失敗しました。table={TableId}", game.TableId);
                 }
             }
-            catch (DSharpPlus.Exceptions.NotFoundException)
-            {
-                var channel = await client.GetChannelAsync(game.ChannelId);
-                message = await channel.SendMessageAsync(
-                    CreatePublicMessageBuilder(snapshot, snapshot.Phase == PokerPhase.Waiting));
-                await service.SetPublicMessageIdAsync(game.TableId, message.Id);
-            }
+        }
+        finally
+        {
+            RestoredGamesSyncLock.Release();
         }
     }
 

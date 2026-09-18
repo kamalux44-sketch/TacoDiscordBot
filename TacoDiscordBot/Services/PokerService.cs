@@ -22,6 +22,49 @@ public sealed class PokerService
         _repository = repository;
     }
 
+    public async Task CloseDueToMissingPublicMessageAsync(string tableId)
+    {
+        var game = GetGame(tableId);
+        await EnterLockAsync(game);
+        try
+        {
+            if (game.Settled)
+                return;
+
+            var participants = game.Players.ToList();
+            if (participants.Count > 0 && game.Pot > 0)
+            {
+                var share = game.Pot / participants.Count;
+                var remainder = game.Pot % participants.Count;
+                foreach (var player in participants)
+                    player.Chips += share;
+                for (var index = 0; index < remainder; index++)
+                    participants[index].Chips++;
+            }
+
+            game.Pot = 0;
+            game.Phase = PokerPhase.Finished;
+            game.WinnerText = "公開卓メッセージ削除により卓終了";
+            game.PublicMessageId = null;
+            await PersistAsync(game);
+
+            foreach (var player in participants)
+            {
+                var payout = CalculateCoinPayout(player.Chips, game.CoinRate);
+                if (payout > 0)
+                    await _coinService.AddCoinsAsync(game.GuildId, player.UserId, payout);
+                player.Chips = 0;
+            }
+
+            game.Settled = true;
+            await PersistAsync(game);
+        }
+        finally
+        {
+            gameLock.Release();
+        }
+    }
+
     public async Task<PokerGame> CreateGameAsync(ulong guildId, ulong creatorId, long coinRate, ulong channelId)
     {
         if (coinRate <= 0)
