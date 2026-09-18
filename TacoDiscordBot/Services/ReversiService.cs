@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using TacoDiscordBot.Models;
 
 namespace TacoDiscordBot.Services;
@@ -9,14 +10,57 @@ public sealed class ReversiService
     private readonly object syncRoot = new();
     private readonly Dictionary<string, ReversiGame> games = [];
 
-    public ReversiGame Start(ulong guildId, ulong channelId, ulong creatorId)
+    public ReversiGame Start(ulong guildId, ulong channelId, ulong creatorId, long betAmount = 0)
     {
+        if (betAmount < 0)
+            throw new ArgumentOutOfRangeException(nameof(betAmount));
+        if (betAmount > 0)
+            _ = checked(betAmount * 20);
         lock (syncRoot)
         {
-            var game = new ReversiGame(Guid.NewGuid().ToString("N"), guildId, channelId, creatorId);
+            var game = new ReversiGame(Guid.NewGuid().ToString("N"), guildId, channelId, creatorId, betAmount);
             games.Add(game.GameId, game);
             return game;
         }
+    }
+
+    public async Task<bool> JoinAsync(string gameId, ulong userId, ReversiBetService? betService)
+    {
+        ReversiGame game;
+        lock (syncRoot)
+        {
+            game = GetRequired(gameId);
+            if (!game.BetEnabled || game.PlayerWhite.HasValue || !game.PlayerBlack.HasValue)
+                return game.TryJoin(userId);
+        }
+
+        if (!await betService!.TryStartAsync(game, userId))
+            return false;
+
+        lock (syncRoot)
+            return game.TryJoin(userId);
+    }
+
+    public async Task<ReversiBetCalculation?> PlayAndSettleAsync(
+        string gameId,
+        ulong userId,
+        ReversiMove move,
+        int boardVersion,
+        ReversiBetService? betService
+    )
+    {
+        bool finished;
+        lock (syncRoot)
+        {
+            var game = GetRequired(gameId);
+            ValidateTurnAndVersion(game, userId, boardVersion);
+            game.TryPlay(move);
+            finished = game.Status == ReversiGameStatus.Finished;
+        }
+
+        return finished && betService != null
+            ? await betService.SettleAsync(GetRequired(gameId))
+            : null;
     }
 
     public ReversiGame? Get(string gameId)

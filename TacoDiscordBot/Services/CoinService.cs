@@ -65,6 +65,36 @@ public sealed class CoinService : ICoinService
         return await GetBalanceAsync(guildId, userId) >= amount;
     }
 
+    public Task<bool> TryStartReversiBetAsync(ulong guildId, ulong blackPlayerId, ulong whitePlayerId, long betAmount)
+        => _repository.TryStartReversiBetAsync(guildId, blackPlayerId, whitePlayerId, betAmount);
+
+    public async Task<bool> SettleReversiBetAsync(
+        ulong guildId,
+        ulong blackPlayerId,
+        ulong whitePlayerId,
+        ulong? winnerId,
+        long betAmount,
+        long additionalLoss,
+        long payout
+    )
+    {
+        var settled = await _repository.SettleReversiBetAsync(
+            guildId,
+            blackPlayerId,
+            whitePlayerId,
+            winnerId,
+            betAmount,
+            additionalLoss,
+            payout
+        );
+        if (settled && _roleService != null)
+        {
+            await _roleService.RefreshUserRolesAsync(guildId, blackPlayerId);
+            await _roleService.RefreshUserRolesAsync(guildId, whitePlayerId);
+        }
+        return settled;
+    }
+
     public async Task<IReadOnlyList<UserData>> GetRankingAsync(ulong guildId)
         => await _repository.GetAllAsync(guildId);
 

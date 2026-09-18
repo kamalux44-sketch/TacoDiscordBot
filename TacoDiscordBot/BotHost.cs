@@ -39,6 +39,8 @@ public static class BotHost
 
     public static Services.ReversiService ReversiService { get; private set; }
 
+    public static Services.ReversiBetService ReversiBetService { get; private set; }
+
     public static Services.VcExchangeService VcExchangeService { get; private set; }
 
     public static Services.RoleService RoleService { get; private set; }
@@ -286,6 +288,9 @@ public static class BotHost
                 : new Services.LastChanceService(userDataRepo, roleService: RoleService);
 
             ReversiService = new Services.ReversiService();
+            ReversiBetService = CoinService == null
+                ? null
+                : new Services.ReversiBetService(CoinService);
 
             SlotService = slotRepo == null || CoinService == null
                 ? null

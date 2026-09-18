@@ -227,6 +227,105 @@ public sealed class UserDataRepository : ILastChanceStore
         return transferred;
     }
 
+    public async Task<bool> TryStartReversiBetAsync(ulong guildId, ulong blackPlayerId, ulong whitePlayerId, long betAmount)
+    {
+        if (betAmount <= 0)
+            throw new ArgumentOutOfRangeException(nameof(betAmount));
+        return await _base.UseTransactionAsync<bool>(async (connection, transaction) =>
+        {
+            dynamic command = connection.CreateCommand();
+            command.CommandText = """
+                INSERT INTO user_data(guild_id, user_id)
+                VALUES (@guild_id, @black_id), (@guild_id, @white_id)
+                ON CONFLICT (guild_id, user_id) DO NOTHING;
+
+                WITH eligible AS (
+                    SELECT user_id
+                    FROM user_data
+                    WHERE guild_id = @guild_id
+                      AND user_id IN (@black_id, @white_id)
+                      AND coins >= @bet_amount
+                ), deducted AS (
+                    UPDATE user_data
+                    SET coins = coins - @bet_amount, updated_at = now()
+                    WHERE guild_id = @guild_id
+                      AND user_id IN (SELECT user_id FROM eligible)
+                      AND (SELECT COUNT(*) FROM eligible) = 2
+                    RETURNING user_id
+                )
+                SELECT COUNT(*) FROM deducted;
+                """;
+            command.Transaction = transaction;
+            command.Parameters.AddWithValue("@guild_id", (long)guildId);
+            command.Parameters.AddWithValue("@black_id", (long)blackPlayerId);
+            command.Parameters.AddWithValue("@white_id", (long)whitePlayerId);
+            command.Parameters.AddWithValue("@bet_amount", betAmount);
+
+            dynamic reader = await command.ExecuteReaderAsync();
+            var success = await reader.ReadAsync() && reader.GetInt64(0) == 2;
+            await reader.DisposeAsync();
+            return success;
+        });
+    }
+
+    public async Task<bool> SettleReversiBetAsync(
+        ulong guildId,
+        ulong blackPlayerId,
+        ulong whitePlayerId,
+        ulong? winnerId,
+        long betAmount,
+        long additionalLoss,
+        long payout
+    )
+    {
+        if (betAmount <= 0 || additionalLoss < 0 || payout <= 0)
+            throw new ArgumentOutOfRangeException(nameof(betAmount));
+
+        return await _base.UseTransactionAsync<bool>(async (connection, transaction) =>
+        {
+            dynamic command = connection.CreateCommand();
+            command.CommandText = winnerId.HasValue
+                ? """
+                    WITH deducted AS (
+                        UPDATE user_data
+                        SET coins = GREATEST(coins - @additional_loss, 0), updated_at = now()
+                        WHERE guild_id = @guild_id AND user_id = @loser_id
+                        RETURNING guild_id
+                    )
+                    UPDATE user_data AS winner
+                    SET coins = winner.coins + @payout, updated_at = now()
+                    FROM deducted
+                    WHERE winner.guild_id = @guild_id AND winner.user_id = @winner_id
+                    RETURNING TRUE;
+                    """
+                : """
+                    UPDATE user_data
+                    SET coins = coins + @bet_amount, updated_at = now()
+                    WHERE guild_id = @guild_id AND user_id IN (@black_id, @white_id);
+
+                    SELECT TRUE;
+                    """;
+            command.Transaction = transaction;
+            command.Parameters.AddWithValue("@guild_id", (long)guildId);
+            command.Parameters.AddWithValue("@black_id", (long)blackPlayerId);
+            command.Parameters.AddWithValue("@white_id", (long)whitePlayerId);
+            command.Parameters.AddWithValue("@bet_amount", betAmount);
+            command.Parameters.AddWithValue("@additional_loss", additionalLoss);
+            command.Parameters.AddWithValue("@payout", payout);
+            if (winnerId.HasValue)
+            {
+                var loserId = winnerId.Value == blackPlayerId ? whitePlayerId : blackPlayerId;
+                command.Parameters.AddWithValue("@winner_id", (long)winnerId.Value);
+                command.Parameters.AddWithValue("@loser_id", (long)loserId);
+            }
+
+            dynamic reader = await command.ExecuteReaderAsync();
+            var success = await reader.ReadAsync() && reader.GetBoolean(0);
+            await reader.DisposeAsync();
+            return success;
+        });
+    }
+
     public async Task<List<UserData>> GetAllAsync(ulong guildId)
         => await GetUsersAsync(guildId, null);
 

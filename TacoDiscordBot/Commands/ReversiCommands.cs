@@ -22,7 +22,10 @@ public sealed class ReversiCommands : ApplicationCommandModule
     private static readonly string[] NumberLabels = ["0️⃣", "1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"];
 
     [SlashCommand("reversistart", "2人対戦のリバーシを開始します")]
-    public async Task Start(InteractionContext ctx)
+    public async Task Start(
+        InteractionContext ctx,
+        [Option("bet", "1以上の1人あたりベット額")] long? bet = null
+    )
     {
         if (ctx.Guild == null)
         {
@@ -30,11 +33,29 @@ public sealed class ReversiCommands : ApplicationCommandModule
             return;
         }
 
-        var game = BotHost.ReversiService.Start(ctx.Guild.Id, ctx.Channel.Id, ctx.User.Id);
-        await ctx.CreateResponseAsync(
-            InteractionResponseType.ChannelMessageWithSource,
-            CreateBuilder(game)
-        );
+        if (bet.HasValue && bet.Value <= 0)
+        {
+            await RespondErrorAsync(ctx, "ベット額は正の整数で指定してください。");
+            return;
+        }
+        if (bet.HasValue && BotHost.ReversiBetService == null)
+        {
+            await RespondErrorAsync(ctx, "コインサービスが利用できないため、ベット対局を開始できません。");
+            return;
+        }
+
+        try
+        {
+            var game = BotHost.ReversiService.Start(ctx.Guild.Id, ctx.Channel.Id, ctx.User.Id, bet ?? 0);
+            await ctx.CreateResponseAsync(
+                InteractionResponseType.ChannelMessageWithSource,
+                CreateBuilder(game)
+            );
+        }
+        catch (OverflowException)
+        {
+            await RespondErrorAsync(ctx, "ベット額が大きすぎます。");
+        }
     }
 
     public static async Task HandleComponentInteractionAsync(
@@ -62,7 +83,11 @@ public sealed class ReversiCommands : ApplicationCommandModule
 
             if (parts[1] == "join")
             {
-                service.Join(gameId, e.Interaction.User.Id);
+                if (!await service.JoinAsync(gameId, e.Interaction.User.Id, BotHost.ReversiBetService))
+                {
+                    await RespondEphemeralAsync(e, "ベット開始に必要な残高が不足しています。");
+                    return;
+                }
             }
             else if (parts[1] == "cancel")
             {
@@ -86,7 +111,13 @@ public sealed class ReversiCommands : ApplicationCommandModule
                 if (parts[1] == "promote")
                     service.Promote(gameId, e.Interaction.User.Id, move, boardVersion);
                 else if (parts[1] == "play")
-                    service.Play(gameId, e.Interaction.User.Id, move, boardVersion);
+                    await service.PlayAndSettleAsync(
+                        gameId,
+                        e.Interaction.User.Id,
+                        move,
+                        boardVersion,
+                        BotHost.ReversiBetService
+                    );
                 else
                     return;
             }
@@ -123,6 +154,8 @@ public sealed class ReversiCommands : ApplicationCommandModule
             $"**リバーシ** `{game.GameId}`",
             $"黒: {FormatPlayer(game.PlayerBlack)}　白: {FormatPlayer(game.PlayerWhite)}"
         };
+        if (game.BetEnabled)
+            lines.Add($"💰 ベット：{game.BetAmount}コイン（field: {game.FieldAmount}コイン）");
 
         if (game.Status == ReversiGameStatus.WaitingForPlayers)
             lines.Add("参加者を2人まで受け付けています。黒が先攻です。");
@@ -144,7 +177,14 @@ public sealed class ReversiCommands : ApplicationCommandModule
         var result = game.Winner == ReversiStone.Empty
             ? "引き分け"
             : $"{StoneEmoji(game.Winner)} {FormatPlayer(game.Winner == ReversiStone.Black ? game.PlayerBlack : game.PlayerWhite)} の勝利";
-        return $"ゲーム終了: {result}（黒 {blackCount} - 白 {whiteCount}）";
+        var text = $"ゲーム終了: {result}（黒 {blackCount} - 白 {whiteCount}）";
+        if (game.BetSettlement is { } settlement)
+        {
+            var blackNet = game.Winner == ReversiStone.Black ? settlement.WinnerNet : settlement.LoserNet;
+            var whiteNet = game.Winner == ReversiStone.White ? settlement.WinnerNet : settlement.LoserNet;
+            text += $"\n倍率：{settlement.Multiplier:0.0}倍\n💰 ベット精算\n⚫ 黒：{blackNet:+#;-#;0}コイン\n⚪ 白：{whiteNet:+#;-#;0}コイン";
+        }
+        return text;
     }
 
     private static IEnumerable<string> CreateBoardLines(ReversiGame game)

@@ -36,12 +36,13 @@ public sealed class ReversiGame
         (1, -1), (1, 0), (1, 1)
     ];
 
-    public ReversiGame(string gameId, ulong guildId, ulong channelId, ulong creatorId)
+    public ReversiGame(string gameId, ulong guildId, ulong channelId, ulong creatorId, long betAmount = 0)
     {
         GameId = gameId;
         GuildId = guildId;
         ChannelId = channelId;
         CreatorId = creatorId;
+        BetAmount = betAmount;
         Board = CreateInitialBoard();
         NumberedMoves = [];
         RedMoves = [];
@@ -53,6 +54,12 @@ public sealed class ReversiGame
     public ulong GuildId { get; }
     public ulong ChannelId { get; }
     public ulong CreatorId { get; }
+    public long BetAmount { get; }
+    public bool BetEnabled => BetAmount > 0;
+    public long FieldAmount => checked(BetAmount * 2);
+    public bool SettlementCompleted { get; private set; }
+    public bool SettlementInProgress { get; private set; }
+    public ReversiBetCalculation? BetSettlement { get; private set; }
     public ulong? PlayerBlack { get; private set; }
     public ulong? PlayerWhite { get; private set; }
     public ReversiStone[,] Board { get; }
@@ -64,6 +71,33 @@ public sealed class ReversiGame
         => Status != ReversiGameStatus.Finished
             ? ReversiStone.Empty
             : DetermineWinner(Count(ReversiStone.Black), Count(ReversiStone.White));
+
+    public bool TryMarkSettlementCompleted()
+    {
+        if (SettlementCompleted)
+            return false;
+
+        SettlementCompleted = true;
+        return true;
+    }
+
+    public bool TryBeginSettlement()
+    {
+        if (SettlementCompleted || SettlementInProgress)
+            return false;
+
+        SettlementInProgress = true;
+        return true;
+    }
+
+    public void MarkSettlementCompleted(ReversiBetCalculation settlement)
+    {
+        SettlementInProgress = false;
+        SettlementCompleted = true;
+        BetSettlement = settlement;
+    }
+
+    public void CancelSettlement() => SettlementInProgress = false;
 
     public static ReversiStone DetermineWinner(int blackCount, int whiteCount)
         => blackCount == whiteCount
