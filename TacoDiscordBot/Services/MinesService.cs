@@ -43,7 +43,7 @@ public sealed class MinesService
             throw new InvalidOperationException("⚠️ 現在 MINES をプレイ中です。先に現在のゲームを終了してください。");
 
         await _coinService.RemoveCoinsAsync(guildId, userId, bet);
-        var reduction = _eventManager?.GetEffects(guildId, userId).MinesBombReduction ?? 0;
+        var reduction = _eventManager?.GetMinesBombReduction(guildId, userId) ?? 0;
         var game = new MinesGame(guildId, userId, bet, CreateBombs(reduction));
         if (game.Bombs.Count != MinesGame.BombCount - reduction || game.Bombs.Any(index => index < 0 || index >= MinesGame.BoardSize))
         {

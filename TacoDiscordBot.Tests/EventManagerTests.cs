@@ -38,8 +38,10 @@ public sealed class EventManagerTests
 
         await manager.StartEventAsync(1, 10, EventType.DoublePayout);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
             () => manager.StartEventAsync(1, 20, EventType.GoodLuck));
+
+        Assert.Equal("現在「💰 倍返しキャンペーン！」が発動中のため実行できません。", exception.Message);
     }
 
     [Fact]
@@ -57,6 +59,26 @@ public sealed class EventManagerTests
         Assert.Equal(1.5m, manager.CalculatePayout(1, 10, 100, "blackjack") / 100m);
         Assert.Equal(5m, manager.CalculatePayout(1, 20, 100, "blackjack") / 100m);
         Assert.Equal(1.5m, manager.CalculatePayout(1, 20, 100, "slot") / 100m);
+    }
+
+    [Theory]
+    [InlineData(EventType.MinesSafetyOne, 15, 1)]
+    [InlineData(EventType.MinesSafetyTwo, 10, 2)]
+    [InlineData(EventType.MinesSafetyThree, 5, 3)]
+    public async Task Mines安全週間はユーザーごとの上限回数まで爆弾を減らす(
+        EventType eventType,
+        int limit,
+        int expectedReduction)
+    {
+        var manager = new EventManager(new FakeCoinService(1_000_000));
+
+        await manager.StartEventAsync(1, 10, eventType);
+
+        for (var count = 0; count < limit; count++)
+            Assert.Equal(expectedReduction, manager.GetMinesBombReduction(1, 10));
+
+        Assert.Equal(0, manager.GetMinesBombReduction(1, 10));
+        Assert.Equal(expectedReduction, manager.GetMinesBombReduction(1, 20));
     }
 
     [Fact]

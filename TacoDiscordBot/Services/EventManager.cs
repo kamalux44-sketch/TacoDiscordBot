@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Npgsql;
 using TacoDiscordBot.Models;
 using TacoDiscordBot.Repository;
 using TacoDiscordBot.Services.Interface;
@@ -22,15 +23,22 @@ public sealed class EventManager : IAsyncDisposable
     private const decimal MinesSafetyOneRate = 0.2m;
     private const decimal MinesSafetyTwoRate = 0.4m;
     private const decimal MinesSafetyThreeRate = 0.95m;
+    private const int MinesSafetyOneGameLimit = 15;
+    private const int MinesSafetyTwoGameLimit = 10;
+    private const int MinesSafetyThreeGameLimit = 5;
     private const decimal LiveOrDieRate = 0.5m;
     private const decimal BlackjackInsuranceRate = 0.5m;
     private const decimal BlackjackInsuranceRefundRate = 0.8m;
     private const decimal LiveOrDieMultiplier = 5m;
+    private const string ServerEventUniqueConstraint = "ux_server_events_guild_server";
+    private const string ServerEventAlreadyActiveMessage = "別のサーバーイベントが発動しました。もう一度お試しください。";
     private readonly ICoinService _coinService;
     private readonly ServerEventRepository? _repository;
     private readonly Func<ServerEvent, bool, Task>? _notification;
     private readonly ConcurrentDictionary<ulong, ServerEvent> _activeEvents = new();
     private readonly ConcurrentDictionary<string, ServerEvent> _personalEvents = new();
+    private readonly ConcurrentDictionary<string, int> _minesSafetyUsage = new();
+    private readonly ConcurrentDictionary<string, object> _minesSafetyUsageLocks = new();
     private readonly CancellationTokenSource _cancellation = new();
     private Task? _monitorTask;
 
@@ -65,9 +73,9 @@ public sealed class EventManager : IAsyncDisposable
         new(EventType.GoodLuck, "🍀 豪運に幸あれ！", "20分間、blackjack・slot・rouletteの払い戻し1.25倍", TimeSpan.FromMinutes(20), GoodLuckRate, 0),
         new(EventType.BlackjackInsurance, "🪙 ブラックジャック保険", "10分間、ブラックジャックのサレンダーでベットの80%を返還", TimeSpan.FromMinutes(10), 0, 0),
         new(EventType.DoubleUpBoost, "🔥 倍倍倍プッシュ！！", "10分間、DoubleUpの当選倍率を2.4倍に変更", TimeSpan.FromMinutes(10), 0, DoubleUpBoostCost),
-        new(EventType.MinesSafetyOne, "💣 Mines安全週間１", "10分間、Minesの爆弾数を4個から3個に減少", TimeSpan.FromMinutes(10), MinesSafetyOneRate, 0),
-        new(EventType.MinesSafetyTwo, "💣 Mines安全週間２", "10分間、Minesの爆弾数を4個から2個に減少", TimeSpan.FromMinutes(10), MinesSafetyTwoRate, 0),
-        new(EventType.MinesSafetyThree, "💣 Mines安全週間３", "10分間、Minesの爆弾数を4個から1個に減少", TimeSpan.FromMinutes(10), MinesSafetyThreeRate, 0),
+        new(EventType.MinesSafetyOne, "💣 Mines安全週間１", "1時間、Minesの爆弾数を4個から3個に減少", TimeSpan.FromHours(1), MinesSafetyOneRate, 0),
+        new(EventType.MinesSafetyTwo, "💣 Mines安全週間２", "1時間、Minesの爆弾数を4個から2個に減少", TimeSpan.FromHours(1), MinesSafetyTwoRate, 0),
+        new(EventType.MinesSafetyThree, "💣 Mines安全週間３", "1時間、Minesの爆弾数を4個から1個に減少", TimeSpan.FromHours(1), MinesSafetyThreeRate, 0),
         new(EventType.LiveOrDie, "💎 生きるか死ぬか", "次の勝負1回のみ、勝敗の払い戻し予定額を5倍", TimeSpan.Zero, 0, 0, true)
     ];
 
@@ -122,15 +130,24 @@ public sealed class EventManager : IAsyncDisposable
         }
         else if (!_activeEvents.TryAdd(guildId, started))
         {
-            throw new InvalidOperationException("別のサーバーイベントが発動しました。もう一度お試しください。");
+            throw new InvalidOperationException(ServerEventAlreadyActiveMessage);
         }
 
         try
         {
             if (_repository != null)
             {
-                if (!await _repository.TryStartWithPaymentAsync(started, cost.Amount))
-                    throw new InvalidOperationException("コインが不足しています。");
+                try
+                {
+                    if (!await _repository.TryStartWithPaymentAsync(started, cost.Amount))
+                        throw new InvalidOperationException("コインが不足しています。");
+                }
+                catch (PostgresException ex) when (
+                    ex.SqlState == PostgresErrorCodes.UniqueViolation
+                    && ex.ConstraintName == ServerEventUniqueConstraint)
+                {
+                    throw new InvalidOperationException(ServerEventAlreadyActiveMessage, ex);
+                }
             }
             else
             {
@@ -160,6 +177,35 @@ public sealed class EventManager : IAsyncDisposable
         if (_personalEvents.ContainsKey(CreatePersonalKey(guildId, userId)))
             effects = effects with { HasPersonalRisk = true, PayoutMultiplier = LiveOrDieMultiplier };
         return effects;
+    }
+
+    public int GetMinesBombReduction(ulong guildId, ulong userId)
+    {
+        var active = GetActiveEvent(guildId);
+        if (active == null)
+            return 0;
+
+        var (limit, reduction) = active.Type switch
+        {
+            EventType.MinesSafetyOne => (MinesSafetyOneGameLimit, 1),
+            EventType.MinesSafetyTwo => (MinesSafetyTwoGameLimit, 2),
+            EventType.MinesSafetyThree => (MinesSafetyThreeGameLimit, 3),
+            _ => (0, 0)
+        };
+        if (limit == 0)
+            return 0;
+
+        var key = CreateMinesSafetyUsageKey(active, userId);
+        var usageLock = _minesSafetyUsageLocks.GetOrAdd(key, _ => new object());
+        lock (usageLock)
+        {
+            var used = _minesSafetyUsage.GetValueOrDefault(key);
+            if (used >= limit)
+                return 0;
+
+            _minesSafetyUsage[key] = used + 1;
+            return reduction;
+        }
     }
 
     public long CalculatePayout(
@@ -239,6 +285,7 @@ public sealed class EventManager : IAsyncDisposable
                     continue;
                 if (_activeEvents.TryRemove(pair.Key, out var ended))
                 {
+                    RemoveMinesSafetyUsage(ended);
                     if (_repository != null)
                         await _repository.DeleteAsync(ended);
                     if (_notification != null)
@@ -288,6 +335,22 @@ public sealed class EventManager : IAsyncDisposable
         };
 
     private static string CreatePersonalKey(ulong guildId, ulong userId) => $"{guildId}:{userId}";
+
+    private static string CreateMinesSafetyUsageKey(ServerEvent serverEvent, ulong userId)
+        => $"{serverEvent.GuildId}:{serverEvent.Type}:{serverEvent.StartedAt.UtcTicks}:{userId}";
+
+    private void RemoveMinesSafetyUsage(ServerEvent serverEvent)
+    {
+        if (serverEvent.Type is not (EventType.MinesSafetyOne or EventType.MinesSafetyTwo or EventType.MinesSafetyThree))
+            return;
+
+        var prefix = $"{serverEvent.GuildId}:{serverEvent.Type}:{serverEvent.StartedAt.UtcTicks}:";
+        foreach (var key in _minesSafetyUsage.Keys.Where(key => key.StartsWith(prefix, StringComparison.Ordinal)))
+        {
+            _minesSafetyUsage.TryRemove(key, out _);
+            _minesSafetyUsageLocks.TryRemove(key, out _);
+        }
+    }
 
     private static long CalculatePercentageCost(long balance, decimal rate)
     {
