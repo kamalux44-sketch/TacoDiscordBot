@@ -162,11 +162,6 @@ public sealed class PokerCommands : ApplicationCommandModule
         var result = await service.JoinAsync(tableId, e.Interaction.User.Id, e.Interaction.User.Username);
         await e.Interaction.EditOriginalResponseAsync(
             CreatePublicWebhookBuilder(service.GetSnapshot(tableId), includeJoin: true));
-        await e.Interaction.CreateFollowupMessageAsync(
-            new DiscordFollowupMessageBuilder()
-                .WithContent(CreatePrivateContent(service.GetPrivateSnapshot(tableId, e.Interaction.User.Id), 0))
-                .AsEphemeral(true)
-        );
         await UpdatePublicAsync(client, result.Game, service.GetSnapshot(tableId));
     }
 
@@ -176,9 +171,22 @@ public sealed class PokerCommands : ApplicationCommandModule
         await e.Interaction.EditOriginalResponseAsync(
             CreatePublicWebhookBuilder(service.GetSnapshot(tableId), includeJoin: false));
         await e.Interaction.CreateFollowupMessageAsync(
-            new DiscordFollowupMessageBuilder()
-                .WithContent(CreatePrivateContent(service.GetPrivateSnapshot(tableId, e.Interaction.User.Id), 0))
-                .AsEphemeral(true));
+            CreatePrivateFollowupBuilder(service.GetPrivateSnapshot(tableId, e.Interaction.User.Id), 0).AsEphemeral(true));
+
+        foreach (var player in game.Players.Where(player => player.UserId != e.Interaction.User.Id))
+        {
+            try
+            {
+                var member = await e.Guild.GetMemberAsync(player.UserId);
+                var dmChannel = await member.CreateDmChannelAsync();
+                await dmChannel.SendMessageAsync(
+                    CreatePrivateMessageBuilder(service.GetPrivateSnapshot(tableId, player.UserId), 0));
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex, "Poker手札DMの送信に失敗しました。user={UserId} table={TableId}", player.UserId, tableId);
+            }
+        }
         await UpdatePublicAsync(client, game, service.GetSnapshot(tableId));
     }
 
@@ -300,15 +308,43 @@ public sealed class PokerCommands : ApplicationCommandModule
 
     private static DiscordInteractionResponseBuilder CreatePrivateBuilder(PokerPrivateSnapshot snapshot, int selectedMask)
     {
-        return new DiscordInteractionResponseBuilder()
-            .WithContent(CreatePrivateContent(snapshot, selectedMask))
-            .AddComponents(CreatePrivateComponents(snapshot, selectedMask));
+        var builder = new DiscordInteractionResponseBuilder()
+            .WithContent(CreatePrivateContent(snapshot, selectedMask));
+        var components = CreatePrivateComponents(snapshot, selectedMask);
+        if (components.Length > 0)
+            builder.AddComponents(components);
+        return builder;
     }
 
     private static DiscordWebhookBuilder CreatePrivateWebhookBuilder(PokerPrivateSnapshot snapshot, int selectedMask)
-        => new DiscordWebhookBuilder()
-            .WithContent(CreatePrivateContent(snapshot, selectedMask))
-            .AddComponents(CreatePrivateComponents(snapshot, selectedMask));
+    {
+        var builder = new DiscordWebhookBuilder()
+            .WithContent(CreatePrivateContent(snapshot, selectedMask));
+        var components = CreatePrivateComponents(snapshot, selectedMask);
+        if (components.Length > 0)
+            builder.AddComponents(components);
+        return builder;
+    }
+
+    private static DiscordMessageBuilder CreatePrivateMessageBuilder(PokerPrivateSnapshot snapshot, int selectedMask)
+    {
+        var builder = new DiscordMessageBuilder()
+            .WithContent(CreatePrivateContent(snapshot, selectedMask));
+        var components = CreatePrivateComponents(snapshot, selectedMask);
+        if (components.Length > 0)
+            builder.AddComponents(components);
+        return builder;
+    }
+
+    private static DiscordFollowupMessageBuilder CreatePrivateFollowupBuilder(PokerPrivateSnapshot snapshot, int selectedMask)
+    {
+        var builder = new DiscordFollowupMessageBuilder()
+            .WithContent(CreatePrivateContent(snapshot, selectedMask));
+        var components = CreatePrivateComponents(snapshot, selectedMask);
+        if (components.Length > 0)
+            builder.AddComponents(components);
+        return builder;
+    }
 
     private static DiscordComponent[] CreatePrivateComponents(PokerPrivateSnapshot snapshot, int selectedMask)
     {
