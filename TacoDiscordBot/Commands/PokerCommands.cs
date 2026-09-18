@@ -110,7 +110,7 @@ public sealed class PokerCommands : ApplicationCommandModule
         var deferred = false;
         try
         {
-            if (operation is "join" or "start" or "card" or "exchange" or "action")
+            if (operation is "join" or "start" or "end" or "forceend" or "card" or "exchange" or "action")
             {
                 await e.Interaction.CreateResponseAsync(InteractionResponseType.DeferredMessageUpdate);
                 deferred = true;
@@ -122,6 +122,9 @@ public sealed class PokerCommands : ApplicationCommandModule
                     break;
                 case "start" when parts.Length == 3:
                     await StartAsync(client, e, service, parts[2]);
+                    break;
+                case "end" or "forceend" when parts.Length == 3:
+                    await EndAsync(client, e, service, parts[2]);
                     break;
                 case "refresh" when parts.Length == 3:
                     await ShowPrivateAsync(e, service, parts[2]);
@@ -233,6 +236,22 @@ public sealed class PokerCommands : ApplicationCommandModule
             CreatePublicWebhookBuilder(service.GetSnapshot(tableId), includeJoin: false));
 
         await UpdateMessagesAsync(client, service, game, service.GetSnapshot(tableId));
+    }
+
+    private static async Task EndAsync(DiscordClient client, ComponentInteractionCreateEventArgs e, PokerService service, string tableId)
+    {
+        var game = await service.EndAsync(tableId, e.Interaction.User.Id);
+        var snapshot = service.GetSnapshot(tableId);
+        await e.Interaction.EditOriginalResponseAsync(
+            CreatePublicWebhookBuilder(snapshot, includeJoin: false));
+        try
+        {
+            await UpdateMessagesAsync(client, service, game, snapshot);
+        }
+        finally
+        {
+            await service.SettleAsync(tableId);
+        }
     }
 
     private static async Task ToggleCardAsync(ComponentInteractionCreateEventArgs e, PokerService service, string tableId, int cardIndex, int mask)
@@ -502,6 +521,12 @@ public sealed class PokerCommands : ApplicationCommandModule
             description += $"\n現在の手番 : {current?.DisplayName ?? "不明"}";
         }
 
+        if (snapshot.Phase == PokerPhase.Waiting)
+        {
+            description += $"\n\n参加費 : {snapshot.CoinRate:N0} Coin";
+            description += $"\n交換レート : {PokerService.InitialChips:N0} Chip = {snapshot.CoinRate:N0} Coin";
+        }
+
         AppendActionSections(ref description, snapshot);
 
         if (snapshot.Phase == PokerPhase.Finished)
@@ -554,6 +579,11 @@ public sealed class PokerCommands : ApplicationCommandModule
                 components.Add(new DiscordButtonComponent(ButtonStyle.Success, $"{Prefix}join:{snapshot.TableId}", "参加"));
             if (snapshot.Players.Count >= PokerService.MinPlayers)
                 components.Add(new DiscordButtonComponent(ButtonStyle.Primary, $"{Prefix}start:{snapshot.TableId}", "開始"));
+            components.Add(new DiscordButtonComponent(ButtonStyle.Danger, $"{Prefix}end:{snapshot.TableId}", "終了"));
+        }
+        else if (snapshot.Phase != PokerPhase.Finished)
+        {
+            components.Add(new DiscordButtonComponent(ButtonStyle.Danger, $"{Prefix}forceend:{snapshot.TableId}", "強制終了"));
         }
         return components.ToArray();
     }

@@ -1,3 +1,4 @@
+using System;
 using System.Threading.Tasks;
 using TacoDiscordBot.Models;
 using TacoDiscordBot.Repository;
@@ -54,6 +55,46 @@ public sealed class PokerServiceTests
             Assert.Equal(5, player.Hand.Count);
             Assert.False(string.IsNullOrWhiteSpace(player.HandCategory));
         });
+    }
+
+    [Fact]
+    public async Task 開始前は卓作成者が卓を終了できる()
+    {
+        var service = CreateService();
+        var game = await service.CreateGameAsync(1, 10, 5, 1);
+        game.Players.Add(new PokerPlayer(10, "Player 1", PokerService.InitialChips));
+
+        await service.EndAsync(game.TableId, 10);
+
+        Assert.Equal(PokerPhase.Finished, game.Phase);
+        Assert.Equal("開始前に卓が終了しました", game.WinnerText);
+        Assert.Equal(-1, game.CurrentPlayerIndex);
+    }
+
+    [Fact]
+    public async Task ゲーム中の強制終了ではPotを参加者へ返却する()
+    {
+        var service = CreateService();
+        var game = await CreateStartedGameAsync(service);
+        game.Players[0].Chips -= 150;
+        game.Players[1].Chips -= 150;
+        game.Pot = 300;
+
+        await service.EndAsync(game.TableId, 10);
+
+        Assert.Equal(PokerPhase.Finished, game.Phase);
+        Assert.Equal("ゲームが強制終了されました", game.WinnerText);
+        Assert.Equal(0, game.Pot);
+        Assert.All(game.Players, player => Assert.Equal(PokerService.InitialChips, player.Chips));
+    }
+
+    [Fact]
+    public async Task 卓作成者以外は卓を終了できない()
+    {
+        var service = CreateService();
+        var game = await service.CreateGameAsync(1, 10, 5, 1);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.EndAsync(game.TableId, 20));
     }
 
     private static PokerService CreateService()

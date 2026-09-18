@@ -45,6 +45,33 @@ public sealed class PokerService
         }
     }
 
+    public async Task<PokerGame> EndAsync(string tableId, ulong userId)
+    {
+        var game = GetGame(tableId);
+        await EnterLockAsync(game);
+        try
+        {
+            if (game.CreatorId != userId)
+                throw new InvalidOperationException("卓を終了できるのは作成者だけです。");
+            if (game.Phase == PokerPhase.Finished)
+                throw new InvalidOperationException("この卓はすでに終了しています。");
+
+            var isWaiting = game.Phase == PokerPhase.Waiting;
+            DistributePot(game);
+            game.Phase = PokerPhase.Finished;
+            game.CurrentPlayerIndex = -1;
+            game.WinnerText = isWaiting
+                ? "開始前に卓が終了しました"
+                : "ゲームが強制終了されました";
+            await PersistAsync(game);
+            return game;
+        }
+        finally
+        {
+            gameLock.Release();
+        }
+    }
+
     public async Task CloseDueToMissingPublicMessageAsync(string tableId)
     {
         var game = GetGame(tableId);
@@ -55,17 +82,7 @@ public sealed class PokerService
                 return;
 
             var participants = game.Players.ToList();
-            if (participants.Count > 0 && game.Pot > 0)
-            {
-                var share = game.Pot / participants.Count;
-                var remainder = game.Pot % participants.Count;
-                foreach (var player in participants)
-                    player.Chips += share;
-                for (var index = 0; index < remainder; index++)
-                    participants[index].Chips++;
-            }
-
-            game.Pot = 0;
+            DistributePot(game);
             game.Phase = PokerPhase.Finished;
             game.WinnerText = "公開卓メッセージ削除により卓終了";
             game.PublicMessageId = null;
@@ -324,6 +341,20 @@ public sealed class PokerService
             for (var card = 0; card < 5; card++)
                 player.Hand.Add(game.Deck.Dequeue());
         game.CurrentPlayerIndex = 0;
+    }
+
+    private static void DistributePot(PokerGame game)
+    {
+        if (game.Pot <= 0 || game.Players.Count == 0)
+            return;
+
+        var share = game.Pot / game.Players.Count;
+        var remainder = game.Pot % game.Players.Count;
+        foreach (var player in game.Players)
+            player.Chips += share;
+        for (var index = 0; index < remainder; index++)
+            game.Players[index].Chips++;
+        game.Pot = 0;
     }
 
     private static long Check(PokerGame game, PokerPlayer player)
