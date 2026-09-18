@@ -33,6 +33,29 @@ public sealed class PokerServiceTests
         Assert.Equal(-1, game.CurrentPlayerIndex);
     }
 
+    [Fact]
+    public async Task ゲーム終了時のスナップショットに全員の手札と役が含まれる()
+    {
+        var service = CreateService();
+        var game = await CreateStartedGameAsync(service);
+
+        await service.ActAsync(game.TableId, 10, PokerAction.Check);
+        await service.ActAsync(game.TableId, 20, PokerAction.Check);
+        await service.ExchangeAsync(game.TableId, 10, []);
+        await service.ExchangeAsync(game.TableId, 20, []);
+        await service.ActAsync(game.TableId, 10, PokerAction.Check);
+        await service.ActAsync(game.TableId, 20, PokerAction.Check);
+
+        var snapshot = service.GetSnapshot(game.TableId);
+
+        Assert.Equal(PokerPhase.Finished, snapshot.Phase);
+        Assert.All(snapshot.Players, player =>
+        {
+            Assert.Equal(5, player.Hand.Count);
+            Assert.False(string.IsNullOrWhiteSpace(player.HandCategory));
+        });
+    }
+
     private static PokerService CreateService()
         => new(new CoinService(new UserDataRepository(new BaseRepository("Host=mock"))));
 

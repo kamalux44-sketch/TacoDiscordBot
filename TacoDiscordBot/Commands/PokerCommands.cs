@@ -183,7 +183,21 @@ public sealed class PokerCommands : ApplicationCommandModule
             var action = operation == "bet" ? PokerAction.Bet : PokerAction.Raise;
             var result = await service.ActAsync(parts[2], e.Interaction.User.Id, action, amount);
             if (result.Finished)
-                await service.SettleAsync(parts[2]);
+            {
+                var finalPrivateSnapshot = service.GetPrivateSnapshot(parts[2], e.Interaction.User.Id);
+                await e.Interaction.EditOriginalResponseAsync(
+                    new DiscordWebhookBuilder().WithContent(CreatePrivateContent(finalPrivateSnapshot, 0)));
+                var finalSnapshot = service.GetSnapshot(parts[2]);
+                try
+                {
+                    await UpdateMessagesAsync(client, service, result.Game, finalSnapshot);
+                }
+                finally
+                {
+                    await service.SettleAsync(parts[2]);
+                }
+                return;
+            }
 
             var privateSnapshot = service.GetPrivateSnapshot(parts[2], e.Interaction.User.Id);
             var actionText = operation == "bet" ? "Betしました。" : "レイズしました。";
@@ -254,7 +268,18 @@ public sealed class PokerCommands : ApplicationCommandModule
         await e.Interaction.EditOriginalResponseAsync(
             CreatePrivateWebhookBuilder(service.GetPrivateSnapshot(parts[2], e.Interaction.User.Id), 0));
         if (result.Finished)
-            await service.SettleAsync(parts[2]);
+        {
+            var finalSnapshot = service.GetSnapshot(parts[2]);
+            try
+            {
+                await UpdateMessagesAsync(client, service, result.Game, finalSnapshot);
+            }
+            finally
+            {
+                await service.SettleAsync(parts[2]);
+            }
+            return;
+        }
         await UpdateMessagesAsync(client, service, result.Game, service.GetSnapshot(parts[2]));
     }
 
@@ -468,26 +493,59 @@ public sealed class PokerCommands : ApplicationCommandModule
 
     private static DiscordEmbed CreatePublicEmbed(PokerGameSnapshot snapshot)
     {
-        var description = $"参加費：{snapshot.CoinRate:N0} Coin\n交換レート：1000 Chip = {snapshot.CoinRate:N0} Coin\n\n";
+        var description = $"💰 Pot\n{snapshot.Pot:N0} Chip\n\n👥 Players\n";
         description += snapshot.Players.Count == 0
             ? "参加者：まだいません"
-            : string.Join("\n", snapshot.Players.Select(player => $"{player.DisplayName}：{player.Chips:N0} Chip"));
-        description += $"\n\nPot：{snapshot.Pot:N0} Chip\nフェーズ：{GetPhaseText(snapshot.Phase, snapshot.BetRound)}";
+            : string.Join("\n", snapshot.Players.Select(player => $"{player.DisplayName} : {player.Chips:N0} Chip"));
+        description += $"\n\n📍 Status\nフェーズ : {GetPhaseText(snapshot.Phase, snapshot.BetRound)}";
+
         if (snapshot.CurrentPlayerId.HasValue)
         {
             var current = snapshot.Players.FirstOrDefault(player => player.UserId == snapshot.CurrentPlayerId.Value);
-            description += $"\n現在の手番：{current?.DisplayName ?? "不明"}";
+            description += $"\n現在の手番 : {current?.DisplayName ?? "不明"}";
         }
-        if (snapshot.Actions.Count > 0)
-            description += "\n\n" + string.Join("\n", snapshot.Actions.TakeLast(12));
-        if (!string.IsNullOrWhiteSpace(snapshot.WinnerText))
-            description += $"\n\n勝者：{snapshot.WinnerText}";
+
+        AppendActionSections(ref description, snapshot);
+
+        if (snapshot.Phase == PokerPhase.Finished)
+        {
+            description += "\n\n🃏 Showdown\n";
+            description += string.Join("\n", snapshot.Players.Select(FormatShowdownPlayer));
+            if (!string.IsNullOrWhiteSpace(snapshot.WinnerText))
+                description += $"\n\n🏆 Winner\n{snapshot.WinnerText.Replace("（", "\n").Replace("）", string.Empty)}";
+        }
 
         return new DiscordEmbedBuilder()
-            .WithTitle($"🎴 5 Card Poker — {snapshot.TableId}")
+            .WithTitle($"♠ 5 Card Poker — {snapshot.TableId}")
             .WithDescription(description)
             .WithColor(DiscordColor.Blurple)
             .Build();
+    }
+
+    private static void AppendActionSections(ref string description, PokerGameSnapshot snapshot)
+    {
+        var exchangeIndex = snapshot.Actions.ToList().FindIndex(action => action.Contains("枚交換", StringComparison.Ordinal));
+        var bettingActions = exchangeIndex < 0 ? snapshot.Actions : snapshot.Actions.Take(exchangeIndex).ToArray();
+        var exchangeActions = snapshot.Actions.Where(action => action.Contains("枚交換", StringComparison.Ordinal)).ToArray();
+        var finalActions = exchangeIndex < 0 ? Array.Empty<string>() : snapshot.Actions.Skip(exchangeIndex + 1).Where(action => !action.Contains("枚交換", StringComparison.Ordinal)).ToArray();
+
+        AppendActionSection(ref description, "📜 Action Log", bettingActions);
+        AppendActionSection(ref description, "🔄 Draw Phase", exchangeActions);
+        AppendActionSection(ref description, "🎯 Final Round", finalActions);
+    }
+
+    private static void AppendActionSection(ref string description, string title, IEnumerable<string> actions)
+    {
+        var values = actions.TakeLast(12).Select(action => $"▶ {action.Replace("：", " ")}").ToArray();
+        description += $"\n\n{title}\n" + (values.Length == 0 ? "なし" : string.Join("\n", values));
+    }
+
+    private static string FormatShowdownPlayer(PokerPlayerSnapshot player)
+    {
+        var hand = player.Hand.Count == 0 ? "非公開" : string.Join(" ", player.Hand);
+        var category = player.HandCategory ?? "役なし";
+        var folded = player.Folded ? "（Fold）" : string.Empty;
+        return $"{player.DisplayName}{folded}\n手札 : {hand}\n役 : {category}\nチップ : {player.Chips:N0} Chip";
     }
 
     private static DiscordComponent[] CreatePublicComponents(PokerGameSnapshot snapshot, bool includeJoin)

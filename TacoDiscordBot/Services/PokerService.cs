@@ -477,9 +477,25 @@ public sealed class PokerService
 
     private static PokerGameSnapshot CreateSnapshot(PokerGame game)
         => new(game.TableId, game.CreatorId, game.CoinRate, game.Phase, game.BetRound, game.Pot, game.CurrentBet,
-            game.Players.Select(player => new PokerPlayerSnapshot(player.DisplayName, player.UserId, player.Chips, player.Folded, player.Exchanged, player.CurrentBet, player.ActionHistory.ToArray())).ToArray(),
+            game.Players.Select(player => CreatePlayerSnapshot(game, player)).ToArray(),
             game.CurrentPlayerIndex >= 0 && game.CurrentPlayerIndex < game.Players.Count ? game.Players[game.CurrentPlayerIndex].UserId : null,
             game.ActionHistory.ToArray(), game.WinnerText);
+
+    private static PokerPlayerSnapshot CreatePlayerSnapshot(PokerGame game, PokerPlayer player)
+    {
+        var isShowdown = game.Phase == PokerPhase.Finished && player.Hand.Count == 5;
+        var evaluation = isShowdown ? PokerHandEvaluator.Evaluate(player.Hand) : null;
+        return new PokerPlayerSnapshot(
+            player.DisplayName,
+            player.UserId,
+            player.Chips,
+            player.Folded,
+            player.Exchanged,
+            player.CurrentBet,
+            player.ActionHistory.ToArray(),
+            isShowdown ? player.Hand.ToArray() : Array.Empty<PokerCard>(),
+            evaluation?.CategoryDisplayName);
+    }
 
     private static IEnumerable<PokerCard> CreateDeck()
     {
@@ -495,7 +511,16 @@ public sealed class PokerService
 public sealed record PokerJoinResult(PokerGame Game, bool Started);
 public sealed record PokerActionResult(PokerGame Game, bool Finished);
 public sealed record PokerExchangeResult(PokerGame Game, int ExchangedCount);
-public sealed record PokerPlayerSnapshot(string DisplayName, ulong UserId, long Chips, bool Folded, bool Exchanged, long CurrentBet, IReadOnlyList<string> Actions);
+public sealed record PokerPlayerSnapshot(
+    string DisplayName,
+    ulong UserId,
+    long Chips,
+    bool Folded,
+    bool Exchanged,
+    long CurrentBet,
+    IReadOnlyList<string> Actions,
+    IReadOnlyList<PokerCard> Hand,
+    string? HandCategory);
 public sealed record PokerGameSnapshot(string TableId, ulong CreatorId, long CoinRate, PokerPhase Phase, int BetRound, long Pot, long CurrentBet, IReadOnlyList<PokerPlayerSnapshot> Players, ulong? CurrentPlayerId, IReadOnlyList<string> Actions, string? WinnerText);
 public sealed record PokerPrivateSnapshot(PokerGame Game, PokerPlayer Player);
 
