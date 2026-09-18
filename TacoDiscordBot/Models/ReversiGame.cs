@@ -126,8 +126,9 @@ public sealed class ReversiGame
         if (numbered.Count >= MaximumMovesPerGroup)
         {
             displaced = numbered[0];
-            numbered.RemoveAt(0);
+            numbered[0] = move;
             var displacedGroup = source == RedMoves ? RedMoves.ToList() : GreenMoves.ToList();
+            displacedGroup.Remove(move);
             displacedGroup.Add(displaced);
             SetGroups(numbered, source == RedMoves ? displacedGroup : RedMoves, source == GreenMoves ? displacedGroup : GreenMoves);
         }
@@ -135,7 +136,7 @@ public sealed class ReversiGame
         {
             var red = RedMoves.Where(item => item != move).ToList();
             var green = GreenMoves.Where(item => item != move).ToList();
-            numbered.Add(move);
+            numbered.Insert(0, move);
             SetGroups(numbered, red, green);
         }
 
