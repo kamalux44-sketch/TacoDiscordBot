@@ -91,11 +91,31 @@ public sealed class PokerService
 
             await _coinService.RemoveCoinsAsync(game.GuildId, userId, game.CoinRate);
             game.Players.Add(new PokerPlayer(userId, displayName, InitialChips));
-            var started = game.Players.Count >= MinPlayers;
-            if (started)
-                StartGame(game);
             await PersistAsync(game);
-            return new PokerJoinResult(game, started);
+            return new PokerJoinResult(game, false);
+        }
+        finally
+        {
+            gameLock.Release();
+        }
+    }
+
+    public async Task<PokerGame> StartAsync(string tableId, ulong userId)
+    {
+        var game = GetGame(tableId);
+        await EnterLockAsync(game);
+        try
+        {
+            if (game.Phase != PokerPhase.Waiting)
+                throw new InvalidOperationException("この卓はすでに開始されています。");
+            if (game.CreatorId != userId)
+                throw new InvalidOperationException("卓の作成者だけがゲームを開始できます。");
+            if (game.Players.Count < MinPlayers)
+                throw new InvalidOperationException("ゲーム開始には2人以上の参加者が必要です。");
+
+            StartGame(game);
+            await PersistAsync(game);
+            return game;
         }
         finally
         {
@@ -377,7 +397,7 @@ public sealed class PokerService
         => _repository == null ? Task.CompletedTask : _repository.SaveAsync(game);
 
     private static PokerGameSnapshot CreateSnapshot(PokerGame game)
-        => new(game.TableId, game.CoinRate, game.Phase, game.BetRound, game.Pot, game.CurrentBet,
+        => new(game.TableId, game.CreatorId, game.CoinRate, game.Phase, game.BetRound, game.Pot, game.CurrentBet,
             game.Players.Select(player => new PokerPlayerSnapshot(player.DisplayName, player.UserId, player.Chips, player.Folded, player.Exchanged, player.CurrentBet, player.ActionHistory.ToArray())).ToArray(),
             game.CurrentPlayerIndex >= 0 && game.CurrentPlayerIndex < game.Players.Count ? game.Players[game.CurrentPlayerIndex].UserId : null,
             game.ActionHistory.ToArray(), game.WinnerText);
@@ -397,7 +417,7 @@ public sealed record PokerJoinResult(PokerGame Game, bool Started);
 public sealed record PokerActionResult(PokerGame Game, bool Finished);
 public sealed record PokerExchangeResult(PokerGame Game, int ExchangedCount);
 public sealed record PokerPlayerSnapshot(string DisplayName, ulong UserId, long Chips, bool Folded, bool Exchanged, long CurrentBet, IReadOnlyList<string> Actions);
-public sealed record PokerGameSnapshot(string TableId, long CoinRate, PokerPhase Phase, int BetRound, long Pot, long CurrentBet, IReadOnlyList<PokerPlayerSnapshot> Players, ulong? CurrentPlayerId, IReadOnlyList<string> Actions, string? WinnerText);
+public sealed record PokerGameSnapshot(string TableId, ulong CreatorId, long CoinRate, PokerPhase Phase, int BetRound, long Pot, long CurrentBet, IReadOnlyList<PokerPlayerSnapshot> Players, ulong? CurrentPlayerId, IReadOnlyList<string> Actions, string? WinnerText);
 public sealed record PokerPrivateSnapshot(PokerGame Game, PokerPlayer Player);
 
 internal static class PokerActionExtensions
