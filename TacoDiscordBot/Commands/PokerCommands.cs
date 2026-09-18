@@ -170,21 +170,19 @@ public sealed class PokerCommands : ApplicationCommandModule
         var game = await service.StartAsync(tableId, e.Interaction.User.Id);
         await e.Interaction.EditOriginalResponseAsync(
             CreatePublicWebhookBuilder(service.GetSnapshot(tableId), includeJoin: false));
-        await e.Interaction.CreateFollowupMessageAsync(
-            CreatePrivateFollowupBuilder(service.GetPrivateSnapshot(tableId, e.Interaction.User.Id), 0).AsEphemeral(true));
 
-        foreach (var player in game.Players.Where(player => player.UserId != e.Interaction.User.Id))
+        // 参加者の手札は公開卓と同じチャンネルへ投稿し、各メッセージに操作ボタンを付ける。
+        var channel = await client.GetChannelAsync(game.ChannelId);
+        foreach (var player in game.Players)
         {
             try
             {
-                var member = await e.Guild.GetMemberAsync(player.UserId);
-                var dmChannel = await member.CreateDmChannelAsync();
-                await dmChannel.SendMessageAsync(
+                await channel.SendMessageAsync(
                     CreatePrivateMessageBuilder(service.GetPrivateSnapshot(tableId, player.UserId), 0));
             }
             catch (Exception ex)
             {
-                Logger.Error(ex, "Poker手札DMの送信に失敗しました。user={UserId} table={TableId}", player.UserId, tableId);
+                Logger.Error(ex, "Poker手札メッセージの送信に失敗しました。user={UserId} table={TableId}", player.UserId, tableId);
             }
         }
         await UpdatePublicAsync(client, game, service.GetSnapshot(tableId));
@@ -329,16 +327,6 @@ public sealed class PokerCommands : ApplicationCommandModule
     private static DiscordMessageBuilder CreatePrivateMessageBuilder(PokerPrivateSnapshot snapshot, int selectedMask)
     {
         var builder = new DiscordMessageBuilder()
-            .WithContent(CreatePrivateContent(snapshot, selectedMask));
-        var components = CreatePrivateComponents(snapshot, selectedMask);
-        if (components.Length > 0)
-            builder.AddComponents(components);
-        return builder;
-    }
-
-    private static DiscordFollowupMessageBuilder CreatePrivateFollowupBuilder(PokerPrivateSnapshot snapshot, int selectedMask)
-    {
-        var builder = new DiscordFollowupMessageBuilder()
             .WithContent(CreatePrivateContent(snapshot, selectedMask));
         var components = CreatePrivateComponents(snapshot, selectedMask);
         if (components.Length > 0)
