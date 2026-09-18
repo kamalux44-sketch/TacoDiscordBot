@@ -21,7 +21,7 @@ public sealed class ReversiCommands : ApplicationCommandModule
     private const string GreenCell = "🟩";
     private static readonly string[] NumberLabels = ["0️⃣", "1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"];
 
-    [SlashCommand("リバーシスタート", "2人対戦のリバーシを開始します")]
+    [SlashCommand("reversistart", "2人対戦のリバーシを開始します")]
     public async Task Start(InteractionContext ctx)
     {
         if (ctx.Guild == null)
