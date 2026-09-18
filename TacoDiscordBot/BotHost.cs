@@ -29,6 +29,8 @@ public static class BotHost
 
     public static Services.BlackjackService BlackjackService { get; private set; }
 
+    public static Services.PokerService PokerService { get; private set; }
+
     public static Services.RouletteService RouletteService { get; private set; }
 
     public static Services.DoubleUpService DoubleUpService { get; private set; }
@@ -105,6 +107,7 @@ public static class BotHost
             Repository.VcExchangeRepository vcExchangeRepo = null;
             Repository.AchievementRepository achievementRepo = null;
             Repository.ServerEventRepository serverEventRepo = null;
+            Repository.PokerRepository pokerRepo = null;
             var host = Environment.GetEnvironmentVariable(Strings.EnvPgHost);
 
             if (!string.IsNullOrWhiteSpace(host))
@@ -166,6 +169,7 @@ public static class BotHost
                         vcExchangeRepo = new Repository.VcExchangeRepository(baseRepo);
                         achievementRepo = new Repository.AchievementRepository(baseRepo);
                         serverEventRepo = new Repository.ServerEventRepository(baseRepo);
+                        pokerRepo = new Repository.PokerRepository(baseRepo);
                         // すべてのリポジトリについて
                         // テーブルの存在確認と作成を行う
                         try
@@ -196,6 +200,8 @@ public static class BotHost
                             achievementRepo.EnsureTablesExistAsync().GetAwaiter().GetResult();
 
                             serverEventRepo.EnsureTablesExistAsync().GetAwaiter().GetResult();
+
+                            pokerRepo.EnsureTablesExistAsync().GetAwaiter().GetResult();
 
                             Logger.Info("BotHost: DB テーブル確認・作成完了");
                         }
@@ -271,6 +277,10 @@ public static class BotHost
                 ? null
                 : new Services.BlackjackService(CoinService, RoleService, EventManager, userDataRepo);
 
+            PokerService = CoinService == null
+                ? null
+                : new Services.PokerService(CoinService, pokerRepo);
+
             RouletteService = CoinService == null
                 ? null
                 : new Services.RouletteService(CoinService, eventManager: EventManager);
@@ -314,6 +324,8 @@ public static class BotHost
             Client.ComponentInteractionCreated += BoManager.HandleComponentInteraction;
 
             Client.ComponentInteractionCreated += Commands.BlackjackCommands.HandleComponentInteractionAsync;
+
+            Client.ComponentInteractionCreated += Commands.PokerCommands.HandleComponentInteractionAsync;
 
             Client.ComponentInteractionCreated += Commands.RouletteCommands.HandleComponentInteractionAsync;
 
@@ -376,6 +388,8 @@ public static class BotHost
 
             slash.RegisterCommands<Commands.BlackjackCommands>();
 
+            slash.RegisterCommands<Commands.PokerCommands>();
+
             slash.RegisterCommands<Commands.RouletteCommands>();
 
             slash.RegisterCommands<Commands.DoubleUpCommands>();
@@ -397,6 +411,13 @@ public static class BotHost
             await Client.ConnectAsync();
 
             Logger.Info("BotHost: Discord 接続完了");
+
+            if (PokerService != null)
+            {
+                await PokerService.RestoreAsync();
+                await Commands.PokerCommands.ResyncRestoredGamesAsync(Client, PokerService);
+                Logger.Info("BotHost: Poker卓の復元完了");
+            }
 
             if (RoleService != null)
             {
