@@ -33,9 +33,11 @@ public sealed class PokerRepository
                 settled BOOLEAN NOT NULL DEFAULT FALSE,
                 deck_json JSONB NOT NULL,
                 action_history_json JSONB NOT NULL,
+                bet_round_acted_json JSONB NOT NULL DEFAULT '[]'::jsonb,
                 created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
                 updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
             );
+            ALTER TABLE poker_games ADD COLUMN IF NOT EXISTS bet_round_acted_json JSONB NOT NULL DEFAULT '[]'::jsonb;
             CREATE TABLE IF NOT EXISTS poker_players (
                 table_id VARCHAR(4) NOT NULL REFERENCES poker_games(table_id) ON DELETE CASCADE,
                 user_id BIGINT NOT NULL,
@@ -65,11 +67,11 @@ public sealed class PokerRepository
                 INSERT INTO poker_games (
                     table_id, guild_id, creator_id, coin_rate, channel_id, public_message_id,
                     pot, current_bet, bet_round, phase, current_player_index, winner_text,
-                    settled, deck_json, action_history_json, updated_at
+                    settled, deck_json, action_history_json, bet_round_acted_json, updated_at
                 ) VALUES (
                     @table_id, @guild_id, @creator_id, @coin_rate, @channel_id, @public_message_id,
                     @pot, @current_bet, @bet_round, @phase, @current_player_index, @winner_text,
-                    @settled, @deck_json, @action_history_json, now()
+                    @settled, @deck_json, @action_history_json, @bet_round_acted_json, now()
                 )
                 ON CONFLICT (table_id) DO UPDATE SET
                     guild_id = EXCLUDED.guild_id,
@@ -86,6 +88,7 @@ public sealed class PokerRepository
                     settled = EXCLUDED.settled,
                     deck_json = EXCLUDED.deck_json,
                     action_history_json = EXCLUDED.action_history_json,
+                    bet_round_acted_json = EXCLUDED.bet_round_acted_json,
                     updated_at = now();
                 """, connection, transaction))
             {
@@ -141,7 +144,7 @@ public sealed class PokerRepository
             await using (var gameCommand = new NpgsqlCommand("""
                 SELECT table_id, guild_id, creator_id, coin_rate, channel_id, public_message_id,
                        pot, current_bet, bet_round, phase, current_player_index, winner_text,
-                       settled, deck_json, action_history_json
+                       settled, deck_json, action_history_json, bet_round_acted_json
                 FROM poker_games
                 WHERE settled = FALSE;
                 """, connection, transaction))
@@ -167,6 +170,7 @@ public sealed class PokerRepository
                         Deck = DeserializeQueue<PokerCard>(reader.GetString(13)),
                     };
                     game.ActionHistory.AddRange(Deserialize<List<string>>(reader.GetString(14)));
+                    game.BetRoundActedPlayerIds.UnionWith(Deserialize<List<ulong>>(reader.GetString(15)));
                     games.Add(game.TableId, game);
                 }
             }
@@ -228,6 +232,7 @@ public sealed class PokerRepository
         command.Parameters.AddWithValue("settled", game.Settled);
         AddJsonParameter(command, "deck_json", game.Deck.ToArray());
         AddJsonParameter(command, "action_history_json", game.ActionHistory);
+        AddJsonParameter(command, "bet_round_acted_json", game.BetRoundActedPlayerIds.ToArray());
     }
 
     private static void AddJsonParameter<T>(NpgsqlCommand command, string name, T value)

@@ -260,6 +260,7 @@ public sealed class PokerCommands : ApplicationCommandModule
 
     private static async Task ShowBettingModalAsync(ComponentInteractionCreateEventArgs e, string operation, string tableId)
     {
+        // モーダルはコンポーネント interaction の初回応答として直接表示する。
         await e.Interaction.CreateResponseAsync(
             InteractionResponseType.Modal,
             new DiscordInteractionResponseBuilder()
@@ -269,7 +270,7 @@ public sealed class PokerCommands : ApplicationCommandModule
                     operation == "bet" ? "Bet額" : "レイズ後の合計ベット額",
                     "amount",
                     operation == "bet" ? "例：100" : "例：300",
-                    string.Empty,
+                    null,
                     true,
                     TextInputStyle.Short,
                     1,

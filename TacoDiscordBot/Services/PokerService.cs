@@ -262,6 +262,7 @@ public sealed class PokerService
                 game.BetRound = 2;
                 game.CurrentBet = 0;
                 game.CurrentPlayerIndex = FindNextActivePlayer(game, -1);
+                game.BetRoundActedPlayerIds.Clear();
                 foreach (var active in game.Players)
                     active.CurrentBet = 0;
             }
@@ -397,6 +398,9 @@ public sealed class PokerService
     {
         player.ActionHistory.Add($"{action.ToDisplayString(added)}");
         game.ActionHistory.Add($"{player.DisplayName}：{player.ActionHistory[^1]}");
+        if (action is PokerAction.Bet or PokerAction.Raise or PokerAction.AllIn)
+            game.BetRoundActedPlayerIds.Clear();
+        game.BetRoundActedPlayerIds.Add(player.UserId);
         if (game.Players.Count(active => !active.Folded) == 1)
         {
             FinishGame(game);
@@ -404,12 +408,16 @@ public sealed class PokerService
         }
 
         var activePlayers = game.Players.Where(active => !active.Folded).ToList();
-        if (activePlayers.All(active => active.AllIn || active.CurrentBet == game.CurrentBet))
+        var allPlayersActed = activePlayers
+            .Where(active => !active.AllIn)
+            .All(active => game.BetRoundActedPlayerIds.Contains(active.UserId));
+        if (allPlayersActed && activePlayers.All(active => active.AllIn || active.CurrentBet == game.CurrentBet))
         {
             if (game.Phase == PokerPhase.BetRound1)
             {
                 game.Phase = PokerPhase.Exchange;
                 game.CurrentPlayerIndex = -1;
+                game.BetRoundActedPlayerIds.Clear();
                 return;
             }
             FinishGame(game);

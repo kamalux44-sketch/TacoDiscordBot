@@ -67,6 +67,7 @@ public sealed class PokerGame
     public List<PokerPlayer> Players { get; } = [];
     public Queue<PokerCard> Deck { get; set; } = new();
     public List<string> ActionHistory { get; } = [];
+    public HashSet<ulong> BetRoundActedPlayerIds { get; } = [];
     public string? WinnerText { get; set; }
     public bool Settled { get; set; }
 }
