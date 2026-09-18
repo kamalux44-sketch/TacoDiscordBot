@@ -37,6 +37,8 @@ public static class BotHost
 
     public static Services.LastChanceService LastChanceService { get; private set; }
 
+    public static Services.ReversiService ReversiService { get; private set; }
+
     public static Services.VcExchangeService VcExchangeService { get; private set; }
 
     public static Services.RoleService RoleService { get; private set; }
@@ -283,6 +285,8 @@ public static class BotHost
                 ? null
                 : new Services.LastChanceService(userDataRepo, roleService: RoleService);
 
+            ReversiService = new Services.ReversiService();
+
             SlotService = slotRepo == null || CoinService == null
                 ? null
                 : new Services.SlotService(slotRepo, CoinService, RoleService, EventManager);
@@ -313,6 +317,8 @@ public static class BotHost
             Client.ComponentInteractionCreated += Commands.MinesCommands.HandleComponentInteractionAsync;
 
             Client.ComponentInteractionCreated += Commands.LastChanceCommands.HandleComponentInteractionAsync;
+
+            Client.ComponentInteractionCreated += Commands.ReversiCommands.HandleComponentInteractionAsync;
 
             Client.ComponentInteractionCreated += Commands.CoinCommands.HandleExchangeComponentInteractionAsync;
 
@@ -372,6 +378,8 @@ public static class BotHost
             slash.RegisterCommands<Commands.MinesCommands>();
 
             slash.RegisterCommands<Commands.LastChanceCommands>();
+
+            slash.RegisterCommands<Commands.ReversiCommands>();
 
             slash.RegisterCommands<Commands.CoinCommands>();
 
