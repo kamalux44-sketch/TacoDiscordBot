@@ -326,6 +326,7 @@ public static class BotHost
             Client.ComponentInteractionCreated += Commands.BlackjackCommands.HandleComponentInteractionAsync;
 
             Client.ComponentInteractionCreated += Commands.PokerCommands.HandleComponentInteractionAsync;
+            Client.ModalSubmitted += Commands.PokerCommands.HandleModalSubmitAsync;
 
             Client.ComponentInteractionCreated += Commands.RouletteCommands.HandleComponentInteractionAsync;
 
