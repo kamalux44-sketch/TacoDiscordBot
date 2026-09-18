@@ -118,26 +118,17 @@ public sealed class ReversiGame
         if (Status != ReversiGameStatus.Playing || !validMoves.Contains(move))
             return false;
 
-        var source = RedMoves.Contains(move) ? RedMoves : GreenMoves.Contains(move) ? GreenMoves : null;
-        if (source == null)
-            return false;
-
-        var numbered = NumberedMoves.ToList();
-        if (numbered.Count >= MaximumMovesPerGroup)
+        if (RedMoves.Contains(move))
         {
-            displaced = numbered[0];
-            numbered[0] = move;
-            var displacedGroup = source == RedMoves ? RedMoves.ToList() : GreenMoves.ToList();
-            displacedGroup.Remove(move);
-            displacedGroup.Add(displaced);
-            SetGroups(numbered, source == RedMoves ? displacedGroup : RedMoves, source == GreenMoves ? displacedGroup : GreenMoves);
+            SetGroups(RedMoves, NumberedMoves, GreenMoves);
+        }
+        else if (GreenMoves.Contains(move))
+        {
+            SetGroups(GreenMoves, RedMoves, NumberedMoves);
         }
         else
         {
-            var red = RedMoves.Where(item => item != move).ToList();
-            var green = GreenMoves.Where(item => item != move).ToList();
-            numbered.Insert(0, move);
-            SetGroups(numbered, red, green);
+            return false;
         }
 
         BoardVersion++;
