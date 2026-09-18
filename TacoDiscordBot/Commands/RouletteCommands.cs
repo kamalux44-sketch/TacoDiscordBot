@@ -1,6 +1,5 @@
 using System;
 using System.IO;
-using System.Linq;
 using System.Threading.Tasks;
 using DSharpPlus;
 using DSharpPlus.Entities;
@@ -13,7 +12,13 @@ namespace TacoDiscordBot.Commands;
 public sealed class RouletteCommands : ApplicationCommandModule
 {
     private const string CustomIdPrefix = "roulette:select";
+    private const string SelectionImageFileName = "roulette.jpg";
     private static readonly int[] SelectableNumbers = [1, 3, 5, 10, 20];
+    private static readonly string SelectionImagePath = Path.Combine(
+        AppContext.BaseDirectory,
+        "Contents",
+        SelectionImageFileName
+    );
     private static readonly string SpinAnimationPath = Path.Combine(
         AppContext.BaseDirectory,
         "Contents",
@@ -54,10 +59,12 @@ public sealed class RouletteCommands : ApplicationCommandModule
                 );
             }
 
+            await using var stream = File.OpenRead(SelectionImagePath);
             await ctx.CreateResponseAsync(
                 InteractionResponseType.ChannelMessageWithSource,
                 new DiscordInteractionResponseBuilder()
                     .AddEmbed(CreateSelectionEmbed(bet, service))
+                    .AddFile(SelectionImageFileName, stream, true)
                     .AddComponents(new DiscordComponent[]
                     {
                         buttons[0], buttons[1], buttons[2], buttons[3], buttons[4]
@@ -141,6 +148,7 @@ public sealed class RouletteCommands : ApplicationCommandModule
     {
         var embed = new DiscordEmbedBuilder()
             .WithTitle("🎲 ルーレットチャレンジ")
+            .WithImageUrl($"attachment://{SelectionImageFileName}")
             .WithDescription(
                 "ボタンで予想する数字を選んでください。\n"
                 + "的中すると、賭け金に倍率を掛けた Scrap を獲得できます。"
@@ -150,11 +158,10 @@ public sealed class RouletteCommands : ApplicationCommandModule
 
         foreach (var number in SelectableNumbers)
         {
-            var occurrenceCount = service.Configuration.Wheel.Count(value => value == number);
             var multiplier = service.Configuration.PayoutMultipliers[number];
             embed.AddField(
                 $"数字 {number}",
-                $"出現率 **{occurrenceCount}/25**\n配当 **×{multiplier}**",
+                $"配当 **×{multiplier}**",
                 true
             );
         }
