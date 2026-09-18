@@ -47,8 +47,14 @@ public sealed class PokerRepository
                 all_in BOOLEAN NOT NULL DEFAULT FALSE,
                 hand_json JSONB NOT NULL,
                 action_history_json JSONB NOT NULL,
+                dm_channel_id BIGINT NULL,
+                dm_public_message_id BIGINT NULL,
+                dm_hand_message_id BIGINT NULL,
                 PRIMARY KEY (table_id, user_id)
             );
+            ALTER TABLE poker_players ADD COLUMN IF NOT EXISTS dm_channel_id BIGINT NULL;
+            ALTER TABLE poker_players ADD COLUMN IF NOT EXISTS dm_public_message_id BIGINT NULL;
+            ALTER TABLE poker_players ADD COLUMN IF NOT EXISTS dm_hand_message_id BIGINT NULL;
             """);
 
     public async Task SaveAsync(PokerGame game)
@@ -99,10 +105,12 @@ public sealed class PokerRepository
                 await using var playerCommand = new NpgsqlCommand("""
                     INSERT INTO poker_players (
                         table_id, user_id, display_name, chips, folded, exchanged,
-                        current_bet, all_in, hand_json, action_history_json
+                        current_bet, all_in, hand_json, action_history_json,
+                        dm_channel_id, dm_public_message_id, dm_hand_message_id
                     ) VALUES (
                         @table_id, @user_id, @display_name, @chips, @folded, @exchanged,
-                        @current_bet, @all_in, @hand_json, @action_history_json
+                        @current_bet, @all_in, @hand_json, @action_history_json,
+                        @dm_channel_id, @dm_public_message_id, @dm_hand_message_id
                     );
                     """, connection, transaction);
                 playerCommand.Parameters.AddWithValue("table_id", game.TableId);
@@ -113,6 +121,9 @@ public sealed class PokerRepository
                 playerCommand.Parameters.AddWithValue("exchanged", player.Exchanged);
                 playerCommand.Parameters.AddWithValue("current_bet", player.CurrentBet);
                 playerCommand.Parameters.AddWithValue("all_in", player.AllIn);
+                playerCommand.Parameters.AddWithValue("dm_channel_id", player.DirectMessageChannelId.HasValue ? (object)(long)player.DirectMessageChannelId.Value : DBNull.Value);
+                playerCommand.Parameters.AddWithValue("dm_public_message_id", player.DirectPublicMessageId.HasValue ? (object)(long)player.DirectPublicMessageId.Value : DBNull.Value);
+                playerCommand.Parameters.AddWithValue("dm_hand_message_id", player.DirectHandMessageId.HasValue ? (object)(long)player.DirectHandMessageId.Value : DBNull.Value);
                 AddJsonParameter(playerCommand, "hand_json", player.Hand);
                 AddJsonParameter(playerCommand, "action_history_json", player.ActionHistory);
                 await playerCommand.ExecuteNonQueryAsync();
@@ -163,6 +174,7 @@ public sealed class PokerRepository
             await using (var playerCommand = new NpgsqlCommand("""
                 SELECT table_id, user_id, display_name, chips, folded, exchanged,
                        current_bet, all_in, hand_json, action_history_json
+                       , dm_channel_id, dm_public_message_id, dm_hand_message_id
                 FROM poker_players
                 WHERE table_id = ANY(@table_ids)
                 ORDER BY table_id, user_id;
@@ -179,7 +191,10 @@ public sealed class PokerRepository
                         Folded = reader.GetBoolean(4),
                         Exchanged = reader.GetBoolean(5),
                         CurrentBet = reader.GetInt64(6),
-                        AllIn = reader.GetBoolean(7)
+                        AllIn = reader.GetBoolean(7),
+                        DirectMessageChannelId = reader.IsDBNull(10) ? null : (ulong?)reader.GetInt64(10),
+                        DirectPublicMessageId = reader.IsDBNull(11) ? null : (ulong?)reader.GetInt64(11),
+                        DirectHandMessageId = reader.IsDBNull(12) ? null : (ulong?)reader.GetInt64(12)
                     };
                     player.Hand.AddRange(Deserialize<List<PokerCard>>(reader.GetString(8)));
                     player.ActionHistory.AddRange(Deserialize<List<string>>(reader.GetString(9)));

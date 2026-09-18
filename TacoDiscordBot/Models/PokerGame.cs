@@ -37,6 +37,9 @@ public sealed class PokerPlayer
     public long CurrentBet { get; set; }
     public bool AllIn { get; set; }
     public List<string> ActionHistory { get; } = [];
+    public ulong? DirectMessageChannelId { get; set; }
+    public ulong? DirectPublicMessageId { get; set; }
+    public ulong? DirectHandMessageId { get; set; }
 }
 
 public sealed class PokerGame

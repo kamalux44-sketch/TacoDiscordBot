@@ -80,8 +80,7 @@ public sealed class PokerCommands : ApplicationCommandModule
                     }
                     else
                     {
-                        await message.ModifyAsync(
-                            CreatePublicMessageBuilder(snapshot, snapshot.Phase == PokerPhase.Waiting));
+                        await UpdateMessagesAsync(client, service, game, snapshot);
                     }
                 }
                 catch (Exception ex)
@@ -193,7 +192,7 @@ public sealed class PokerCommands : ApplicationCommandModule
             AddPrivateComponents(privateBuilder, privateSnapshot, 0);
             await e.Interaction.EditOriginalResponseAsync(privateBuilder);
 
-            await UpdatePublicAsync(client, result.Game, service.GetSnapshot(parts[2]));
+            await UpdateMessagesAsync(client, service, result.Game, service.GetSnapshot(parts[2]));
         }
         catch (ArgumentException ex)
         {
@@ -213,7 +212,7 @@ public sealed class PokerCommands : ApplicationCommandModule
         var result = await service.JoinAsync(tableId, e.Interaction.User.Id, e.Interaction.User.Username);
         await e.Interaction.EditOriginalResponseAsync(
             CreatePublicWebhookBuilder(service.GetSnapshot(tableId), includeJoin: true));
-        await UpdatePublicAsync(client, result.Game, service.GetSnapshot(tableId));
+        await UpdateMessagesAsync(client, service, result.Game, service.GetSnapshot(tableId));
     }
 
     private static async Task StartAsync(DiscordClient client, ComponentInteractionCreateEventArgs e, PokerService service, string tableId)
@@ -222,15 +221,7 @@ public sealed class PokerCommands : ApplicationCommandModule
         await e.Interaction.EditOriginalResponseAsync(
             CreatePublicWebhookBuilder(service.GetSnapshot(tableId), includeJoin: false));
 
-        // 開始者が最初の手番なら、手札と操作ボタンを本人だけへ表示する。
-        if (game.CurrentPlayerIndex >= 0
-            && game.Players[game.CurrentPlayerIndex].UserId == e.Interaction.User.Id)
-        {
-            await e.Interaction.CreateFollowupMessageAsync(
-                CreatePrivateFollowupBuilder(service.GetPrivateSnapshot(tableId, e.Interaction.User.Id), 0)
-                    .AsEphemeral(true));
-        }
-        await UpdatePublicAsync(client, game, service.GetSnapshot(tableId));
+        await UpdateMessagesAsync(client, service, game, service.GetSnapshot(tableId));
     }
 
     private static async Task ToggleCardAsync(ComponentInteractionCreateEventArgs e, PokerService service, string tableId, int cardIndex, int mask)
@@ -248,7 +239,7 @@ public sealed class PokerCommands : ApplicationCommandModule
         var result = await service.ExchangeAsync(tableId, e.Interaction.User.Id, indexes);
         await e.Interaction.EditOriginalResponseAsync(
             CreatePrivateWebhookBuilder(service.GetPrivateSnapshot(tableId, e.Interaction.User.Id), 0));
-        await UpdatePublicAsync(client, result.Game, service.GetSnapshot(tableId));
+        await UpdateMessagesAsync(client, service, result.Game, service.GetSnapshot(tableId));
     }
 
     private static async Task ActionAsync(DiscordClient client, ComponentInteractionCreateEventArgs e, PokerService service, string[] parts)
@@ -264,7 +255,7 @@ public sealed class PokerCommands : ApplicationCommandModule
             CreatePrivateWebhookBuilder(service.GetPrivateSnapshot(parts[2], e.Interaction.User.Id), 0));
         if (result.Finished)
             await service.SettleAsync(parts[2]);
-        await UpdatePublicAsync(client, result.Game, service.GetSnapshot(parts[2]));
+        await UpdateMessagesAsync(client, service, result.Game, service.GetSnapshot(parts[2]));
     }
 
     private static async Task ShowBettingModalAsync(ComponentInteractionCreateEventArgs e, string operation, string tableId)
@@ -311,13 +302,99 @@ public sealed class PokerCommands : ApplicationCommandModule
             builder.AsEphemeral(true));
     }
 
-    private static async Task UpdatePublicAsync(DiscordClient client, PokerGame game, PokerGameSnapshot snapshot)
+    private static async Task UpdateMessagesAsync(
+        DiscordClient client,
+        PokerService service,
+        PokerGame game,
+        PokerGameSnapshot snapshot)
     {
         if (!game.PublicMessageId.HasValue)
             return;
+
         var channel = await client.GetChannelAsync(game.ChannelId);
         var message = await channel.GetMessageAsync(game.PublicMessageId.Value);
         await message.ModifyAsync(CreatePublicMessageBuilder(snapshot, snapshot.Phase == PokerPhase.Waiting));
+
+        DiscordGuild? guild = null;
+        foreach (var player in game.Players)
+        {
+            try
+            {
+                DiscordChannel dmChannel;
+                if (player.DirectMessageChannelId.HasValue)
+                {
+                    dmChannel = await client.GetChannelAsync(player.DirectMessageChannelId.Value);
+                }
+                else
+                {
+                    guild ??= await client.GetGuildAsync(game.GuildId);
+                    var member = await guild.GetMemberAsync(player.UserId);
+                    dmChannel = await member.CreateDmChannelAsync();
+                }
+
+                var directPublicMessage = await GetMessageOrNullAsync(
+                    dmChannel,
+                    player.DirectPublicMessageId);
+                if (directPublicMessage == null)
+                {
+                    directPublicMessage = await dmChannel.SendMessageAsync(
+                        CreateDirectPublicMessageBuilder(snapshot));
+                }
+                else
+                {
+                    await directPublicMessage.ModifyAsync(
+                        CreateDirectPublicMessageBuilder(snapshot));
+                }
+
+                var handMessage = await GetMessageOrNullAsync(
+                    dmChannel,
+                    player.DirectHandMessageId);
+                var handBuilder = CreatePrivateMessageBuilder(
+                    service.GetPrivateSnapshot(game.TableId, player.UserId),
+                    0);
+                if (handMessage == null)
+                {
+                    handMessage = await dmChannel.SendMessageAsync(handBuilder);
+                }
+                else
+                {
+                    await handMessage.ModifyAsync(handBuilder);
+                }
+
+                if (player.DirectMessageChannelId != dmChannel.Id
+                    || player.DirectPublicMessageId != directPublicMessage.Id
+                    || player.DirectHandMessageId != handMessage.Id)
+                {
+                    await service.SetPlayerDirectMessageIdsAsync(
+                        game.TableId,
+                        player.UserId,
+                        dmChannel.Id,
+                        directPublicMessage.Id,
+                        handMessage.Id);
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Error(ex, "Poker参加者DMの同期に失敗しました。user={UserId} table={TableId}", player.UserId, game.TableId);
+            }
+        }
+    }
+
+    private static async Task<DiscordMessage?> GetMessageOrNullAsync(
+        DiscordChannel channel,
+        ulong? messageId)
+    {
+        if (!messageId.HasValue)
+            return null;
+
+        try
+        {
+            return await channel.GetMessageAsync(messageId.Value);
+        }
+        catch (DSharpPlus.Exceptions.NotFoundException)
+        {
+            return null;
+        }
     }
 
     private static DiscordInteractionResponseBuilder CreatePublicBuilder(PokerGameSnapshot snapshot, bool includeJoin)
@@ -332,6 +409,10 @@ public sealed class PokerCommands : ApplicationCommandModule
         => new DiscordMessageBuilder()
             .AddEmbed(CreatePublicEmbed(snapshot))
             .AddComponents(CreatePublicComponents(snapshot, includeJoin));
+
+    private static DiscordMessageBuilder CreateDirectPublicMessageBuilder(PokerGameSnapshot snapshot)
+        => new DiscordMessageBuilder()
+            .AddEmbed(CreatePublicEmbed(snapshot));
 
     private static DiscordWebhookBuilder CreatePublicWebhookBuilder(PokerGameSnapshot snapshot, bool includeJoin)
         => new DiscordWebhookBuilder()
@@ -372,16 +453,20 @@ public sealed class PokerCommands : ApplicationCommandModule
             if (snapshot.Players.Count >= PokerService.MinPlayers)
                 components.Add(new DiscordButtonComponent(ButtonStyle.Primary, $"{Prefix}start:{snapshot.TableId}", "開始"));
         }
-        else
-        {
-            components.Add(new DiscordButtonComponent(ButtonStyle.Primary, $"{Prefix}refresh:{snapshot.TableId}", "🔄 手札を再表示"));
-        }
         return components.ToArray();
     }
 
     private static DiscordWebhookBuilder CreatePrivateWebhookBuilder(PokerPrivateSnapshot snapshot, int selectedMask)
     {
         var builder = new DiscordWebhookBuilder()
+            .WithContent(CreatePrivateContent(snapshot, selectedMask));
+        AddPrivateComponents(builder, snapshot, selectedMask);
+        return builder;
+    }
+
+    private static DiscordMessageBuilder CreatePrivateMessageBuilder(PokerPrivateSnapshot snapshot, int selectedMask)
+    {
+        var builder = new DiscordMessageBuilder()
             .WithContent(CreatePrivateContent(snapshot, selectedMask));
         AddPrivateComponents(builder, snapshot, selectedMask);
         return builder;
@@ -397,6 +482,14 @@ public sealed class PokerCommands : ApplicationCommandModule
 
     private static void AddPrivateComponents(
         DiscordInteractionResponseBuilder builder,
+        PokerPrivateSnapshot snapshot,
+        int selectedMask)
+    {
+        AddPrivateComponentRows(CreatePrivateComponents(snapshot, selectedMask), row => { builder.AddComponents(row); });
+    }
+
+    private static void AddPrivateComponents(
+        DiscordMessageBuilder builder,
         PokerPrivateSnapshot snapshot,
         int selectedMask)
     {

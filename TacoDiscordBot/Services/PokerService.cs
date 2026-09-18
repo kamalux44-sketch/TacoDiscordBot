@@ -22,6 +22,29 @@ public sealed class PokerService
         _repository = repository;
     }
 
+    public async Task SetPlayerDirectMessageIdsAsync(
+        string tableId,
+        ulong userId,
+        ulong channelId,
+        ulong publicMessageId,
+        ulong handMessageId)
+    {
+        var game = GetGame(tableId);
+        await EnterLockAsync(game);
+        try
+        {
+            var player = GetPlayer(game, userId);
+            player.DirectMessageChannelId = channelId;
+            player.DirectPublicMessageId = publicMessageId;
+            player.DirectHandMessageId = handMessageId;
+            await PersistAsync(game);
+        }
+        finally
+        {
+            gameLock.Release();
+        }
+    }
+
     public async Task CloseDueToMissingPublicMessageAsync(string tableId)
     {
         var game = GetGame(tableId);
