@@ -314,7 +314,9 @@ public sealed class PokerService
         ValidateBetAmount(target, MinimumBet);
         if (game.CurrentBet != 0 || target > player.Chips)
             throw new InvalidOperationException("Bet額が不正です。");
-        return AddToTarget(player, target);
+        var added = AddToTarget(player, target);
+        game.CurrentBet = target;
+        return added;
     }
 
     private static long Call(PokerGame game, PokerPlayer player)
@@ -330,7 +332,9 @@ public sealed class PokerService
         ValidateBetAmount(target, game.CurrentBet + MinimumRaise);
         if (target > player.Chips + player.CurrentBet)
             throw new InvalidOperationException("Raise額が所持Chipを超えています。");
-        return AddToTarget(player, target);
+        var added = AddToTarget(player, target);
+        game.CurrentBet = target;
+        return added;
     }
 
     private static long Fold(PokerGame game, PokerPlayer player)
@@ -345,6 +349,7 @@ public sealed class PokerService
         if (target < game.CurrentBet && game.CurrentBet - target > player.Chips)
             throw new InvalidOperationException("Side PotなしではこのAll-inを処理できません。");
         var added = AddToTarget(player, target);
+        game.CurrentBet = Math.Max(game.CurrentBet, target);
         player.AllIn = true;
         return added;
     }
