@@ -182,11 +182,11 @@ public sealed class PokerCommands : ApplicationCommandModule
 
             var action = operation == "bet" ? PokerAction.Bet : PokerAction.Raise;
             var result = await service.ActAsync(parts[2], e.Interaction.User.Id, action, amount);
+            var actionText = operation == "bet" ? "Betしました。" : "レイズしました。";
             if (result.Finished)
             {
-                var finalPrivateSnapshot = service.GetPrivateSnapshot(parts[2], e.Interaction.User.Id);
                 await e.Interaction.EditOriginalResponseAsync(
-                    new DiscordWebhookBuilder().WithContent(CreatePrivateContent(finalPrivateSnapshot, 0)));
+                    new DiscordWebhookBuilder().WithContent(actionText));
                 var finalSnapshot = service.GetSnapshot(parts[2]);
                 try
                 {
@@ -199,11 +199,8 @@ public sealed class PokerCommands : ApplicationCommandModule
                 return;
             }
 
-            var privateSnapshot = service.GetPrivateSnapshot(parts[2], e.Interaction.User.Id);
-            var actionText = operation == "bet" ? "Betしました。" : "レイズしました。";
             var privateBuilder = new DiscordWebhookBuilder()
-                .WithContent($"{actionText}\n\n" + CreatePrivateContent(privateSnapshot, 0));
-            AddPrivateComponents(privateBuilder, privateSnapshot, 0);
+                .WithContent(actionText);
             await e.Interaction.EditOriginalResponseAsync(privateBuilder);
 
             await UpdateMessagesAsync(client, service, result.Game, service.GetSnapshot(parts[2]));
