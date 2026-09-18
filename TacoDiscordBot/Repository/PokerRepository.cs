@@ -199,7 +199,11 @@ public sealed class PokerRepository
         command.Parameters.AddWithValue("creator_id", (long)game.CreatorId);
         command.Parameters.AddWithValue("coin_rate", game.CoinRate);
         command.Parameters.AddWithValue("channel_id", (long)game.ChannelId);
-        command.Parameters.AddWithValue("public_message_id", (object?)game.PublicMessageId ?? DBNull.Value);
+        command.Parameters.AddWithValue(
+            "public_message_id",
+            game.PublicMessageId.HasValue
+                ? (object)(long)game.PublicMessageId.Value
+                : DBNull.Value);
         command.Parameters.AddWithValue("pot", game.Pot);
         command.Parameters.AddWithValue("current_bet", game.CurrentBet);
         command.Parameters.AddWithValue("bet_round", game.BetRound);
