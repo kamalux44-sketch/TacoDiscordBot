@@ -40,6 +40,8 @@ public sealed class AchievementRepository
                 user_id BIGINT NOT NULL,
                 bankruptcy_count BIGINT NOT NULL DEFAULT 0,
                 rare_slot_count BIGINT NOT NULL DEFAULT 0,
+                hot_slot_watermelon_count BIGINT NOT NULL DEFAULT 0,
+                mega_jackpot_count BIGINT NOT NULL DEFAULT 0,
                 max_mines_safe_count BIGINT NOT NULL DEFAULT 0,
                 lastchance_jackpot_count BIGINT NOT NULL DEFAULT 0,
                 lastchance_zero_count BIGINT NOT NULL DEFAULT 0,
@@ -51,6 +53,8 @@ public sealed class AchievementRepository
             ALTER TABLE user_achievement_stats ADD COLUMN IF NOT EXISTS lastchance_zero_count BIGINT NOT NULL DEFAULT 0;
             ALTER TABLE user_achievement_stats ADD COLUMN IF NOT EXISTS blackjack_win_streak BIGINT NOT NULL DEFAULT 0;
             ALTER TABLE user_achievement_stats ADD COLUMN IF NOT EXISTS blackjack_loss_streak BIGINT NOT NULL DEFAULT 0;
+            ALTER TABLE user_achievement_stats ADD COLUMN IF NOT EXISTS hot_slot_watermelon_count BIGINT NOT NULL DEFAULT 0;
+            ALTER TABLE user_achievement_stats ADD COLUMN IF NOT EXISTS mega_jackpot_count BIGINT NOT NULL DEFAULT 0;
             ALTER TABLE achievement_definitions ADD COLUMN IF NOT EXISTS group_key TEXT NULL;
             UPDATE achievement_definitions
             SET group_key = CASE role_name
@@ -110,7 +114,10 @@ public sealed class AchievementRepository
                 ('全戦全勝', 'blackjack_win_streak', 'blackjack_win', 20, 'normal', 'ブラックジャック20連勝'),
                 ('負け癖', 'blackjack_loss_streak', 'blackjack_loss', 5, 'normal', 'ブラックジャック5連敗'),
                 ('負け街道', 'blackjack_loss_streak', 'blackjack_loss', 10, 'normal', 'ブラックジャック10連敗'),
-                ('底なし沼', 'blackjack_loss_streak', 'blackjack_loss', 20, 'normal', 'ブラックジャック20連敗')
+                ('底なし沼', 'blackjack_loss_streak', 'blackjack_loss', 20, 'normal', 'ブラックジャック20連敗'),
+                ('🤔幸運？それとも悪運？', 'hot_slot_watermelon_count', 'hot_slot_watermelon', 1, 'rare', '激アツスロット中に確率が一番低い🍉を3つ揃える'),
+                ('🪽超奇跡的回避', 'mines_safe_count', 'mines_safe', 16, 'rare', 'Minesで安全マスを16個開放する'),
+                ('⚜️確率の超越', 'mega_jackpot_count', 'mega_jackpot', 1, 'rare', 'スロットで7️⃣を3つ揃える')
             ON CONFLICT (condition_type, threshold, role_name) DO NOTHING;
             """;
         await _base.ExecuteNonQueryAsync(sql);
@@ -225,6 +232,8 @@ public sealed class AchievementRepository
                 UPDATE user_achievement_stats
                 SET bankruptcy_count = CASE WHEN @condition_type = 'bankruptcy_count' THEN bankruptcy_count + @amount ELSE bankruptcy_count END,
                     rare_slot_count = CASE WHEN @condition_type = 'rare_slot_count' THEN rare_slot_count + @amount ELSE rare_slot_count END,
+                    hot_slot_watermelon_count = CASE WHEN @condition_type = 'hot_slot_watermelon_count' THEN hot_slot_watermelon_count + @amount ELSE hot_slot_watermelon_count END,
+                    mega_jackpot_count = CASE WHEN @condition_type = 'mega_jackpot_count' THEN mega_jackpot_count + @amount ELSE mega_jackpot_count END,
                     max_mines_safe_count = CASE WHEN @condition_type = 'mines_safe_count' THEN GREATEST(max_mines_safe_count, @amount) ELSE max_mines_safe_count END,
                     lastchance_jackpot_count = CASE WHEN @condition_type = 'lastchance_jackpot_count' THEN lastchance_jackpot_count + @amount ELSE lastchance_jackpot_count END,
                     lastchance_zero_count = CASE WHEN @condition_type = 'lastchance_zero_count' THEN lastchance_zero_count + @amount ELSE lastchance_zero_count END,
@@ -257,7 +266,8 @@ public sealed class AchievementRepository
         {
             dynamic command = connection.CreateCommand();
             command.CommandText = """
-                SELECT bankruptcy_count, rare_slot_count, max_mines_safe_count,
+                SELECT bankruptcy_count, rare_slot_count, hot_slot_watermelon_count,
+                       mega_jackpot_count, max_mines_safe_count,
                        lastchance_jackpot_count, lastchance_zero_count,
                        blackjack_win_streak, blackjack_loss_streak
                 FROM user_achievement_stats
@@ -272,11 +282,13 @@ public sealed class AchievementRepository
                 {
                     BankruptcyCount = reader.GetInt64(0),
                     RareSlotCount = reader.GetInt64(1),
-                    MaxMinesSafeCount = reader.GetInt64(2),
-                    LastChanceJackpotCount = reader.GetInt64(3),
-                    LastChanceZeroCount = reader.GetInt64(4),
-                    BlackjackWinStreak = reader.GetInt64(5),
-                    BlackjackLossStreak = reader.GetInt64(6)
+                    HotSlotWatermelonCount = reader.GetInt64(2),
+                    MegaJackpotCount = reader.GetInt64(3),
+                    MaxMinesSafeCount = reader.GetInt64(4),
+                    LastChanceJackpotCount = reader.GetInt64(5),
+                    LastChanceZeroCount = reader.GetInt64(6),
+                    BlackjackWinStreak = reader.GetInt64(7),
+                    BlackjackLossStreak = reader.GetInt64(8)
                 };
             }
             await reader.DisposeAsync();

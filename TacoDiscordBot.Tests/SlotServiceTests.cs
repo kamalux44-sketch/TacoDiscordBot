@@ -17,6 +17,7 @@ public sealed class SlotServiceTests
     public void 通常絵柄の3つ揃いをWINに判定する()
     {
         Assert.Equal(SlotWinRank.Win, SlotService.DetermineRank(["🍒", "🍒", "🍒"]));
+        Assert.Equal(SlotWinRank.Win, SlotService.DetermineRank(["🍉", "🍉", "🍉"]));
     }
 
     [Fact]

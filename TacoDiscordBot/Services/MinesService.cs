@@ -12,6 +12,7 @@ namespace TacoDiscordBot.Services;
 public sealed class MinesService
 {
     private const int MinimumBet = 1;
+    private const int MiracleSafeCount = 16;
     private readonly ICoinService _coinService;
     private readonly ConcurrentDictionary<string, MinesGame> _games = new();
     private readonly Func<IReadOnlyCollection<int>> _createBombs;
@@ -90,6 +91,9 @@ public sealed class MinesService
                 game.SafeOpenedCount,
                 updateRoles: false
             );
+
+        if (_roleService != null && game.SafeOpenedCount >= MiracleSafeCount)
+            await _roleService.RefreshUserRolesAsync(guildId, userId);
 
         if (game.Bombs.Contains(index))
         {

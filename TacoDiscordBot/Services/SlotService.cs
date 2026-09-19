@@ -61,7 +61,8 @@ public sealed class SlotService
             throw new ArgumentOutOfRangeException(nameof(bet), "ベットは1以上で指定してください。");
 
         await _coinService.RemoveCoinsAsync(guildId, userId, bet);
-        var symbols = DrawSymbols(_eventManager?.GetActiveEvent(guildId)?.Type == EventType.HotSlot);
+        var isHotSlot = _eventManager?.GetActiveEvent(guildId)?.Type == EventType.HotSlot;
+        var symbols = DrawSymbols(isHotSlot);
         var rank = DetermineRank(symbols);
         var payout = CalculatePayout(bet, symbols, rank);
         // 払い戻しが発生しないリーチは、敗北として扱います。
@@ -81,10 +82,19 @@ public sealed class SlotService
         if (payout > 0)
             await _coinService.AddCoinsAsync(guildId, userId, payout);
 
-        if (_roleService != null && rank is SlotWinRank.MegaJackpot or SlotWinRank.UltraRare or SlotWinRank.BigWin)
-            await _roleService.RecordEventAsync(guildId, userId, "rare_slot_count");
-        else if (_roleService != null)
+        if (_roleService != null)
+        {
+            if (rank is SlotWinRank.MegaJackpot or SlotWinRank.UltraRare or SlotWinRank.BigWin)
+                await _roleService.RecordEventAsync(guildId, userId, "rare_slot_count", updateRoles: false);
+
+            if (rank == SlotWinRank.MegaJackpot)
+                await _roleService.RecordEventAsync(guildId, userId, "mega_jackpot_count", updateRoles: false);
+
+            if (isHotSlot && symbols.All(symbol => symbol == "🍉"))
+                await _roleService.RecordEventAsync(guildId, userId, "hot_slot_watermelon_count", updateRoles: false);
+
             await _roleService.RefreshUserRolesAsync(guildId, userId);
+        }
 
         // 各リールの確定結果を順番に通知し、呼び出し側で表示を更新します。
         if (onReelRevealed != null)

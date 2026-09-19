@@ -231,6 +231,8 @@ public sealed class RoleService
         {
             "bankruptcy_count" => stats.BankruptcyCount >= definition.Threshold,
             "rare_slot_count" => stats.RareSlotCount >= definition.Threshold,
+            "hot_slot_watermelon_count" => stats.HotSlotWatermelonCount >= definition.Threshold,
+            "mega_jackpot_count" => stats.MegaJackpotCount >= definition.Threshold,
             "mines_safe_count" => stats.MaxMinesSafeCount >= definition.Threshold,
             "lastchance_jackpot_count" => stats.LastChanceJackpotCount >= definition.Threshold,
             "lastchance_zero_count" => stats.LastChanceZeroCount >= definition.Threshold,

@@ -6,6 +6,10 @@ public sealed class AchievementStats
 
     public long RareSlotCount { get; init; }
 
+    public long HotSlotWatermelonCount { get; init; }
+
+    public long MegaJackpotCount { get; init; }
+
     public long MaxMinesSafeCount { get; init; }
 
     public long LastChanceJackpotCount { get; init; }
