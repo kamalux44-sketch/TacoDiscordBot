@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using DSharpPlus;
+using DSharpPlus.Entities;
 using TacoDiscordBot.Models;
 using TacoDiscordBot.Repository;
 using TacoDiscordBot.Services.Interface;
@@ -37,9 +38,11 @@ public sealed class ShopService
         }
 
         var guild = await _client.GetGuildAsync(guildId);
-        var role = guild.Roles.Values.FirstOrDefault(item => item.Name == definition.RoleName);
-        if (role == null)
-            return new ShopPurchaseResult { Status = ShopPurchaseStatus.RoleNotFound };
+        var role = guild.Roles.Values.FirstOrDefault(item => item.Name == definition.RoleName)
+            ?? await guild.CreateRoleAsync(
+                definition.RoleName,
+                color: new DiscordColor(definition.ColorHex),
+                reason: "ショップ購入ロールの作成");
 
         var member = await guild.GetMemberAsync(userId);
         if (member.Roles.Any(item => item.Id == role.Id))
