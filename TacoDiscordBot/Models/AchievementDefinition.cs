@@ -8,6 +8,14 @@ public sealed class AchievementDefinition
 
     public string RoleName { get; init; }
 
+    public string? RoleEmoji { get; init; }
+
+    public string? RoleColorHex { get; init; }
+
+    public string DisplayRoleName => string.IsNullOrWhiteSpace(RoleEmoji)
+        ? RoleName
+        : $"{RoleEmoji} {RoleName}";
+
     public string ConditionType { get; init; }
 
     public string GroupKey { get; init; }

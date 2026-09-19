@@ -15,16 +15,19 @@ public sealed class RoleService
     private readonly DiscordClient _client;
     private readonly AchievementRepository _repository;
     private readonly UserDataRepository _userDataRepository;
+    private readonly RoleProvisioningService _roleProvisioningService;
 
     public RoleService(
         DiscordClient client,
         AchievementRepository repository,
-        UserDataRepository userDataRepository
+        UserDataRepository userDataRepository,
+        RoleProvisioningService? roleProvisioningService = null
     )
     {
         _client = client ?? throw new ArgumentNullException(nameof(client));
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
         _userDataRepository = userDataRepository ?? throw new ArgumentNullException(nameof(userDataRepository));
+        _roleProvisioningService = roleProvisioningService ?? new RoleProvisioningService();
     }
 
     public Task SetNotificationChannelAsync(ulong guildId, ulong channelId)
@@ -43,37 +46,6 @@ public sealed class RoleService
 
         await SetNotificationChannelAsync(guildId, channelId).ConfigureAwait(false);
         return true;
-    }
-
-    public async Task InitializeRolesAsync()
-    {
-        var guildIds = await _repository.GetConfiguredGuildIdsAsync();
-        var definitions = await _repository.GetDefinitionsAsync();
-
-        foreach (var guildId in guildIds)
-        {
-            try
-            {
-                await InitializeGuildRolesAsync(guildId, definitions);
-            }
-            catch (Exception ex)
-            {
-                Logger.Error(ex, "RoleService: ギルドの実績ロール初期化に失敗 guild={GuildId}", guildId);
-            }
-        }
-    }
-
-    public async Task InitializeRolesAsync(ulong guildId)
-    {
-        var definitions = await _repository.GetDefinitionsAsync();
-        try
-        {
-            await InitializeGuildRolesAsync(guildId, definitions);
-        }
-        catch (Exception ex)
-        {
-            Logger.Error(ex, "RoleService: ギルドの実績ロール初期化に失敗 guild={GuildId}", guildId);
-        }
     }
 
     public Task RefreshUserRolesAsync(ulong guildId, ulong userId)
@@ -130,10 +102,10 @@ public sealed class RoleService
             return;
 
         var roleId = await _repository.GetGuildRoleIdAsync(guildId, definition.Id) ?? definition.RoleId;
-        if (!roleId.HasValue)
-            return;
-
-        var memberRole = member.Roles.FirstOrDefault(role => role.Id == roleId.Value);
+        var memberRole = member.Roles.FirstOrDefault(role => role.Name == definition.DisplayRoleName);
+        memberRole ??= roleId.HasValue
+            ? member.Roles.FirstOrDefault(role => role.Id == roleId.Value)
+            : null;
         if (memberRole == null)
             return;
 
@@ -146,22 +118,16 @@ public sealed class RoleService
         AchievementDefinition definition
     )
     {
-        var roleId = await _repository.GetGuildRoleIdAsync(guildId, definition.Id) ?? definition.RoleId;
-        if (!roleId.HasValue)
-        {
-            Logger.Info("RoleService: ロールID未設定のためスキップ achievement={AchievementId}", definition.Id);
-            return false;
-        }
+        var role = member.Guild.Roles.Values.FirstOrDefault(item => item.Name == definition.DisplayRoleName)
+            ?? await _roleProvisioningService.GetOrCreateAsync(
+                member.Guild,
+                definition.DisplayRoleName,
+                definition.RoleColorHex ?? "#808080",
+                "実績解除ロールの作成");
+        await _repository.SetGuildRoleIdAsync(guildId, definition.Id, role.Id);
 
-        if (member.Roles.Any(role => role.Id == roleId.Value))
+        if (member.Roles.Any(item => item.Id == role.Id))
             return false;
-
-        var role = member.Guild.GetRole(roleId.Value);
-        if (role == null)
-        {
-            Logger.Info("RoleService: ロールが見つからないためスキップ guild={GuildId} role={RoleId}", guildId, roleId);
-            return false;
-        }
 
         await member.GrantRoleAsync(role, "実績解除");
         if (!await _repository.TryRecordGrantAsync(guildId, member.Id, definition.Id))
@@ -169,30 +135,6 @@ public sealed class RoleService
 
         await NotifyRoleGrantedAsync(guildId, member, role, definition);
         return true;
-    }
-
-    private async Task InitializeGuildRolesAsync(
-        ulong guildId,
-        IReadOnlyList<AchievementDefinition> definitions
-    )
-    {
-        var guild = await _client.GetGuildAsync(guildId);
-        foreach (var definition in definitions)
-        {
-            var roleId = await _repository.GetGuildRoleIdAsync(guildId, definition.Id);
-            var role = roleId.HasValue ? guild.GetRole(roleId.Value) : null;
-            role ??= definition.RoleId.HasValue ? guild.GetRole(definition.RoleId.Value) : null;
-            role ??= guild.Roles.Values.FirstOrDefault(item => item.Name == definition.RoleName);
-            role ??= await guild.CreateRoleAsync(definition.RoleName, reason: "実績ロール初期化");
-
-            await _repository.SetGuildRoleIdAsync(guildId, definition.Id, role.Id);
-            Logger.Info(
-                "RoleService: 実績ロールを準備しました guild={GuildId} achievement={AchievementId} role={RoleId}",
-                guildId,
-                definition.Id,
-                role.Id
-            );
-        }
     }
 
     private async Task NotifyRoleGrantedAsync(
@@ -213,8 +155,8 @@ public sealed class RoleService
                 ? "🏆 実績ランクアップ！"
                 : "🏆 実績解除！";
         var body = definition.ParentAchievementId.HasValue
-            ? $"<@{member.Id}> が上位ロールを獲得しました！\n\n{role.Mention} {definition.RoleName}"
-            : $"<@{member.Id}> がロールを獲得しました！\n\nロール:\n{role.Mention} {definition.RoleName}";
+            ? $"<@{member.Id}> が上位ロールを獲得しました！\n\n{role.Mention} {definition.DisplayRoleName}"
+            : $"<@{member.Id}> がロールを獲得しました！\n\nロール:\n{role.Mention} {definition.DisplayRoleName}";
 
         await notificationChannel.SendMessageAsync(
             $"{title}\n\n{body}\n\n条件:\n{definition.ConditionDescription}"

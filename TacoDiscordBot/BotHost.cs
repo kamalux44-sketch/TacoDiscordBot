@@ -430,12 +430,6 @@ public static class BotHost
                 Logger.Info("BotHost: Poker卓の復元完了");
             }
 
-            if (RoleService != null)
-            {
-                await RoleService.InitializeRolesAsync();
-                Logger.Info("BotHost: 実績ロール初期化完了");
-            }
-
             if (EventManager != null)
                 await EventManager.RestoreAsync();
             EventManager?.StartMonitoring();

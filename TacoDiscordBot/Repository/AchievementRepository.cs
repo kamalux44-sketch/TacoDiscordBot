@@ -311,11 +311,15 @@ public sealed class AchievementRepository
             dynamic reader = await command.ExecuteReaderAsync();
             while (await reader.ReadAsync())
             {
+                var roleName = reader.GetString(2);
+                var roleDefinition = AchievementRoleDefinition.Find(roleName);
                 result.Add(new AchievementDefinition
                 {
                     Id = reader.GetInt64(0),
                     RoleId = reader.IsDBNull(1) ? null : (ulong?)reader.GetInt64(1),
-                    RoleName = reader.GetString(2),
+                    RoleName = roleDefinition?.Name ?? roleName,
+                    RoleEmoji = roleDefinition?.Emoji,
+                    RoleColorHex = roleDefinition?.ColorHex,
                     ConditionType = reader.GetString(3),
                     GroupKey = reader.IsDBNull(4) ? null : reader.GetString(4),
                     Threshold = reader.GetInt64(5),

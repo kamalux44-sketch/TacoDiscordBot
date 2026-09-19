@@ -1,8 +1,6 @@
 using System;
-using System.Linq;
 using System.Threading.Tasks;
 using DSharpPlus;
-using DSharpPlus.Entities;
 using TacoDiscordBot.Models;
 using TacoDiscordBot.Repository;
 using TacoDiscordBot.Services.Interface;
@@ -14,12 +12,18 @@ public sealed class ShopService
     private readonly DiscordClient _client;
     private readonly ICoinService _coinService;
     private readonly UserDataRepository _repository;
+    private readonly RoleProvisioningService _roleProvisioningService;
 
-    public ShopService(DiscordClient client, ICoinService coinService, UserDataRepository repository)
+    public ShopService(
+        DiscordClient client,
+        ICoinService coinService,
+        UserDataRepository repository,
+        RoleProvisioningService? roleProvisioningService = null)
     {
         _client = client ?? throw new ArgumentNullException(nameof(client));
         _coinService = coinService ?? throw new ArgumentNullException(nameof(coinService));
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
+        _roleProvisioningService = roleProvisioningService ?? new RoleProvisioningService();
     }
 
     public async Task<ShopPurchaseResult> PurchaseAsync(ulong guildId, ulong userId, int roleIndex)
@@ -38,11 +42,11 @@ public sealed class ShopService
         }
 
         var guild = await _client.GetGuildAsync(guildId);
-        var role = guild.Roles.Values.FirstOrDefault(item => item.Name == definition.RoleName)
-            ?? await guild.CreateRoleAsync(
-                definition.RoleName,
-                color: new DiscordColor(definition.ColorHex),
-                reason: "ショップ購入ロールの作成");
+        var role = await _roleProvisioningService.GetOrCreateAsync(
+            guild,
+            definition.RoleName,
+            definition.ColorHex,
+            "ショップ購入ロールの作成");
 
         var member = await guild.GetMemberAsync(userId);
         if (member.Roles.Any(item => item.Id == role.Id))
