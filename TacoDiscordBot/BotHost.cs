@@ -27,6 +27,8 @@ public static class BotHost
 
     public static Services.CoinService CoinService { get; private set; }
 
+    public static Services.ShopService ShopService { get; private set; }
+
     public static Services.BlackjackService BlackjackService { get; private set; }
 
     public static Services.PokerService PokerService { get; private set; }
@@ -269,6 +271,10 @@ public static class BotHost
                 ? null
                 : new Services.CoinService(userDataRepo, RoleService);
 
+            ShopService = userDataRepo == null || CoinService == null
+                ? null
+                : new Services.ShopService(Client, CoinService, userDataRepo);
+
             EventManager = CoinService == null
                 ? null
                 : new Services.EventManager(CoinService, NotifyServerEventAsync, serverEventRepo);
@@ -344,6 +350,8 @@ public static class BotHost
 
             Client.ComponentInteractionCreated += Commands.HelpCommands.HandleComponentInteractionAsync;
 
+            Client.ComponentInteractionCreated += Commands.ShopCommands.HandleComponentInteractionAsync;
+
             // AI メッセージ
             Client.MessageCreated += AiService.HandleMessageCreated;
 
@@ -406,6 +414,8 @@ public static class BotHost
             slash.RegisterCommands<Commands.ServerEventCommands>();
 
             slash.RegisterCommands<Commands.HelpCommands>();
+
+            slash.RegisterCommands<Commands.ShopCommands>();
 
             Logger.Info("BotHost: Discord へ接続開始");
 

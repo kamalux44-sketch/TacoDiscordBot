@@ -42,6 +42,13 @@ public sealed class UserDataRepository : ILastChanceStore
             ADD COLUMN IF NOT EXISTS blackjack_loss_half_units BIGINT NOT NULL DEFAULT 0;
             ALTER TABLE user_data
             ADD COLUMN IF NOT EXISTS blackjack_draws BIGINT NOT NULL DEFAULT 0;
+            CREATE TABLE IF NOT EXISTS shop_purchases (
+                guild_id BIGINT NOT NULL,
+                user_id BIGINT NOT NULL,
+                role_key TEXT NOT NULL,
+                purchased_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+                PRIMARY KEY (guild_id, user_id, role_key)
+            );
             """;
         await _base.ExecuteNonQueryAsync(sql);
         Logger.Info("UserDataRepository: サーバー単位ユーザーデータテーブル確認・作成完了");
@@ -78,6 +85,52 @@ public sealed class UserDataRepository : ILastChanceStore
         });
 
         return result ?? throw new InvalidOperationException("サーバー単位のユーザーデータを作成できませんでした。");
+    }
+
+    public async Task<bool> HasPurchasedShopRoleAsync(ulong guildId, ulong userId, string roleKey)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(roleKey);
+
+        var exists = false;
+        await _base.UseConnectionAsync(async connection =>
+        {
+            dynamic command = connection.CreateCommand();
+            command.CommandText = """
+                SELECT EXISTS(
+                    SELECT 1
+                    FROM shop_purchases
+                    WHERE guild_id = @guild_id AND user_id = @user_id AND role_key = @role_key
+                );
+                """;
+            command.Parameters.AddWithValue("@guild_id", (long)guildId);
+            command.Parameters.AddWithValue("@user_id", (long)userId);
+            command.Parameters.AddWithValue("@role_key", roleKey);
+            exists = (bool)await command.ExecuteScalarAsync();
+        });
+
+        return exists;
+    }
+
+    public async Task<bool> RecordShopRolePurchaseAsync(ulong guildId, ulong userId, string roleKey)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(roleKey);
+
+        var recorded = false;
+        await _base.UseConnectionAsync(async connection =>
+        {
+            dynamic command = connection.CreateCommand();
+            command.CommandText = """
+                INSERT INTO shop_purchases(guild_id, user_id, role_key)
+                VALUES (@guild_id, @user_id, @role_key)
+                ON CONFLICT (guild_id, user_id, role_key) DO NOTHING;
+                """;
+            command.Parameters.AddWithValue("@guild_id", (long)guildId);
+            command.Parameters.AddWithValue("@user_id", (long)userId);
+            command.Parameters.AddWithValue("@role_key", roleKey);
+            recorded = await command.ExecuteNonQueryAsync() > 0;
+        });
+
+        return recorded;
     }
 
     public async Task<BlackjackStatistics> RecordBlackjackOutcomeAsync(
