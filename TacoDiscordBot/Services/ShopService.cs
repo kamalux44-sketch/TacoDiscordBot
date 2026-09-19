@@ -35,20 +35,23 @@ public sealed class ShopService
             return new ShopPurchaseResult { Status = ShopPurchaseStatus.Failed, ErrorMessage = "購入対象のロールが見つかりません。" };
 
         var roleKey = roleIndex.ToString();
-        if (await _repository.HasPurchasedShopRoleAsync(guildId, userId, roleKey))
-        {
-            var balance = await _coinService.GetBalanceAsync(guildId, userId);
-            return new ShopPurchaseResult { Status = ShopPurchaseStatus.AlreadyPurchased, Balance = balance };
-        }
-
         var guild = await _client.GetGuildAsync(guildId);
         var role = await _roleProvisioningService.GetOrCreateAsync(
             guild,
-            definition.RoleName,
+            definition.DisplayName,
             definition.ColorHex,
             "ショップ購入ロールの作成");
 
         var member = await guild.GetMemberAsync(userId);
+        if (await _repository.HasPurchasedShopRoleAsync(guildId, userId, roleKey))
+        {
+            if (!member.Roles.Any(item => item.Id == role.Id))
+                await member.GrantRoleAsync(role, "購入済みショップロールの再付与");
+
+            var balance = await _coinService.GetBalanceAsync(guildId, userId);
+            return new ShopPurchaseResult { Status = ShopPurchaseStatus.AlreadyPurchased, Balance = balance };
+        }
+
         if (member.Roles.Any(item => item.Id == role.Id))
         {
             await _repository.RecordShopRolePurchaseAsync(guildId, userId, roleKey);
