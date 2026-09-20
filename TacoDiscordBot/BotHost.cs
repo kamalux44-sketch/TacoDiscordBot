@@ -33,6 +33,8 @@ public static class BotHost
 
     public static Services.PokerService PokerService { get; private set; }
 
+    public static Services.TexasPokerService TexasPokerService { get; private set; }
+
     public static Services.RouletteService RouletteService { get; private set; }
 
     public static Services.DoubleUpService DoubleUpService { get; private set; }
@@ -287,6 +289,8 @@ public static class BotHost
                 ? null
                 : new Services.PokerService(CoinService, pokerRepo);
 
+            TexasPokerService = new Services.TexasPokerService();
+
             RouletteService = CoinService == null
                 ? null
                 : new Services.RouletteService(CoinService, eventManager: EventManager);
@@ -333,6 +337,9 @@ public static class BotHost
 
             Client.ComponentInteractionCreated += Commands.PokerCommands.HandleComponentInteractionAsync;
             Client.ModalSubmitted += Commands.PokerCommands.HandleModalSubmitAsync;
+
+            Client.ComponentInteractionCreated += Commands.TexasPokerCommands.HandleComponentInteractionAsync;
+            Client.ModalSubmitted += Commands.TexasPokerCommands.HandleModalSubmitAsync;
 
             Client.ComponentInteractionCreated += Commands.RouletteCommands.HandleComponentInteractionAsync;
 
@@ -398,6 +405,8 @@ public static class BotHost
             slash.RegisterCommands<Commands.BlackjackCommands>();
 
             slash.RegisterCommands<Commands.PokerCommands>();
+
+            slash.RegisterCommands<Commands.TexasPokerCommands>();
 
             slash.RegisterCommands<Commands.RouletteCommands>();
 
