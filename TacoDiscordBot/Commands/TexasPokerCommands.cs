@@ -101,6 +101,7 @@ public sealed class TexasPokerCommands : ApplicationCommandModule
                 await message.ModifyAsync(publicContent);
             }
             await UpdateEphemeralMessagesAsync(service, game);
+            await PublishShowdownAsync(client, game);
         }
         catch (InvalidOperationException ex)
         {
@@ -149,6 +150,7 @@ public sealed class TexasPokerCommands : ApplicationCommandModule
         var game = service.ApplyAction(gameId, e.Interaction.User.Id, action);
         await e.Interaction.CreateResponseAsync(InteractionResponseType.UpdateMessage, BuildPublic(game));
         await UpdateEphemeralMessagesAsync(service, game);
+        await PublishShowdownAsync(BotHost.Client, game);
     }
 
     private static async Task ShowAmountModalAsync(ComponentInteractionCreateEventArgs e, string operation, string? gameId)
@@ -173,7 +175,10 @@ public sealed class TexasPokerCommands : ApplicationCommandModule
         {
             builder.AddComponents(new DiscordButtonComponent(ButtonStyle.Primary, $"{Prefix}action:{gameId}:check", "チェック"));
             if (game.CurrentBet == player.CurrentBet)
+            {
+                builder.AddComponents(new DiscordButtonComponent(ButtonStyle.Primary, $"{Prefix}action:{gameId}:check", "チェック"));
                 builder.AddComponents(new DiscordButtonComponent(ButtonStyle.Primary, $"{Prefix}bet:{gameId}", "ベット"));
+            }
             else
                 builder.AddComponents(new DiscordButtonComponent(ButtonStyle.Primary, $"{Prefix}action:{gameId}:call", $"コール {game.CurrentBet - player.CurrentBet}"));
             builder.AddComponents(new DiscordButtonComponent(ButtonStyle.Danger, $"{Prefix}action:{gameId}:fold", "フォールド"));
@@ -272,26 +277,34 @@ public sealed class TexasPokerCommands : ApplicationCommandModule
     private static string CreatePublicContent(TexasPokerGame game)
     {
         var players = game.Players.Count == 0 ? "なし" : string.Join('\n', game.Players.Select(player => $"👤 {player.DisplayName}　💰 {player.Chips:N0}"));
-        if (game.Phase == TexasPokerPhase.Finished)
-        {
-            var showdown = string.Join('\n', game.Players.Select(player =>
-                $"{(game.WinnerUserIds.Contains(player.UserId) ? "🏆" : "　")} {player.DisplayName}: {string.Join(' ', player.HoleCards)} ({game.HandRankNames.GetValueOrDefault(player.UserId, "フォールド")})"));
-            players += $"\n\nShowdown\n{showdown}";
-        }
-        var board = game.Phase == TexasPokerPhase.Waiting ? "ゲーム開始前です。" : $"Board\n{string.Join(' ', game.CommunityCards.Select(card => card.ToString()))} {(game.CommunityCards.Count < 5 ? "🂠" : string.Empty)}\n\nPot: {game.Pot:N0}";
+        var board = game.Phase == TexasPokerPhase.Waiting ? "ゲーム開始前です。" : $"Board\n{string.Join(' ', game.CommunityCards.Select(card => card.ToString()))}\n\nPot: {game.Pot:N0}";
         var turn = game.CurrentPlayerIndex >= 0 ? $"\n\n▶ {game.Players[game.CurrentPlayerIndex].DisplayName} のターン" : string.Empty;
-        var result = game.ResultText == null ? string.Empty : $"\n\n{game.ResultText}";
-        return $"🃏 Texas Hold'em\n━━━━━━━━━━━━━━━━\n\n参加者:\n{players}\n\n{board}{turn}{result}";
+        return $"🃏 Texas Hold'em\n━━━━━━━━━━━━━━━━\n\n参加者:\n{players}\n\n{board}{turn}";
+    }
+
+    private static string CreateShowdownContent(TexasPokerGame game)
+    {
+        var players = string.Join('\n', game.Players.Select(player =>
+            $"{(game.WinnerUserIds.Contains(player.UserId) ? "🏆" : "　")} {player.DisplayName}: {string.Join(' ', player.HoleCards)} ({game.HandRankNames.GetValueOrDefault(player.UserId, "未評価")})"));
+        return $"🃏 Texas Hold'em - 勝負の結果\n━━━━━━━━━━━━━━━━\n\nBoard\n{string.Join(' ', game.CommunityCards.Select(card => card.ToString()))}\n\n{players}\n\n{game.ResultText}";
+    }
+
+    private static async Task PublishShowdownAsync(DiscordClient client, TexasPokerGame game)
+    {
+        if (game.Phase != TexasPokerPhase.Finished || game.ShowdownMessageId.HasValue)
+            return;
+        var channel = await client.GetChannelAsync(game.ChannelId);
+        var message = await channel.SendMessageAsync(new DiscordMessageBuilder().WithContent(CreateShowdownContent(game)));
+        game.ShowdownMessageId = message.Id;
     }
 
     private static string CreatePrivateContent(TexasPokerService service, TexasPokerGame game, TexasPokerPlayer player, string? notice)
     {
         var cards = player.HoleCards.Count == 0 ? "ゲーム開始時に配布されます。" : string.Join(' ', player.HoleCards.Select(card => card.ToString()));
-        var board = game.CommunityCards.Count == 0 ? "なし" : string.Join(' ', game.CommunityCards.Select(card => card.ToString()));
         var state = game.CurrentPlayerIndex >= 0 && game.Players[game.CurrentPlayerIndex].UserId == player.UserId ? "▶ あなたのターン" : $"状態: {game.Phase}";
         var hand = service.GetHandEvaluation(game.GameId, player.UserId)?.CategoryDisplayName;
         var handText = hand == null ? string.Empty : $"\n\n現在の役: {hand}";
-        return $"🔒 あなたの手札\n\n{cards}\n\nBoard: {board}{handText}\n\n{state}{(notice == null ? string.Empty : $"\n\n{notice}")}";
+        return $"🔒 あなたの手札\n\n{cards}{handText}\n\n{state}{(notice == null ? string.Empty : $"\n\n{notice}")}";
     }
 
     private static async Task RespondErrorAsync(ComponentInteractionCreateEventArgs e, string message)

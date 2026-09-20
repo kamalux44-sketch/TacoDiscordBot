@@ -73,6 +73,7 @@ public sealed class TexasPokerGame
     public ulong HostId { get; }
     public ulong ChannelId { get; }
     public ulong? PublicMessageId { get; set; }
+    public ulong? ShowdownMessageId { get; set; }
     public List<TexasPokerPlayer> Players { get; } = [];
     public List<PokerCard> CommunityCards { get; } = [];
     public Queue<PokerCard> Deck { get; } = new();

@@ -151,6 +151,17 @@ public sealed class TexasPokerService
                 return game;
             }
 
+            if (action == TexasPokerAction.Fold)
+            {
+                var nextPlayerAfterFold = NextActiveIndex(game, game.CurrentPlayerIndex);
+                if (nextPlayerAfterFold >= 0 && nextPlayerAfterFold != game.CurrentPlayerIndex)
+                {
+                    game.CurrentPlayerIndex = nextPlayerAfterFold;
+                    game.Players[nextPlayerAfterFold].State = TexasPokerPlayerState.Acting;
+                    return game;
+                }
+            }
+
             var next = NextActiveIndex(game, game.CurrentPlayerIndex);
             if (next == game.CurrentPlayerIndex || AllActed(game))
             {
@@ -349,13 +360,16 @@ public sealed class TexasPokerService
 
     private static int NextActiveIndex(TexasPokerGame game, int start)
     {
+        if (game.Players.Count == 0)
+            return -1;
+
         for (var offset = 1; offset <= game.Players.Count; offset++)
         {
             var index = (start + offset) % game.Players.Count;
             if (!game.Players[index].IsFolded && !game.Players[index].IsAllIn)
                 return index;
         }
-        return start;
+        return -1;
     }
 
     private static void EnsurePhase(TexasPokerGame game, TexasPokerPhase phase)
