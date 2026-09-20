@@ -12,6 +12,7 @@ public sealed class TexasPokerCommands : ApplicationCommandModule
 {
     private const string Prefix = "texaspoker:";
     private static readonly ConcurrentDictionary<(string GameId, ulong UserId), EphemeralReference> EphemeralMessages = new();
+    private static readonly ConcurrentDictionary<string, SemaphoreSlim> PublicMessageLocks = new(StringComparer.OrdinalIgnoreCase);
 
     private sealed record EphemeralReference(DiscordInteraction Interaction, ulong MessageId, bool IsFollowup);
 
@@ -93,13 +94,7 @@ public sealed class TexasPokerCommands : ApplicationCommandModule
             var game = service.ApplyAction(parts[2], e.Interaction.User.Id, action, amount);
             await e.Interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
                 new DiscordInteractionResponseBuilder().WithContent("アクションを受け付けました。公開卓を確認してください。").AsEphemeral(true));
-            if (game.PublicMessageId.HasValue)
-            {
-                var channel = await client.GetChannelAsync(game.ChannelId);
-                var message = await channel.GetMessageAsync(game.PublicMessageId.Value);
-                var publicContent = CreatePublicContent(game);
-                await message.ModifyAsync(publicContent);
-            }
+            await UpdatePublicMessageAsync(client, game);
             await UpdateEphemeralMessagesAsync(service, game);
             await PublishShowdownAsync(client, game);
         }
@@ -291,11 +286,42 @@ public sealed class TexasPokerCommands : ApplicationCommandModule
 
     private static async Task PublishShowdownAsync(DiscordClient client, TexasPokerGame game)
     {
-        if (game.Phase != TexasPokerPhase.Finished || game.ShowdownMessageId.HasValue)
+        if (game.Phase != TexasPokerPhase.Finished)
             return;
-        var channel = await client.GetChannelAsync(game.ChannelId);
-        var message = await channel.SendMessageAsync(new DiscordMessageBuilder().WithContent(CreateShowdownContent(game)));
-        game.ShowdownMessageId = message.Id;
+
+        var gate = PublicMessageLocks.GetOrAdd(game.GameId, _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync();
+        try
+        {
+            if (game.ShowdownMessageId.HasValue)
+                return;
+            var channel = await client.GetChannelAsync(game.ChannelId);
+            var message = await channel.SendMessageAsync(new DiscordMessageBuilder().WithContent(CreateShowdownContent(game)));
+            game.ShowdownMessageId = message.Id;
+        }
+        finally
+        {
+            gate.Release();
+        }
+    }
+
+    private static async Task UpdatePublicMessageAsync(DiscordClient client, TexasPokerGame game)
+    {
+        if (!game.PublicMessageId.HasValue)
+            return;
+
+        var gate = PublicMessageLocks.GetOrAdd(game.GameId, _ => new SemaphoreSlim(1, 1));
+        await gate.WaitAsync();
+        try
+        {
+            var channel = await client.GetChannelAsync(game.ChannelId);
+            var message = await channel.GetMessageAsync(game.PublicMessageId.Value);
+            await message.ModifyAsync(CreatePublicContent(game));
+        }
+        finally
+        {
+            gate.Release();
+        }
     }
 
     private static string CreatePrivateContent(TexasPokerService service, TexasPokerGame game, TexasPokerPlayer player, string? notice)
