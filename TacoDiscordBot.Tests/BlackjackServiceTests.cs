@@ -49,4 +49,22 @@ public sealed class BlackjackServiceTests
 
         Assert.Equal(50, Math.Round(statistics.WinRate));
     }
+
+    [Fact]
+    public void ダブルダウンは初期ベットと同額だけ現在ベットを増やす()
+    {
+        var game = new BlackjackGame(
+            1,
+            2,
+            1_000,
+            new[] { new BlackjackCard("8", "♠"), new BlackjackCard("3", "♥") },
+            new[] { new BlackjackCard("K", "♣"), new BlackjackCard("7", "♦") },
+            Array.Empty<BlackjackCard>());
+
+        game.DoubleBet();
+
+        Assert.Equal(1_000, game.OriginalBet);
+        Assert.Equal(2_000, game.CurrentBet);
+        Assert.True(game.IsDoubledDown);
+    }
 }
