@@ -119,10 +119,48 @@ public sealed class BlackjackCommands : ApplicationCommandModule
                 return;
             }
 
+            if (parts[1] == "double")
+            {
+                var hasResponded = false;
+                var doubleResult = await service.DoubleDownAsync(guildId, ownerId, async progress =>
+                {
+                    var progressBuilder = CreateBuilder(progress, guildId, ownerId, false);
+                    if (!hasResponded)
+                    {
+                        await e.Interaction.CreateResponseAsync(
+                            InteractionResponseType.UpdateMessage,
+                            progressBuilder
+                        );
+                        hasResponded = true;
+                        return;
+                    }
+
+                    await Task.Delay(700);
+                    await e.Interaction.EditOriginalResponseAsync(
+                        new DiscordWebhookBuilder().AddEmbed(progress.Embed)
+                    );
+                });
+
+                if (hasResponded)
+                {
+                    await e.Interaction.EditOriginalResponseAsync(
+                        new DiscordWebhookBuilder().AddEmbed(doubleResult.Embed)
+                    );
+                }
+                else
+                {
+                    await e.Interaction.CreateResponseAsync(
+                        InteractionResponseType.UpdateMessage,
+                        CreateBuilder(doubleResult, guildId, ownerId)
+                    );
+                }
+
+                return;
+            }
+
             var result = parts[1] switch
             {
                 "hit" => await service.HitAsync(guildId, ownerId),
-                "double" => await service.DoubleDownAsync(guildId, ownerId),
                 "surrender" => await service.SurrenderAsync(guildId, ownerId),
                 _ => null
             };
@@ -153,15 +191,22 @@ public sealed class BlackjackCommands : ApplicationCommandModule
         var builder = new DiscordInteractionResponseBuilder().AddEmbed(result.Embed);
         if (!result.IsFinished && showControls)
         {
-            var components = new System.Collections.Generic.List<DiscordComponent>
+            var actionRow = new System.Collections.Generic.List<DiscordComponent>
             {
-                new DiscordButtonComponent(ButtonStyle.Primary, $"blackjack:hit:{guildId}:{userId}", "HIT"),
-                new DiscordButtonComponent(ButtonStyle.Success, $"blackjack:stand:{guildId}:{userId}", "STAND")
+                new DiscordButtonComponent(ButtonStyle.Primary, $"blackjack:hit:{guildId}:{userId}", "HIT")
             };
             if (result.CanDoubleDown)
-                components.Add(new DiscordButtonComponent(ButtonStyle.Secondary, $"blackjack:double:{guildId}:{userId}", "DOUBLE DOWN"));
-            components.Add(new DiscordButtonComponent(ButtonStyle.Secondary, $"blackjack:surrender:{guildId}:{userId}", "SURRENDER"));
-            builder.AddComponents(components);
+                actionRow.Add(new DiscordButtonComponent(ButtonStyle.Secondary, $"blackjack:double:{guildId}:{userId}", "DOUBLE DOWN"));
+
+            var decisionRow = new System.Collections.Generic.List<DiscordComponent>
+            {
+                new DiscordButtonComponent(ButtonStyle.Success, $"blackjack:stand:{guildId}:{userId}", "STAND")
+            };
+            if (result.CanSurrender)
+                decisionRow.Add(new DiscordButtonComponent(ButtonStyle.Secondary, $"blackjack:surrender:{guildId}:{userId}", "SURRENDER"));
+
+            builder.AddComponents(actionRow);
+            builder.AddComponents(decisionRow);
         }
         return builder;
     }

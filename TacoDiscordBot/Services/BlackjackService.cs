@@ -56,7 +56,7 @@ public sealed class BlackjackService
             return await FinishAsync(game, BlackjackOutcome.Blackjack);
 
         var canDoubleDown = await _coinService.CanAffordAsync(guildId, userId, game.OriginalBet);
-        return CreateResult(game, false, "あなたのターンです。", 0, canDoubleDown: canDoubleDown);
+        return CreateResult(game, false, "あなたのターンです。", 0, canDoubleDown: canDoubleDown, canSurrender: true);
     }
 
     public async Task<BlackjackResult> HitAsync(ulong guildId, ulong userId)
@@ -79,7 +79,11 @@ public sealed class BlackjackService
         return CreateResult(game, false, "もう一度カードを引くか、STANDしてください。", 0);
     }
 
-    public async Task<BlackjackResult> DoubleDownAsync(ulong guildId, ulong userId)
+    public async Task<BlackjackResult> DoubleDownAsync(
+        ulong guildId,
+        ulong userId,
+        Func<BlackjackResult, Task>? onProgress = null
+    )
     {
         if (!_games.TryGetValue(CreateGameKey(guildId, userId), out var game))
             throw new InvalidOperationException("このブラックジャックゲームは終了しています。");
@@ -112,10 +116,13 @@ public sealed class BlackjackService
             game.PlayerCards.Add(game.Deck.Dequeue());
         }
 
+        if (onProgress != null)
+            await onProgress(CreateResult(game, false, "ダブルダウンの追加カードを公開します。", 0));
+
         if (CalculateTotal(game.PlayerCards) > 21)
             return await FinishAsync(game, BlackjackOutcome.Loss);
 
-        return await ResolveDealerTurnAsync(game);
+        return await ResolveDealerTurnAsync(game, onProgress);
     }
 
     public async Task<BlackjackResult> SurrenderAsync(ulong guildId, ulong userId)
@@ -125,8 +132,10 @@ public sealed class BlackjackService
 
         lock (game)
         {
-            if (game.IsFinished || game.IsDoubledDown || game.HasActed)
+            if (game.IsFinished)
                 throw new InvalidOperationException("このブラックジャックゲームは終了しています。");
+            if (game.IsDoubledDown || game.HasActed)
+                throw new InvalidOperationException("サレンダーできる状態ではありません。");
             game.HasActed = true;
         }
 
@@ -293,7 +302,8 @@ public sealed class BlackjackService
         long payout,
         BlackjackStatistics? statistics = null,
         bool revealDealerCards = false,
-        bool canDoubleDown = false
+        bool canDoubleDown = false,
+        bool canSurrender = false
     )
     {
         var dealer = finished || revealDealerCards
@@ -304,7 +314,7 @@ public sealed class BlackjackService
             .WithDescription($"**あなた**\n{string.Join(" ", game.PlayerCards)}\n合計: {CalculateTotal(game.PlayerCards)}\n\n**ディーラー**\n{dealer}\n合計: {(finished || revealDealerCards ? CalculateTotal(game.DealerCards).ToString() : "❓")}\n\n{message}\n{(statistics == null ? string.Empty : $"勝{statistics.Wins}/負{statistics.LossHalfUnits / 2d:0.##}/分{statistics.Draws} 勝率{Math.Round(statistics.WinRate):0}%\n")}ベット: {game.CurrentBet:N0}\n払い戻し: {payout:N0}")
             .WithColor(finished ? DiscordColor.Green : DiscordColor.Blurple)
             .Build();
-        return new BlackjackResult(embed, finished, canDoubleDown);
+        return new BlackjackResult(embed, finished, canDoubleDown, canSurrender);
     }
 
     private static void ValidateBet(long bet)
@@ -328,4 +338,9 @@ public sealed class BlackjackService
 
 }
 
-public sealed record BlackjackResult(DiscordEmbed Embed, bool IsFinished, bool CanDoubleDown = false);
+public sealed record BlackjackResult(
+    DiscordEmbed Embed,
+    bool IsFinished,
+    bool CanDoubleDown = false,
+    bool CanSurrender = false
+);
