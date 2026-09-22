@@ -205,8 +205,16 @@ public sealed class BlackjackCommands : ApplicationCommandModule
             if (result.CanSurrender)
                 decisionRow.Add(new DiscordButtonComponent(ButtonStyle.Secondary, $"blackjack:surrender:{guildId}:{userId}", "SURRENDER"));
 
-            builder.AddComponents(actionRow);
-            builder.AddComponents(decisionRow);
+            if (result.CanDoubleDown && result.CanSurrender)
+            {
+                builder.AddComponents(actionRow);
+                builder.AddComponents(decisionRow);
+            }
+            else
+            {
+                actionRow.AddRange(decisionRow);
+                builder.AddComponents(actionRow);
+            }
         }
         return builder;
     }
